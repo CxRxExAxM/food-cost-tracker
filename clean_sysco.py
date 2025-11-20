@@ -55,6 +55,35 @@ def load_csv(file_path):
         sys.exit(1)
 
 
+def clean_unit_column(df):
+    """
+    Clean and normalize the 'Unit' column.
+    - Convert '#' to 'LB'
+    - Normalize all units to uppercase
+
+    Args:
+        df (pd.DataFrame): DataFrame with 'Unit' column
+
+    Returns:
+        pd.DataFrame: DataFrame with cleaned 'Unit' column
+    """
+    if 'Unit' not in df.columns:
+        print("Warning: 'Unit' column not found in dataset")
+        return df
+
+    # Replace '#' with 'LB'
+    df['Unit'] = df['Unit'].astype(str).str.replace('#', 'LB', regex=False)
+
+    # Normalize to uppercase
+    df['Unit'] = df['Unit'].str.upper()
+
+    print(f"Cleaned 'Unit' column - normalized to uppercase")
+    print(f"  Unique units: {df['Unit'].nunique()}")
+    print(f"  Units: {df['Unit'].unique().tolist()}")
+
+    return df
+
+
 def clean_size_column(df):
     """
     Clean the 'Size' column by removing non-numeric characters and converting to float.
@@ -195,6 +224,9 @@ def main():
 
         if columns_not_found:
             print(f"\nWarning: {len(columns_not_found)} column(s) not found: {', '.join(columns_not_found)}")
+
+    # Clean Unit column (normalize to uppercase, convert # to LB)
+    df = clean_unit_column(df)
 
     # Clean Size column
     df = clean_size_column(df)

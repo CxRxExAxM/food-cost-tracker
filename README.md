@@ -2,6 +2,15 @@
 
 A system for managing food costs, tracking prices from multiple distributors, and calculating recipe costs.
 
+## TODO
+
+### Priority Features
+1. **Inline Product Editing** - Add ability to edit product table inline to fix NaN values and incomplete data from original documents
+2. **Product Mapping Interface** - Build UI for mapping distributor products to common_products
+3. **Recipe Management** - Create recipes with cost calculation
+4. **Price Trend Charts** - Visualize price changes over time
+5. **Multi-distributor Import** - Add support for remaining distributors (Vesta, SM Seafood, Shamrock, Noble Bread, Sterling)
+
 ## Quick Start
 
 ### 1. Set Up the Database
@@ -54,8 +63,25 @@ python import_csv.py cleaned_sysco.csv sysco
 
 - **Database**: SQLite 3
 - **Data Processing**: Python 3 + Pandas
-- **Backend** (planned): FastAPI
-- **Frontend** (planned): React
+- **Backend**: FastAPI
+- **Frontend**: React + Vite
+- **API Documentation**: Auto-generated with FastAPI (http://localhost:8000/docs)
+
+## Running the Application
+
+### Start API Server
+```bash
+cd api
+../venv/bin/python3 run.py
+```
+API will be available at http://localhost:8000
+
+### Start Frontend
+```bash
+cd frontend
+npm run dev
+```
+Frontend will be available at http://localhost:5173
 
 ## Development
 

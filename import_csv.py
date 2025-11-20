@@ -19,14 +19,18 @@ def get_distributor_id(cursor, distributor_code):
 
 
 def get_unit_id(cursor, unit_abbr):
-    """Get unit ID from abbreviation."""
-    cursor.execute("SELECT id FROM units WHERE abbreviation = ?", (unit_abbr,))
+    """Get unit ID from abbreviation (case-insensitive)."""
+    if not unit_abbr:
+        return None
+
+    # Try exact match (case-insensitive)
+    cursor.execute("SELECT id FROM units WHERE LOWER(abbreviation) = LOWER(?)", (unit_abbr,))
     result = cursor.fetchone()
     if result:
         return result[0]
 
-    # If not found, try to match by name
-    cursor.execute("SELECT id FROM units WHERE name LIKE ?", (f"%{unit_abbr}%",))
+    # If not found, try to match by name (case-insensitive)
+    cursor.execute("SELECT id FROM units WHERE LOWER(name) LIKE LOWER(?)", (f"%{unit_abbr}%",))
     result = cursor.fetchone()
     return result[0] if result else None
 

@@ -1,0 +1,101 @@
+.home {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 2rem;
+}
+
+.home-container {
+  max-width: 900px;
+  width: 100%;
+}
+
+.home-header {
+  text-align: center;
+  color: white;
+  margin-bottom: 3rem;
+}
+
+.home-header h1 {
+  font-size: 3.5rem;
+  margin-bottom: 1rem;
+  font-weight: 700;
+}
+
+.home-header p {
+  font-size: 1.25rem;
+  opacity: 0.9;
+}
+
+.nav-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 2rem;
+  margin-bottom: 2rem;
+}
+
+.nav-card {
+  background: white;
+  border-radius: 12px;
+  padding: 2.5rem;
+  text-decoration: none;
+  color: #333;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  position: relative;
+  overflow: hidden;
+}
+
+.nav-card:hover {
+  transform: translateY(-8px);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15);
+}
+
+.card-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+
+.nav-card h2 {
+  font-size: 1.75rem;
+  margin-bottom: 0.5rem;
+  color: #667eea;
+}
+
+.nav-card p {
+  color: #666;
+  line-height: 1.6;
+  margin-bottom: 1.5rem;
+}
+
+.card-arrow {
+  position: absolute;
+  bottom: 1.5rem;
+  right: 2rem;
+  font-size: 1.5rem;
+  color: #667eea;
+  transition: transform 0.3s ease;
+}
+
+.nav-card:hover .card-arrow {
+  transform: translateX(8px);
+}
+
+.home-footer {
+  text-align: center;
+  color: white;
+  opacity: 0.8;
+  font-size: 0.95rem;
+}
+
+@media (max-width: 768px) {
+  .home-header h1 {
+    font-size: 2.5rem;
+  }
+
+  .nav-cards {
+    grid-template-columns: 1fr;
+  }
+}

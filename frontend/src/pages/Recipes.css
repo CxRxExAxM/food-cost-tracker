@@ -1,0 +1,23 @@
+.coming-soon {
+  text-align: center;
+  padding: 4rem 2rem;
+  background: white;
+  border-radius: 12px;
+  margin-top: 2rem;
+}
+
+.coming-soon-icon {
+  font-size: 4rem;
+  margin-bottom: 1.5rem;
+}
+
+.coming-soon h2 {
+  font-size: 2rem;
+  color: #333;
+  margin-bottom: 1rem;
+}
+
+.coming-soon p {
+  font-size: 1.1rem;
+  color: #666;
+}

@@ -192,7 +192,9 @@ def create_database():
     # Insert common units
     units = [
         ('Pound', 'lb', 'weight'),
+        ('Pound Uppercase', 'LB', 'weight'),
         ('Ounce', 'oz', 'weight'),
+        ('Ounce Uppercase', 'OZ', 'weight'),
         ('Kilogram', 'kg', 'weight'),
         ('Gram', 'g', 'weight'),
         ('Gallon', 'gal', 'volume'),
@@ -205,6 +207,8 @@ def create_database():
         ('Tablespoon', 'tbsp', 'volume'),
         ('Teaspoon', 'tsp', 'volume'),
         ('Each', 'ea', 'count'),
+        ('Count', 'CT', 'count'),
+        ('Count Lowercase', 'ct', 'count'),
         ('Dozen', 'doz', 'count'),
         ('Case', 'case', 'count'),
         ('Box', 'box', 'count'),

@@ -1,0 +1,183 @@
+.filters {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.search-input {
+  flex: 1;
+  min-width: 250px;
+  padding: 0.75rem 1rem;
+  font-size: 1rem;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  transition: border-color 0.2s;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: white;
+  border-radius: 8px;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+.results-count {
+  padding: 0.75rem 1rem;
+  background: white;
+  border-radius: 8px;
+  color: #666;
+  font-weight: 500;
+}
+
+.loading {
+  text-align: center;
+  padding: 3rem;
+  font-size: 1.1rem;
+  color: #666;
+  background: white;
+  border-radius: 8px;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 3rem;
+  font-size: 1.1rem;
+  color: #999;
+  background: white;
+  border-radius: 8px;
+}
+
+.table-container {
+  background: white;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.products-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.products-table thead {
+  background: #f8f9fa;
+  border-bottom: 2px solid #e0e0e0;
+}
+
+.products-table th {
+  padding: 1rem;
+  text-align: left;
+  font-weight: 600;
+  color: #333;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.products-table tbody tr {
+  border-bottom: 1px solid #f0f0f0;
+  transition: background-color 0.15s;
+}
+
+.products-table tbody tr:hover {
+  background: #f8f9fa;
+}
+
+.products-table tbody tr:last-child {
+  border-bottom: none;
+}
+
+.products-table td {
+  padding: 1rem;
+  color: #555;
+  font-size: 0.95rem;
+}
+
+.product-name {
+  font-weight: 500;
+  color: #333;
+  max-width: 300px;
+}
+
+.brand-cell {
+  color: #667eea;
+  font-weight: 500;
+}
+
+.distributor-cell {
+  color: #666;
+}
+
+.price-cell {
+  font-weight: 600;
+  color: #333;
+  font-variant-numeric: tabular-nums;
+}
+
+.text-right {
+  text-align: right;
+}
+
+.text-center {
+  text-align: center;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 0.35rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.status-badge.mapped {
+  background: #d4edda;
+  color: #155724;
+}
+
+.status-badge.unmapped {
+  background: #fff3cd;
+  color: #856404;
+}
+
+/* Responsive adjustments */
+@media (max-width: 1200px) {
+  .table-container {
+    overflow-x: auto;
+  }
+
+  .products-table {
+    min-width: 900px;
+  }
+}
+
+@media (max-width: 768px) {
+  .filters {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .search-input {
+    width: 100%;
+  }
+}
