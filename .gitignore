@@ -1,0 +1,54 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+*.egg-info/
+dist/
+build/
+
+# Database
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# CSV files (data files)
+*.csv
+!*_example.csv
+
+# Environment variables
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Node (for future React frontend)
+node_modules/
+.pnp
+.pnp.js
+coverage/
+build/
+.npm
+.eslintcache
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
