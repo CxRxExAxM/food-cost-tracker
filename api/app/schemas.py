@@ -10,6 +10,23 @@ class CommonProductBase(BaseModel):
     subcategory: Optional[str] = None
     preferred_unit_id: Optional[int] = None
     notes: Optional[str] = None
+    # Allergen/Dietary Flags
+    allergen_vegan: bool = False
+    allergen_vegetarian: bool = False
+    allergen_gluten: bool = False
+    allergen_crustation: bool = False
+    allergen_egg: bool = False
+    allergen_mollusk: bool = False
+    allergen_fish: bool = False
+    allergen_lupin: bool = False
+    allergen_dairy: bool = False
+    allergen_tree_nuts: bool = False
+    allergen_peanuts: bool = False
+    allergen_sesame: bool = False
+    allergen_soy: bool = False
+    allergen_sulphur_dioxide: bool = False
+    allergen_mustard: bool = False
+    allergen_celery: bool = False
 
 
 class CommonProductCreate(CommonProductBase):
@@ -23,6 +40,23 @@ class CommonProductUpdate(BaseModel):
     preferred_unit_id: Optional[int] = None
     notes: Optional[str] = None
     is_active: Optional[bool] = None
+    # Allergen/Dietary Flags
+    allergen_vegan: Optional[bool] = None
+    allergen_vegetarian: Optional[bool] = None
+    allergen_gluten: Optional[bool] = None
+    allergen_crustation: Optional[bool] = None
+    allergen_egg: Optional[bool] = None
+    allergen_mollusk: Optional[bool] = None
+    allergen_fish: Optional[bool] = None
+    allergen_lupin: Optional[bool] = None
+    allergen_dairy: Optional[bool] = None
+    allergen_tree_nuts: Optional[bool] = None
+    allergen_peanuts: Optional[bool] = None
+    allergen_sesame: Optional[bool] = None
+    allergen_soy: Optional[bool] = None
+    allergen_sulphur_dioxide: Optional[bool] = None
+    allergen_mustard: Optional[bool] = None
+    allergen_celery: Optional[bool] = None
 
 
 class CommonProduct(CommonProductBase):
@@ -65,6 +99,7 @@ class ProductWithPrice(Product):
     unit_price: Optional[float] = None
     effective_date: Optional[date] = None
     unit_abbreviation: Optional[str] = None
+    common_product_name: Optional[str] = None
 
 
 class ProductMapping(BaseModel):
@@ -91,7 +126,8 @@ class Unit(BaseModel):
 
 # Recipes
 class RecipeIngredientBase(BaseModel):
-    common_product_id: int
+    common_product_id: Optional[int] = None  # Either this...
+    sub_recipe_id: Optional[int] = None      # ...or this
     quantity: float
     unit_id: int
     yield_percentage: float = 100.0
@@ -106,14 +142,21 @@ class RecipeIngredient(RecipeIngredientBase):
         from_attributes = True
 
 
+class RecipeMethodStep(BaseModel):
+    step_number: int
+    instruction: str
+
 class RecipeBase(BaseModel):
     name: str
     description: Optional[str] = None
     category: Optional[str] = None
+    category_path: Optional[str] = None  # Free-form folder structure
     yield_amount: Optional[float] = None
     yield_unit_id: Optional[int] = None
-    prep_time_minutes: Optional[int] = None
-    cook_time_minutes: Optional[int] = None
+    prep_time_minutes: Optional[int] = None  # Keeping for backward compatibility
+    cook_time_minutes: Optional[int] = None  # Keeping for backward compatibility
+    method: Optional[list[RecipeMethodStep]] = None  # List of numbered steps
+    notes: Optional[str] = None
 
 
 class RecipeCreate(RecipeBase):

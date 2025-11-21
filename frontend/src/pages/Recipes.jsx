@@ -1,21 +1,1371 @@
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import axios from 'axios';
 import './Recipes.css';
 
+const API_URL = 'http://localhost:8000';
+
 function Recipes() {
+  const [recipes, setRecipes] = useState([]);
+  const [selectedRecipe, setSelectedRecipe] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [expandedFolders, setExpandedFolders] = useState(new Set());
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showFolderModal, setShowFolderModal] = useState(false);
+  const [editedRecipe, setEditedRecipe] = useState(null);
+  const [isDirty, setIsDirty] = useState(false);
+  const [contextMenu, setContextMenu] = useState(null);
+  const [renamingFolder, setRenamingFolder] = useState(null);
+  const [draggedItem, setDraggedItem] = useState(null);
+  const [dropTarget, setDropTarget] = useState(null);
+  const [prefilledCategoryPath, setPrefilledCategoryPath] = useState('');
+  const [virtualFolders, setVirtualFolders] = useState(() => {
+    // Load from localStorage on mount
+    const saved = localStorage.getItem('virtualFolders');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  useEffect(() => {
+    fetchRecipes();
+  }, []);
+
+  const fetchRecipes = async () => {
+    try {
+      setLoading(true);
+      const response = await axios.get(`${API_URL}/recipes`);
+      setRecipes(response.data);
+    } catch (error) {
+      console.error('Error fetching recipes:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Build tree structure from recipes + virtual folders
+  const buildTree = () => {
+    const tree = [];
+    const folderMap = new Map(); // Track folders by path
+
+    // Filter out placeholder recipes (folder markers)
+    const realRecipes = recipes.filter(r => !r.name.startsWith('.folder_'));
+
+    // First, create all virtual folders (empty folders)
+    virtualFolders.forEach(folderPath => {
+      const segments = folderPath.split('/').filter(s => s.trim());
+      let currentPath = '';
+      let currentLevel = tree;
+
+      segments.forEach((segment, index) => {
+        currentPath = currentPath ? `${currentPath}/${segment}` : segment;
+
+        let folder = currentLevel.find(
+          item => item.type === 'folder' && item.path === currentPath
+        );
+
+        if (!folder) {
+          folder = {
+            type: 'folder',
+            name: segment,
+            path: currentPath,
+            children: [],
+            isVirtual: true
+          };
+          currentLevel.push(folder);
+        }
+
+        currentLevel = folder.children;
+      });
+    });
+
+    // Then add recipes and their folder structures
+    realRecipes.forEach(recipe => {
+      const path = recipe.category_path || '';
+
+      if (!path) {
+        // Root level recipe
+        tree.push({ type: 'recipe', data: recipe });
+        return;
+      }
+
+      // Split path into folder segments
+      const segments = path.split('/').filter(s => s.trim());
+      let currentPath = '';
+      let currentLevel = tree;
+
+      // Build folder hierarchy
+      segments.forEach((segment, index) => {
+        currentPath = currentPath ? `${currentPath}/${segment}` : segment;
+
+        // Check if folder exists at this level
+        let folder = currentLevel.find(
+          item => item.type === 'folder' && item.path === currentPath
+        );
+
+        if (!folder) {
+          // Create new folder
+          folder = {
+            type: 'folder',
+            name: segment,
+            path: currentPath,
+            children: [],
+            isVirtual: false
+          };
+          currentLevel.push(folder);
+        } else if (folder.isVirtual) {
+          // Mark as non-virtual once it has recipes
+          folder.isVirtual = false;
+        }
+
+        // If this is the last segment, add the recipe to this folder
+        if (index === segments.length - 1) {
+          folder.children.push({ type: 'recipe', data: recipe });
+        } else {
+          // Move to next level
+          currentLevel = folder.children;
+        }
+      });
+    });
+
+    // Sort: folders first, then recipes, alphabetically
+    const sortTree = (items) => {
+      items.sort((a, b) => {
+        if (a.type === 'folder' && b.type === 'recipe') return -1;
+        if (a.type === 'recipe' && b.type === 'folder') return 1;
+
+        const nameA = a.type === 'folder' ? a.name : a.data.name;
+        const nameB = b.type === 'folder' ? b.name : b.data.name;
+        return nameA.localeCompare(nameB);
+      });
+
+      items.forEach(item => {
+        if (item.type === 'folder' && item.children) {
+          sortTree(item.children);
+        }
+      });
+    };
+
+    sortTree(tree);
+    return tree;
+  };
+
+  const toggleFolder = (path) => {
+    const newExpanded = new Set(expandedFolders);
+    if (newExpanded.has(path)) {
+      newExpanded.delete(path);
+    } else {
+      newExpanded.add(path);
+    }
+    setExpandedFolders(newExpanded);
+  };
+
+  const selectRecipe = async (recipeId) => {
+    try {
+      const response = await axios.get(`${API_URL}/recipes/${recipeId}`);
+      setSelectedRecipe(response.data);
+      setEditedRecipe({});
+      setIsDirty(false);
+    } catch (error) {
+      console.error('Error fetching recipe:', error);
+    }
+  };
+
+  const createNewRecipe = () => {
+    setPrefilledCategoryPath('');
+    setShowCreateModal(true);
+  };
+
+  const createNewFolder = () => {
+    setShowFolderModal(true);
+  };
+
+  const handleCreateFolder = (folderPath) => {
+    // Add to virtual folders
+    const newVirtualFolders = [...virtualFolders, folderPath];
+    setVirtualFolders(newVirtualFolders);
+    localStorage.setItem('virtualFolders', JSON.stringify(newVirtualFolders));
+
+    // Expand the folder to show it
+    const newExpanded = new Set(expandedFolders);
+    const segments = folderPath.split('/').filter(s => s.trim());
+    let currentPath = '';
+    segments.forEach(segment => {
+      currentPath = currentPath ? `${currentPath}/${segment}` : segment;
+      newExpanded.add(currentPath);
+    });
+    setExpandedFolders(newExpanded);
+
+    // Close modal
+    setShowFolderModal(false);
+  };
+
+  const handleCreateRecipe = async (newRecipe) => {
+    try {
+      const response = await axios.post(`${API_URL}/recipes`, newRecipe);
+      setRecipes([...recipes, response.data]);
+      setShowCreateModal(false);
+      selectRecipe(response.data.id);
+    } catch (error) {
+      console.error('Error creating recipe:', error);
+      alert('Failed to create recipe');
+    }
+  };
+
+  const handleUpdateRecipe = async () => {
+    if (!editedRecipe || !selectedRecipe) return;
+
+    try {
+      await axios.patch(`${API_URL}/recipes/${selectedRecipe.id}`, editedRecipe);
+
+      // Update recipes list
+      setRecipes(recipes.map(r => r.id === selectedRecipe.id ? { ...r, ...editedRecipe } : r));
+
+      // Update selected recipe
+      setSelectedRecipe({ ...selectedRecipe, ...editedRecipe });
+      setEditedRecipe(null);
+      setIsDirty(false);
+    } catch (error) {
+      console.error('Error updating recipe:', error);
+      alert('Failed to update recipe');
+    }
+  };
+
+  const handleDeleteRecipe = async (recipeId) => {
+    if (!confirm('Are you sure you want to delete this recipe?')) return;
+
+    try {
+      await axios.delete(`${API_URL}/recipes/${recipeId}`);
+      setRecipes(recipes.filter(r => r.id !== recipeId));
+      setSelectedRecipe(null);
+      setEditedRecipe(null);
+    } catch (error) {
+      console.error('Error deleting recipe:', error);
+      alert('Failed to delete recipe');
+    }
+  };
+
+  const handleFieldChange = (field, value) => {
+    setEditedRecipe({ ...editedRecipe, [field]: value });
+    setIsDirty(true);
+  };
+
+  const handleCancel = () => {
+    if (isDirty && !confirm('You have unsaved changes. Are you sure you want to cancel?')) {
+      return;
+    }
+    setEditedRecipe(null);
+    setIsDirty(false);
+  };
+
+  const handleContextMenu = (e, item) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      item: item
+    });
+  };
+
+  const closeContextMenu = () => {
+    setContextMenu(null);
+  };
+
+  const handleRenameFolder = (folderPath) => {
+    const newName = prompt('Enter new folder name:', folderPath.split('/').pop());
+    if (!newName || !newName.trim()) return;
+
+    // Get all recipes in this folder and update their paths
+    const pathPrefix = folderPath + '/';
+    const recipesToUpdate = recipes.filter(r =>
+      r.category_path === folderPath || r.category_path?.startsWith(pathPrefix)
+    );
+
+    if (recipesToUpdate.length === 0) {
+      alert('No recipes in this folder');
+      return;
+    }
+
+    // Calculate new path
+    const parentPath = folderPath.split('/').slice(0, -1).join('/');
+    const newPath = parentPath ? `${parentPath}/${newName.trim()}` : newName.trim();
+
+    // Update all affected recipes
+    Promise.all(
+      recipesToUpdate.map(recipe => {
+        let newCategoryPath;
+        if (recipe.category_path === folderPath) {
+          newCategoryPath = newPath;
+        } else {
+          newCategoryPath = recipe.category_path.replace(folderPath, newPath);
+        }
+
+        return axios.patch(`${API_URL}/recipes/${recipe.id}`, {
+          category_path: newCategoryPath
+        });
+      })
+    )
+      .then(() => {
+        fetchRecipes();
+        closeContextMenu();
+      })
+      .catch(error => {
+        console.error('Error renaming folder:', error);
+        alert('Failed to rename folder');
+      });
+  };
+
+  const handleDeleteFolder = (folderPath) => {
+    const recipesInFolder = recipes.filter(r =>
+      r.category_path === folderPath || r.category_path?.startsWith(folderPath + '/')
+    );
+
+    if (recipesInFolder.length === 0) {
+      // Empty virtual folder - just remove it
+      if (!confirm(`Delete empty folder "${folderPath}"?`)) {
+        return;
+      }
+
+      const newVirtualFolders = virtualFolders.filter(vf => vf !== folderPath && !vf.startsWith(folderPath + '/'));
+      setVirtualFolders(newVirtualFolders);
+      localStorage.setItem('virtualFolders', JSON.stringify(newVirtualFolders));
+      closeContextMenu();
+      return;
+    }
+
+    if (!confirm(`Delete folder and move ${recipesInFolder.length} recipe(s) to root?`)) {
+      return;
+    }
+
+    Promise.all(
+      recipesInFolder.map(recipe => {
+        // Remove the folder path, keeping any sub-path
+        const remainingPath = recipe.category_path.replace(folderPath, '').replace(/^\//, '');
+        return axios.patch(`${API_URL}/recipes/${recipe.id}`, {
+          category_path: remainingPath || null
+        });
+      })
+    )
+      .then(() => {
+        // Also remove from virtual folders
+        const newVirtualFolders = virtualFolders.filter(vf => vf !== folderPath && !vf.startsWith(folderPath + '/'));
+        setVirtualFolders(newVirtualFolders);
+        localStorage.setItem('virtualFolders', JSON.stringify(newVirtualFolders));
+
+        fetchRecipes();
+        closeContextMenu();
+      })
+      .catch(error => {
+        console.error('Error deleting folder:', error);
+        alert('Failed to delete folder');
+      });
+  };
+
+  // Close context menu when clicking outside
+  useEffect(() => {
+    const handleClick = () => closeContextMenu();
+    if (contextMenu) {
+      document.addEventListener('click', handleClick);
+      return () => document.removeEventListener('click', handleClick);
+    }
+  }, [contextMenu]);
+
+  // Drag and drop handlers
+  const handleDragStart = (e, item) => {
+    if (item.type === 'recipe') {
+      setDraggedItem(item);
+      e.dataTransfer.effectAllowed = 'move';
+    }
+  };
+
+  const handleDragOver = (e, item) => {
+    e.preventDefault();
+    if (draggedItem && item.type === 'folder') {
+      e.dataTransfer.dropEffect = 'move';
+      setDropTarget(item.path);
+    } else if (draggedItem && !item.type) {
+      // Root level drop
+      e.dataTransfer.dropEffect = 'move';
+      setDropTarget('__root__');
+    }
+  };
+
+  const handleDragLeave = (e) => {
+    setDropTarget(null);
+  };
+
+  const handleDrop = async (e, targetItem) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!draggedItem || draggedItem.type !== 'recipe') {
+      setDraggedItem(null);
+      setDropTarget(null);
+      return;
+    }
+
+    const recipe = draggedItem.data;
+    let newCategoryPath;
+
+    if (targetItem && targetItem.type === 'folder') {
+      newCategoryPath = targetItem.path;
+    } else {
+      // Dropped on root
+      newCategoryPath = null;
+    }
+
+    // Don't update if dropping in same folder
+    if (newCategoryPath === recipe.category_path) {
+      setDraggedItem(null);
+      setDropTarget(null);
+      return;
+    }
+
+    try {
+      await axios.patch(`${API_URL}/recipes/${recipe.id}`, {
+        category_path: newCategoryPath
+      });
+
+      // Refresh recipes
+      fetchRecipes();
+
+      // Re-select the recipe if it was selected
+      if (selectedRecipe?.id === recipe.id) {
+        selectRecipe(recipe.id);
+      }
+    } catch (error) {
+      console.error('Error moving recipe:', error);
+      alert('Failed to move recipe');
+    }
+
+    setDraggedItem(null);
+    setDropTarget(null);
+  };
+
   return (
-    <div className="container">
+    <div className="recipes-container">
       <Link to="/" className="back-link">← Back to Home</Link>
 
-      <div className="page-header">
-        <h1>Recipes</h1>
-        <p>Create and manage recipes with cost calculations</p>
+      <div className="recipes-layout">
+        {/* Left Panel - Explorer Tree */}
+        <div className="recipes-explorer">
+          <div className="explorer-header">
+            <h2>Recipes</h2>
+            <div className="explorer-actions">
+              <button onClick={createNewFolder} className="btn-new-folder" title="Create New Folder">
+                📁+
+              </button>
+              <button onClick={createNewRecipe} className="btn-new-recipe" title="Create New Recipe">
+                📄+
+              </button>
+            </div>
+          </div>
+
+          {loading ? (
+            <div className="explorer-loading">Loading recipes...</div>
+          ) : recipes.length === 0 ? (
+            <div className="explorer-empty">
+              <p>No recipes yet</p>
+              <button onClick={createNewRecipe} className="btn-create-first">
+                Create Your First Recipe
+              </button>
+            </div>
+          ) : (
+            <div
+              className="recipe-tree"
+              onDragOver={(e) => handleDragOver(e, null)}
+              onDrop={(e) => handleDrop(e, null)}
+            >
+              {buildTree().map((node, idx) => (
+                <TreeNode
+                  key={node.type === 'folder' ? node.path : node.data.id}
+                  node={node}
+                  selectedRecipe={selectedRecipe}
+                  expandedFolders={expandedFolders}
+                  onToggleFolder={toggleFolder}
+                  onSelectRecipe={selectRecipe}
+                  onContextMenu={handleContextMenu}
+                  onDragStart={handleDragStart}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  dropTarget={dropTarget}
+                  depth={0}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* Context Menu */}
+          {contextMenu && (
+            <ContextMenu
+              x={contextMenu.x}
+              y={contextMenu.y}
+              item={contextMenu.item}
+              onRenameFolder={handleRenameFolder}
+              onDeleteFolder={handleDeleteFolder}
+              onClose={closeContextMenu}
+            />
+          )}
+        </div>
+
+        {/* Right Panel - Recipe Detail/Editor */}
+        <div className="recipe-detail">
+          {!selectedRecipe ? (
+            <div className="detail-empty-state">
+              <div className="empty-state-content">
+                <h3>Welcome to Recipes</h3>
+                <p>Select a recipe from the explorer to view and edit it</p>
+                <p className="empty-state-stats">
+                  {recipes.length} recipe{recipes.length !== 1 ? 's' : ''} total
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="recipe-editor">
+              {/* Recipe Header */}
+              <RecipeHeader
+                recipe={selectedRecipe}
+                editedRecipe={editedRecipe}
+                onFieldChange={handleFieldChange}
+                onDelete={handleDeleteRecipe}
+              />
+
+              {/* Recipe Metadata */}
+              <RecipeMetadata
+                recipe={selectedRecipe}
+                editedRecipe={editedRecipe}
+                onFieldChange={handleFieldChange}
+              />
+
+              {/* Ingredients Section */}
+              <RecipeIngredients
+                recipe={selectedRecipe}
+                onIngredientsChange={() => selectRecipe(selectedRecipe.id)}
+              />
+
+              {/* Method Steps */}
+              <RecipeMethod
+                recipe={selectedRecipe}
+                onMethodChange={() => selectRecipe(selectedRecipe.id)}
+              />
+
+              {/* Cost Panel */}
+              <RecipeCost recipe={selectedRecipe} />
+
+              {/* Notes */}
+              <RecipeNotes recipe={selectedRecipe} />
+
+              {/* Action Buttons */}
+              <div className="recipe-actions">
+                <button
+                  className="btn-save"
+                  onClick={handleUpdateRecipe}
+                  disabled={!isDirty}
+                >
+                  Save
+                </button>
+                <button className="btn-cancel" onClick={handleCancel}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
-      <div className="coming-soon">
-        <div className="coming-soon-icon">🚧</div>
-        <h2>Coming Soon</h2>
-        <p>Recipe management and cost calculation features are under development.</p>
+      {/* Create Recipe Modal */}
+      {showCreateModal && (
+        <RecipeCreateModal
+          onClose={() => {
+            setShowCreateModal(false);
+            setPrefilledCategoryPath('');
+          }}
+          onCreate={handleCreateRecipe}
+          initialCategoryPath={prefilledCategoryPath}
+        />
+      )}
+
+      {/* Create Folder Modal */}
+      {showFolderModal && (
+        <FolderCreateModal
+          onClose={() => setShowFolderModal(false)}
+          onCreate={handleCreateFolder}
+        />
+      )}
+    </div>
+  );
+}
+
+// Component Implementations
+
+function RecipeHeader({ recipe, editedRecipe, onFieldChange, onDelete }) {
+  const currentName = editedRecipe?.name !== undefined ? editedRecipe.name : recipe.name;
+  const currentPath = editedRecipe?.category_path !== undefined ? editedRecipe.category_path : recipe.category_path;
+
+  return (
+    <div className="recipe-header">
+      <div className="recipe-title-section">
+        <input
+          type="text"
+          className="recipe-title-input"
+          value={currentName}
+          onChange={(e) => onFieldChange('name', e.target.value)}
+          placeholder="Recipe Name"
+        />
+        <div className="recipe-header-actions">
+          <button
+            className="btn-icon"
+            title="Delete"
+            onClick={() => onDelete(recipe.id)}
+          >
+            🗑️
+          </button>
+        </div>
       </div>
+      <input
+        type="text"
+        className="recipe-path-input"
+        value={currentPath || ''}
+        onChange={(e) => onFieldChange('category_path', e.target.value)}
+        placeholder="Category Path (e.g., Breakfast/Hot Items)"
+      />
+    </div>
+  );
+}
+
+function RecipeMetadata({ recipe, editedRecipe, onFieldChange }) {
+  const currentYield = editedRecipe?.yield_amount !== undefined ? editedRecipe.yield_amount : recipe.yield_amount;
+  const currentDescription = editedRecipe?.description !== undefined ? editedRecipe.description : recipe.description;
+
+  return (
+    <div className="recipe-metadata">
+      <div className="metadata-field">
+        <label>Yield:</label>
+        <input
+          type="number"
+          className="metadata-input"
+          value={currentYield || ''}
+          onChange={(e) => onFieldChange('yield_amount', parseFloat(e.target.value) || null)}
+          placeholder="4"
+          step="0.1"
+        />
+        <span className="metadata-unit">portions</span>
+      </div>
+      <div className="metadata-field full-width">
+        <label>Description:</label>
+        <input
+          type="text"
+          className="metadata-input-full"
+          value={currentDescription || ''}
+          onChange={(e) => onFieldChange('description', e.target.value)}
+          placeholder="Brief description of the recipe"
+        />
+      </div>
+    </div>
+  );
+}
+
+function RecipeIngredients({ recipe, onIngredientsChange }) {
+  const [commonProducts, setCommonProducts] = useState([]);
+  const [units, setUnits] = useState([]);
+  const [showAddRow, setShowAddRow] = useState(false);
+  const [newIngredient, setNewIngredient] = useState({
+    common_product_id: '',
+    quantity: '',
+    unit_id: '',
+    yield_percentage: 100
+  });
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filteredProducts, setFilteredProducts] = useState([]);
+  const [showAutocomplete, setShowAutocomplete] = useState(false);
+
+  useEffect(() => {
+    fetchCommonProducts();
+    fetchUnits();
+  }, []);
+
+  const fetchCommonProducts = async () => {
+    try {
+      const response = await axios.get(`${API_URL}/common-products?limit=10000`);
+      setCommonProducts(response.data);
+    } catch (error) {
+      console.error('Error fetching common products:', error);
+    }
+  };
+
+  const fetchUnits = async () => {
+    try {
+      const response = await axios.get(`${API_URL}/units`);
+      setUnits(response.data);
+    } catch (error) {
+      console.error('Error fetching units:', error);
+    }
+  };
+
+  const handleSearchChange = (value) => {
+    setSearchTerm(value);
+    if (value.trim()) {
+      const filtered = commonProducts.filter(cp =>
+        cp.common_name.toLowerCase().includes(value.toLowerCase())
+      );
+      setFilteredProducts(filtered);
+      setShowAutocomplete(true);
+    } else {
+      setFilteredProducts([]);
+      setShowAutocomplete(false);
+    }
+  };
+
+  const selectProduct = (product) => {
+    setNewIngredient({ ...newIngredient, common_product_id: product.id });
+    setSearchTerm(product.common_name);
+    setShowAutocomplete(false);
+  };
+
+  const handleAddIngredient = async () => {
+    if (!newIngredient.common_product_id || !newIngredient.quantity || !newIngredient.unit_id) {
+      alert('Please fill in all required fields');
+      return;
+    }
+
+    try {
+      await axios.post(`${API_URL}/recipes/${recipe.id}/ingredients`, {
+        common_product_id: parseInt(newIngredient.common_product_id),
+        quantity: parseFloat(newIngredient.quantity),
+        unit_id: parseInt(newIngredient.unit_id),
+        yield_percentage: parseFloat(newIngredient.yield_percentage)
+      });
+
+      // Refresh recipe to get updated ingredients
+      onIngredientsChange();
+
+      // Reset form
+      setNewIngredient({
+        common_product_id: '',
+        quantity: '',
+        unit_id: '',
+        yield_percentage: 100
+      });
+      setSearchTerm('');
+      setShowAddRow(false);
+    } catch (error) {
+      console.error('Error adding ingredient:', error);
+      alert('Failed to add ingredient');
+    }
+  };
+
+  const handleRemoveIngredient = async (ingredientId) => {
+    if (!confirm('Remove this ingredient?')) return;
+
+    try {
+      await axios.delete(`${API_URL}/recipes/${recipe.id}/ingredients/${ingredientId}`);
+      onIngredientsChange();
+    } catch (error) {
+      console.error('Error removing ingredient:', error);
+      alert('Failed to remove ingredient');
+    }
+  };
+
+  return (
+    <div className="recipe-section">
+      <h2>Ingredients</h2>
+      <div className="ingredients-table-container">
+        <table className="ingredients-table">
+          <thead>
+            <tr>
+              <th>Ingredient</th>
+              <th>Quantity</th>
+              <th>Unit</th>
+              <th>Yield %</th>
+              <th>Cost</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {recipe.ingredients && recipe.ingredients.length > 0 ? (
+              recipe.ingredients.map((ing) => (
+                <tr key={ing.id}>
+                  <td>{ing.common_name || ing.sub_recipe_name || 'Unknown'}</td>
+                  <td>{ing.quantity}</td>
+                  <td>{ing.unit_abbreviation}</td>
+                  <td>{ing.yield_percentage}%</td>
+                  <td>TODO</td>
+                  <td>
+                    <button
+                      className="btn-icon-small"
+                      onClick={() => handleRemoveIngredient(ing.id)}
+                      title="Remove ingredient"
+                    >
+                      ×
+                    </button>
+                  </td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td colSpan="6" className="empty-cell">No ingredients yet</td>
+              </tr>
+            )}
+            {showAddRow && (
+              <tr className="ingredient-add-row">
+                <td>
+                  <div className="autocomplete-container">
+                    <input
+                      type="text"
+                      className="ingredient-input"
+                      value={searchTerm}
+                      onChange={(e) => handleSearchChange(e.target.value)}
+                      placeholder="Search common products..."
+                      autoFocus
+                    />
+                    {showAutocomplete && filteredProducts.length > 0 && (
+                      <div className="autocomplete-dropdown">
+                        {filteredProducts.slice(0, 10).map(product => (
+                          <div
+                            key={product.id}
+                            className="autocomplete-item"
+                            onClick={() => selectProduct(product)}
+                          >
+                            {product.common_name}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </td>
+                <td>
+                  <input
+                    type="number"
+                    className="ingredient-input"
+                    value={newIngredient.quantity}
+                    onChange={(e) => setNewIngredient({ ...newIngredient, quantity: e.target.value })}
+                    placeholder="0"
+                    step="0.01"
+                  />
+                </td>
+                <td>
+                  <select
+                    className="ingredient-input"
+                    value={newIngredient.unit_id}
+                    onChange={(e) => setNewIngredient({ ...newIngredient, unit_id: e.target.value })}
+                  >
+                    <option value="">Select unit</option>
+                    {units.map(unit => (
+                      <option key={unit.id} value={unit.id}>
+                        {unit.abbreviation}
+                      </option>
+                    ))}
+                  </select>
+                </td>
+                <td>
+                  <input
+                    type="number"
+                    className="ingredient-input"
+                    value={newIngredient.yield_percentage}
+                    onChange={(e) => setNewIngredient({ ...newIngredient, yield_percentage: e.target.value })}
+                    step="1"
+                    min="0"
+                    max="100"
+                  />
+                </td>
+                <td>-</td>
+                <td>
+                  <button
+                    className="btn-icon-small btn-save-ingredient"
+                    onClick={handleAddIngredient}
+                    title="Save ingredient"
+                  >
+                    ✓
+                  </button>
+                  <button
+                    className="btn-icon-small"
+                    onClick={() => {
+                      setShowAddRow(false);
+                      setSearchTerm('');
+                      setNewIngredient({
+                        common_product_id: '',
+                        quantity: '',
+                        unit_id: '',
+                        yield_percentage: 100
+                      });
+                    }}
+                    title="Cancel"
+                  >
+                    ×
+                  </button>
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+        <button
+          className="btn-add-ingredient"
+          onClick={() => setShowAddRow(true)}
+          disabled={showAddRow}
+        >
+          + Add Ingredient
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function RecipeMethod({ recipe, onMethodChange }) {
+  const [steps, setSteps] = useState(recipe.method || []);
+  const [editingStepIndex, setEditingStepIndex] = useState(null);
+
+  useEffect(() => {
+    setSteps(recipe.method || []);
+  }, [recipe.method]);
+
+  const handleAddStep = () => {
+    const newStep = {
+      step_number: steps.length + 1,
+      instruction: ''
+    };
+    setSteps([...steps, newStep]);
+    setEditingStepIndex(steps.length);
+  };
+
+  const handleStepChange = (index, instruction) => {
+    const updatedSteps = [...steps];
+    updatedSteps[index].instruction = instruction;
+    setSteps(updatedSteps);
+  };
+
+  const handleRemoveStep = (index) => {
+    if (!confirm('Remove this step?')) return;
+
+    const updatedSteps = steps.filter((_, i) => i !== index);
+    // Renumber steps
+    updatedSteps.forEach((step, i) => {
+      step.step_number = i + 1;
+    });
+    setSteps(updatedSteps);
+    saveMethod(updatedSteps);
+  };
+
+  const handleMoveStep = (index, direction) => {
+    if (
+      (direction === 'up' && index === 0) ||
+      (direction === 'down' && index === steps.length - 1)
+    ) {
+      return;
+    }
+
+    const newIndex = direction === 'up' ? index - 1 : index + 1;
+    const updatedSteps = [...steps];
+    [updatedSteps[index], updatedSteps[newIndex]] = [updatedSteps[newIndex], updatedSteps[index]];
+
+    // Renumber steps
+    updatedSteps.forEach((step, i) => {
+      step.step_number = i + 1;
+    });
+
+    setSteps(updatedSteps);
+    saveMethod(updatedSteps);
+  };
+
+  const saveMethod = async (updatedSteps) => {
+    try {
+      await axios.patch(`${API_URL}/recipes/${recipe.id}`, {
+        method: updatedSteps
+      });
+      onMethodChange();
+    } catch (error) {
+      console.error('Error updating method:', error);
+      alert('Failed to update method');
+    }
+  };
+
+  const handleSaveStep = (index) => {
+    if (!steps[index].instruction.trim()) {
+      alert('Step instruction cannot be empty');
+      return;
+    }
+    setEditingStepIndex(null);
+    saveMethod(steps);
+  };
+
+  return (
+    <div className="recipe-section">
+      <h2>Method</h2>
+      <div className="method-steps">
+        {steps.length > 0 ? (
+          steps.map((step, idx) => (
+            <div key={idx} className="method-step">
+              <div className="step-header">
+                <div className="step-number">{step.step_number}</div>
+                <div className="step-controls">
+                  <button
+                    className="btn-step-control"
+                    onClick={() => handleMoveStep(idx, 'up')}
+                    disabled={idx === 0}
+                    title="Move up"
+                  >
+                    ↑
+                  </button>
+                  <button
+                    className="btn-step-control"
+                    onClick={() => handleMoveStep(idx, 'down')}
+                    disabled={idx === steps.length - 1}
+                    title="Move down"
+                  >
+                    ↓
+                  </button>
+                  <button
+                    className="btn-step-control btn-remove"
+                    onClick={() => handleRemoveStep(idx)}
+                    title="Remove step"
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+              {editingStepIndex === idx ? (
+                <div className="step-edit-container">
+                  <textarea
+                    className="step-instruction-input"
+                    value={step.instruction}
+                    onChange={(e) => handleStepChange(idx, e.target.value)}
+                    placeholder="Enter step instruction..."
+                    autoFocus
+                    rows="3"
+                  />
+                  <div className="step-edit-actions">
+                    <button
+                      className="btn-step-save"
+                      onClick={() => handleSaveStep(idx)}
+                    >
+                      Save
+                    </button>
+                    <button
+                      className="btn-step-cancel"
+                      onClick={() => {
+                        setEditingStepIndex(null);
+                        setSteps(recipe.method || []);
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div
+                  className="step-instruction"
+                  onClick={() => setEditingStepIndex(idx)}
+                  title="Click to edit"
+                >
+                  {step.instruction || <span className="placeholder-text">Click to add instruction...</span>}
+                </div>
+              )}
+            </div>
+          ))
+        ) : (
+          <div className="empty-method">No method steps yet</div>
+        )}
+        <button className="btn-add-step" onClick={handleAddStep}>
+          + Add Step
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function RecipeCost({ recipe }) {
+  return (
+    <div className="recipe-section recipe-cost-section">
+      <h2>Cost Analysis</h2>
+      {/* TODO Phase 3: Implement cost calculations */}
+      <div className="cost-panel">
+        <div className="cost-summary">
+          <div className="cost-item">
+            <label>Total Cost:</label>
+            <span className="cost-value">TODO</span>
+          </div>
+          <div className="cost-item">
+            <label>Cost per Serving:</label>
+            <span className="cost-value">TODO</span>
+          </div>
+        </div>
+        <div className="cost-breakdown">
+          <p className="placeholder-text">Cost breakdown will appear here in Phase 3</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RecipeNotes({ recipe }) {
+  return (
+    <div className="recipe-section">
+      <h2>Notes</h2>
+      <textarea
+        className="recipe-notes-textarea"
+        placeholder="Add notes about this recipe..."
+        defaultValue={recipe.notes || ''}
+        readOnly
+      />
+    </div>
+  );
+}
+
+// Create Recipe Modal
+function RecipeCreateModal({ onClose, onCreate, initialCategoryPath = '' }) {
+  const [formData, setFormData] = useState({
+    name: '',
+    category_path: initialCategoryPath,
+    description: '',
+    yield_amount: ''
+  });
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!formData.name.trim()) {
+      alert('Recipe name is required');
+      return;
+    }
+
+    onCreate({
+      ...formData,
+      yield_amount: formData.yield_amount ? parseFloat(formData.yield_amount) : null
+    });
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h2>Create New Recipe</h2>
+          <button className="modal-close" onClick={onClose}>×</button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="modal-form">
+          <div className="form-group">
+            <label>Recipe Name *</label>
+            <input
+              type="text"
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              placeholder="e.g., Chicken Carbonara"
+              required
+              autoFocus
+            />
+          </div>
+
+          <div className="form-group">
+            <label>Category Path</label>
+            <input
+              type="text"
+              value={formData.category_path}
+              onChange={(e) => setFormData({ ...formData, category_path: e.target.value })}
+              placeholder="e.g., Dinner/Italian/Pasta"
+            />
+            <small>Use / to create nested folders (e.g., Breakfast/Hot Items)</small>
+          </div>
+
+          <div className="form-group">
+            <label>Description</label>
+            <input
+              type="text"
+              value={formData.description}
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              placeholder="Brief description"
+            />
+          </div>
+
+          <div className="form-group">
+            <label>Yield (portions)</label>
+            <input
+              type="number"
+              value={formData.yield_amount}
+              onChange={(e) => setFormData({ ...formData, yield_amount: e.target.value })}
+              placeholder="4"
+              step="0.1"
+              min="0"
+            />
+          </div>
+
+          <div className="modal-actions">
+            <button type="button" className="btn-cancel" onClick={onClose}>
+              Cancel
+            </button>
+            <button type="submit" className="btn-save">
+              Create Recipe
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// Create Folder Modal
+function FolderCreateModal({ onClose, onCreate }) {
+  const [folderPath, setFolderPath] = useState('');
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!folderPath.trim()) {
+      alert('Folder path is required');
+      return;
+    }
+
+    onCreate(folderPath.trim());
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h2>Create New Folder</h2>
+          <button className="modal-close" onClick={onClose}>×</button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="modal-form">
+          <div className="form-group">
+            <label>Folder Path *</label>
+            <input
+              type="text"
+              value={folderPath}
+              onChange={(e) => setFolderPath(e.target.value)}
+              placeholder="e.g., Breakfast/Hot Items"
+              required
+              autoFocus
+            />
+            <small>Use / to create nested folders. The folder will be created immediately and you can add recipes to it later.</small>
+          </div>
+
+          <div className="modal-actions">
+            <button type="button" className="btn-cancel" onClick={onClose}>
+              Cancel
+            </button>
+            <button type="submit" className="btn-save">
+              Create Folder
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// Context Menu Component
+function ContextMenu({ x, y, item, onRenameFolder, onDeleteFolder, onClose }) {
+  const handleAction = (action) => {
+    action();
+    onClose();
+  };
+
+  return (
+    <div
+      className="context-menu"
+      style={{ left: x, top: y }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      {item.type === 'folder' ? (
+        <>
+          <div
+            className="context-menu-item"
+            onClick={() => handleAction(() => onRenameFolder(item.path))}
+          >
+            ✏️ Rename Folder
+          </div>
+          <div
+            className="context-menu-item"
+            onClick={() => handleAction(() => onDeleteFolder(item.path))}
+          >
+            🗑️ Delete Folder
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="context-menu-item context-menu-disabled">
+            Move to...
+          </div>
+          <div className="context-menu-item context-menu-disabled">
+            Duplicate
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// Tree Node Component
+function TreeNode({
+  node,
+  selectedRecipe,
+  expandedFolders,
+  onToggleFolder,
+  onSelectRecipe,
+  onContextMenu,
+  onDragStart,
+  onDragOver,
+  onDragLeave,
+  onDrop,
+  dropTarget,
+  depth
+}) {
+  if (node.type === 'folder') {
+    const isExpanded = expandedFolders.has(node.path);
+    const hasChildren = node.children && node.children.length > 0;
+    const isDropTarget = dropTarget === node.path;
+
+    return (
+      <>
+        <div
+          className={`tree-folder ${isDropTarget ? 'drop-target' : ''}`}
+          style={{ paddingLeft: `${depth * 1.5}rem` }}
+          onClick={() => hasChildren && onToggleFolder(node.path)}
+          onContextMenu={(e) => onContextMenu(e, node)}
+          onDragOver={(e) => onDragOver(e, node)}
+          onDragLeave={onDragLeave}
+          onDrop={(e) => onDrop(e, node)}
+        >
+          <span className="folder-icon">
+            {hasChildren ? (isExpanded ? '📂' : '📁') : '📁'}
+          </span>
+          <span className="folder-name">{node.name}</span>
+          <span className="folder-count">({node.children.length})</span>
+        </div>
+        {isExpanded && hasChildren && (
+          <>
+            {node.children.map((child, idx) => (
+              <TreeNode
+                key={child.type === 'folder' ? child.path : child.data.id}
+                node={child}
+                selectedRecipe={selectedRecipe}
+                expandedFolders={expandedFolders}
+                onToggleFolder={onToggleFolder}
+                onSelectRecipe={onSelectRecipe}
+                onContextMenu={onContextMenu}
+                onDragStart={onDragStart}
+                onDragOver={onDragOver}
+                onDragLeave={onDragLeave}
+                onDrop={onDrop}
+                dropTarget={dropTarget}
+                depth={depth + 1}
+              />
+            ))}
+          </>
+        )}
+      </>
+    );
+  }
+
+  // Recipe node
+  return (
+    <div
+      className={`recipe-item ${selectedRecipe?.id === node.data.id ? 'selected' : ''}`}
+      style={{ paddingLeft: `${depth * 1.5}rem` }}
+      draggable
+      onClick={() => onSelectRecipe(node.data.id)}
+      onContextMenu={(e) => onContextMenu(e, node)}
+      onDragStart={(e) => onDragStart(e, node)}
+    >
+      <span className="recipe-icon">📄</span>
+      <span className="recipe-name">{node.data.name}</span>
     </div>
   );
 }

@@ -37,11 +37,13 @@ def list_products(
                 ph.case_price,
                 ph.unit_price,
                 ph.effective_date,
-                u.abbreviation as unit_abbreviation
+                u.abbreviation as unit_abbreviation,
+                cp.common_name as common_product_name
             FROM products p
             LEFT JOIN distributor_products dp ON dp.product_id = p.id
             LEFT JOIN distributors d ON d.id = dp.distributor_id
             LEFT JOIN units u ON u.id = p.unit_id
+            LEFT JOIN common_products cp ON cp.id = p.common_product_id
             LEFT JOIN (
                 SELECT distributor_product_id, case_price, unit_price, effective_date,
                        ROW_NUMBER() OVER (PARTITION BY distributor_product_id ORDER BY effective_date DESC) as rn
@@ -91,11 +93,13 @@ def get_product(product_id: int):
                 ph.case_price,
                 ph.unit_price,
                 ph.effective_date,
-                u.abbreviation as unit_abbreviation
+                u.abbreviation as unit_abbreviation,
+                cp.common_name as common_product_name
             FROM products p
             LEFT JOIN distributor_products dp ON dp.product_id = p.id
             LEFT JOIN distributors d ON d.id = dp.distributor_id
             LEFT JOIN units u ON u.id = p.unit_id
+            LEFT JOIN common_products cp ON cp.id = p.common_product_id
             LEFT JOIN (
                 SELECT distributor_product_id, case_price, unit_price, effective_date,
                        ROW_NUMBER() OVER (PARTITION BY distributor_product_id ORDER BY effective_date DESC) as rn
@@ -151,3 +155,36 @@ def unmap_product(product_id: int):
         conn.commit()
 
         return {"message": "Product unmapped successfully", "product_id": product_id}
+
+
+@router.patch("/{product_id}")
+def update_product(product_id: int, updates: dict):
+    """Update product fields (name, brand, pack, size, unit_id, common_product_id)."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Check if product exists
+        cursor.execute("SELECT id FROM products WHERE id = ?", (product_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Product not found")
+
+        # Build update query dynamically
+        allowed_fields = ['name', 'brand', 'pack', 'size', 'unit_id', 'common_product_id']
+        update_fields = []
+        params = []
+
+        for field, value in updates.items():
+            if field in allowed_fields:
+                update_fields.append(f"{field} = ?")
+                params.append(value)
+
+        if not update_fields:
+            raise HTTPException(status_code=400, detail="No valid fields to update")
+
+        params.append(product_id)
+        query = f"UPDATE products SET {', '.join(update_fields)} WHERE id = ?"
+
+        cursor.execute(query, params)
+        conn.commit()
+
+        return {"message": "Product updated successfully", "product_id": product_id}

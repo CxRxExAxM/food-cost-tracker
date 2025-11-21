@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .routers import products, common_products, distributors, units
+from .routers import products, common_products, distributors, units, recipes
 
 app = FastAPI(
     title="Food Cost Tracker API",
@@ -22,6 +22,7 @@ app.include_router(products.router)
 app.include_router(common_products.router)
 app.include_router(distributors.router)
 app.include_router(units.router)
+app.include_router(recipes.router)
 
 
 @app.get("/")

@@ -9,7 +9,7 @@ router = APIRouter(prefix="/common-products", tags=["common-products"])
 @router.get("", response_model=list[CommonProduct])
 def list_common_products(
     skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=500),
+    limit: int = Query(100, ge=1, le=10000),
     search: Optional[str] = None,
     category: Optional[str] = None
 ):
