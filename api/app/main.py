@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from .routers import products, common_products, distributors, units, recipes, uploads, auth
+from .database import init_db
 
 app = FastAPI(
     title="Food Cost Tracker API",
@@ -21,6 +22,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Initialize database on startup
+init_db()
 
 # Include routers
 app.include_router(auth.router)

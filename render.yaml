@@ -9,6 +9,8 @@ services:
         generateValue: true
       - key: PYTHON_ENV
         value: production
+      - key: DATABASE_PATH
+        value: /app/data/food_cost_tracker.db
     disk:
       name: food-cost-data
       mountPath: /app/data
