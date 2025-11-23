@@ -176,6 +176,19 @@ def init_db():
         )
     """)
 
+    # Create import_batches table for tracking CSV imports
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS import_batches (
+            id TEXT PRIMARY KEY,
+            distributor_id INTEGER REFERENCES distributors(id),
+            filename TEXT NOT NULL,
+            rows_imported INTEGER,
+            rows_failed INTEGER,
+            import_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            notes TEXT
+        )
+    """)
+
     conn.commit()
     conn.close()
 
