@@ -73,23 +73,36 @@ def init_db():
     """)
 
     # Seed default units if table is empty
+    # Note: Using UPPERCASE abbreviations for consistency with import normalization
     cursor.execute("SELECT COUNT(*) FROM units")
     if cursor.fetchone()[0] == 0:
         units = [
-            ('Pound', 'lb', 'weight'),
-            ('Ounce', 'oz', 'weight'),
-            ('Kilogram', 'kg', 'weight'),
-            ('Gram', 'g', 'weight'),
-            ('Gallon', 'gal', 'volume'),
-            ('Quart', 'qt', 'volume'),
-            ('Pint', 'pt', 'volume'),
-            ('Cup', 'cup', 'volume'),
-            ('Fluid Ounce', 'fl oz', 'volume'),
+            # Weight units
+            ('Pound', 'LB', 'weight'),
+            ('Ounce', 'OZ', 'weight'),
+            ('Kilogram', 'KG', 'weight'),
+            ('Gram', 'G', 'weight'),
+            # Volume units
+            ('Gallon', 'GAL', 'volume'),
+            ('Quart', 'QT', 'volume'),
+            ('Pint', 'PT', 'volume'),
+            ('Cup', 'CUP', 'volume'),
+            ('Fluid Ounce', 'FL OZ', 'volume'),
             ('Liter', 'L', 'volume'),
-            ('Milliliter', 'mL', 'volume'),
-            ('Each', 'ea', 'count'),
-            ('Dozen', 'doz', 'count'),
-            ('Case', 'case', 'count'),
+            ('Milliliter', 'ML', 'volume'),
+            ('Tablespoon', 'TBSP', 'volume'),
+            ('Teaspoon', 'TSP', 'volume'),
+            # Count units
+            ('Each', 'EA', 'count'),
+            ('Count', 'CT', 'count'),
+            ('Dozen', 'DOZ', 'count'),
+            ('Case', 'CASE', 'count'),
+            ('Box', 'BOX', 'count'),
+            ('Bag', 'BAG', 'count'),
+            ('Can', 'CAN', 'count'),
+            ('Jar', 'JAR', 'count'),
+            ('Pack', 'PACK', 'count'),
+            ('Bunch', 'BUNCH', 'count'),
         ]
         cursor.executemany(
             "INSERT INTO units (name, abbreviation, unit_type) VALUES (?, ?, ?)",
