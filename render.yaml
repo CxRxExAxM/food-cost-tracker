@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: food-cost-tracker
+    runtime: docker
+    dockerfilePath: ./Dockerfile.render
+    dockerContext: .
+    envVars:
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: PYTHON_ENV
+        value: production
+    disk:
+      name: food-cost-data
+      mountPath: /app/data
+      sizeGB: 1

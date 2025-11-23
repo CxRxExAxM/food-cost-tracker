@@ -80,59 +80,61 @@
 
 ---
 
-## Phase 4: Cost Calculations
+## ✅ Phase 4: Cost Calculations (COMPLETE)
 **Goal**: Real-time recipe cost analysis
 
 ### Backend
-- [ ] Implement `/recipes/{id}/cost` endpoint
-- [ ] Calculate ingredient costs from latest prices
-- [ ] Handle sub-recipe cost recursion
-- [ ] Calculate cost per serving
-- [ ] Return cost breakdown by ingredient
-- [ ] Handle missing price data gracefully
+- [x] Implement `/recipes/{id}/cost` endpoint
+- [x] Calculate ingredient costs from latest prices
+- [x] Handle sub-recipe cost recursion
+- [x] Calculate cost per serving
+- [x] Return cost breakdown by ingredient
+- [x] Handle missing price data gracefully
 
 ### Frontend
-- [ ] Display total cost
-- [ ] Display cost per serving
-- [ ] Show cost breakdown table
-- [ ] Highlight ingredients with no price data
-- [ ] Add cost percentage by ingredient
-- [ ] Make cost panel collapsible
+- [x] Display total cost
+- [x] Display cost per serving
+- [x] Show cost breakdown table
+- [x] Highlight ingredients with no price data
+- [x] Add cost percentage by ingredient
+- [x] Make cost panel collapsible
 
-### Components to Build
-- [ ] CostBreakdownTable
-- [ ] PriceWarning component
+### Components Built
+- [x] RecipeCost component (with collapsible panel)
+- [x] CostBreakdownTable (inline in RecipeCost)
+- [x] PriceWarning (inline in RecipeCost)
 
 ---
 
-## Phase 5: Allergen Management
+## ✅ Phase 5: Allergen Management (COMPLETE)
 **Goal**: Allergen tracking from common products to recipes
 
 ### Backend
-- [ ] Update common_products PATCH to handle allergens
-- [ ] Calculate recipe allergens from ingredients
-- [ ] Return allergen summary with recipe
+- [x] Update common_products PATCH to handle allergens (already worked)
+- [x] Calculate recipe allergens from ingredients
+- [x] Return allergen summary with recipe cost endpoint
 
 ### Frontend (Products Page)
-- [ ] Build allergen modal for common products
-- [ ] Add allergen checkboxes (16 total)
-- [ ] Show allergen indicators on product badges
+- [x] Build allergen modal for common products
+- [x] Add allergen checkboxes (16 total)
+- [x] Show allergen indicators on product badges
 
 ### Frontend (Recipes Page)
-- [ ] Display recipe allergen summary
-- [ ] Show allergen warnings
-- [ ] Allergen icons/badges
+- [x] Display recipe allergen summary
+- [x] Show dietary flags (Vegan/Vegetarian)
+- [x] Allergen icons/badges
 
-### Components to Build
-- [ ] AllergenModal
-- [ ] AllergenBadges
-- [ ] AllergenSummary
+### Components Built
+- [x] AllergenModal (in Products.jsx)
+- [x] Allergen badges on common product display
+- [x] Allergen summary in RecipeCost component
 
 ---
 
 ## Phase 6: Advanced Features
 **Goal**: Polish and advanced functionality
 
+### Recipes
 - [ ] Recipe search (name, ingredients, allergens)
 - [ ] Bulk operations (tag recipes, batch move)
 - [ ] Recipe templates
@@ -143,6 +145,13 @@
 - [ ] Price trend charts per recipe
 - [ ] Batch cost comparison
 - [ ] Unit conversions
+
+### Products
+- [x] CSV upload UI for vendor price lists (with vendor-specific cleaning)
+- [ ] Manual product entry form
+- [ ] Price history view per product
+- [ ] Product merge/deduplication tool
+- [ ] Bulk product editing
 
 ---
 
@@ -169,7 +178,77 @@
 **Phase 1**: ✅ COMPLETE
 **Phase 2**: ✅ COMPLETE
 **Phase 3**: ✅ COMPLETE
-**Next Steps**: Ready for Phase 4 - Cost Calculations
+**Phase 4**: ✅ COMPLETE
+**Phase 5**: ✅ COMPLETE
+**Next Steps**: Ready for Phase 6 - Advanced Features
+
+---
+
+## Vendor Import Workflow
+
+### Overview
+The system supports importing price lists from multiple vendors. Each vendor has unique file formats that require specific cleaning operations. The goal is to make imports seamless for users - they simply select the vendor and upload the raw file.
+
+### Supported Vendors
+| Vendor | File Format | Header Row | Special Handling |
+|--------|-------------|------------|------------------|
+| Sysco | CSV/Excel | Row 1 | Unit `#` → `LB`, calculates Unit $ |
+| Vesta | Excel (.xls) | Row 10 | Parses `Packaging` column into Pack/Size/Unit |
+| SM Seafood | CSV/Excel | Row 0 | TBD |
+| Shamrock | CSV/Excel | Row 0 | TBD |
+| Noble Bread | CSV/Excel | Row 0 | TBD |
+| Sterling | CSV/Excel | Row 0 | TBD |
+
+### Import Flow
+1. **User uploads raw vendor file** via Products page
+2. **Select vendor** from dropdown (determines cleaning rules)
+3. **Backend applies vendor-specific cleaning**:
+   - Reads file with correct header row
+   - Drops unnecessary columns
+   - Parses/normalizes packaging info into `Pack`, `Size`, `Unit`
+   - Renames columns to standard format (`Desc`, `SUPC`, `Case $`, etc.)
+   - Applies unit normalizations (e.g., `BK` → `PACK`, `HG` → `GAL`)
+4. **Data imports to database**:
+   - Creates new products if not found
+   - Updates prices if product exists
+   - Links products to distributor
+
+### Standard Column Format (Post-Cleaning)
+All vendor files are normalized to these columns before database import:
+- `Desc` - Product description/name
+- `SUPC` - Vendor SKU/product number
+- `Brand` - Brand name (optional)
+- `Pack` - Number of units per case
+- `Size` - Size of each unit
+- `Unit` - Unit of measure (LB, OZ, CT, EA, GAL, etc.)
+- `Case $` - Price per case
+- `Unit $` - Price per unit (calculated if not provided)
+
+### Unit Normalization
+All units are normalized to UPPERCASE and mapped to database entries:
+- `#` → `LB`
+- `BK` (Basket) → `PACK`
+- `BU` (Bunch) → `BUNCH`
+- `HG` (Half-Gallon) → `GAL` (with size × 0.5)
+- `GL` → `GAL`
+- `LT` → `L`
+
+### CLI Scripts
+Each vendor also has a standalone CLI cleaning script for manual processing:
+- `clean_sysco.py`
+- `clean_vesta.py`
+- `clean_smseafood.py`
+- `clean_shamrock.py`
+- `clean_noblebread.py`
+- `clean_sterling.py`
+
+Usage: `venv/bin/python3 clean_<vendor>.py <input_file> [output_csv]`
+
+### Adding New Vendors
+1. Add vendor config to `api/app/routers/uploads.py` → `VENDOR_CONFIGS`
+2. Add vendor to `distributors` table in database
+3. Create CLI script `clean_<vendor>.py` (optional, for manual use)
+4. Document header row, column mappings, and special handling
 
 ---
 

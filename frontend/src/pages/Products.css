@@ -68,12 +68,34 @@
 .table-container {
   background: white;
   border-radius: 8px;
-  overflow: hidden;
+  overflow-x: auto;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  max-width: 100%;
+  -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
+}
+
+/* Custom scrollbar for table */
+.table-container::-webkit-scrollbar {
+  height: 8px;
+}
+
+.table-container::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+.table-container::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+
+.table-container::-webkit-scrollbar-thumb:hover {
+  background: #a1a1a1;
 }
 
 .products-table {
   width: 100%;
+  min-width: 1100px; /* Ensure table doesn't collapse too small */
   border-collapse: collapse;
 }
 
@@ -318,12 +340,8 @@
 
 /* Responsive adjustments */
 @media (max-width: 1200px) {
-  .table-container {
-    overflow-x: auto;
-  }
-
   .products-table {
-    min-width: 1100px;
+    min-width: 1000px;
   }
 }
 
@@ -336,4 +354,670 @@
   .search-input {
     width: 100%;
   }
+}
+
+/* Common Product Display with Allergens */
+.common-product-display {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.allergen-icons {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+.allergen-icon {
+  font-size: 0.9rem;
+  cursor: default;
+}
+
+.allergen-more {
+  font-size: 0.7rem;
+  color: #666;
+  padding: 0.1rem 0.3rem;
+  background: #f0f0f0;
+  border-radius: 8px;
+}
+
+.btn-allergen {
+  padding: 0.25rem 0.4rem;
+  background: transparent;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-allergen:hover {
+  background: #f5f5f5;
+  border-color: #999;
+}
+
+/* Allergen Modal */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+
+.modal-content {
+  background: white;
+  border-radius: 12px;
+  max-width: 600px;
+  width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.allergen-modal {
+  max-width: 550px;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  color: #333;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 1.75rem;
+  color: #999;
+  cursor: pointer;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.modal-close:hover {
+  background: #f5f5f5;
+  color: #333;
+}
+
+.modal-body {
+  padding: 1.5rem;
+}
+
+.allergen-product-name {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.allergen-section {
+  margin-bottom: 1.5rem;
+}
+
+.allergen-section h3 {
+  font-size: 1rem;
+  color: #333;
+  margin: 0 0 0.25rem 0;
+}
+
+.allergen-section-note {
+  font-size: 0.85rem;
+  color: #666;
+  margin: 0 0 1rem 0;
+}
+
+.allergen-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 0.5rem;
+}
+
+.dietary-grid {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.allergen-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  background: #f8f9fa;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.allergen-checkbox:hover {
+  background: #e9ecef;
+}
+
+.allergen-checkbox.active {
+  background: #fff3e0;
+  border-color: #ff9800;
+}
+
+.allergen-checkbox.dietary.active {
+  background: #e8f5e9;
+  border-color: #4caf50;
+}
+
+.allergen-checkbox input[type="checkbox"] {
+  display: none;
+}
+
+.allergen-checkbox-icon {
+  font-size: 1.25rem;
+}
+
+.allergen-checkbox-label {
+  font-size: 0.85rem;
+  color: #333;
+  font-weight: 500;
+}
+
+.dietary-section {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid #e0e0e0;
+}
+
+.modal-footer {
+  padding: 1rem 1.5rem;
+  border-top: 1px solid #e0e0e0;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.btn-done {
+  padding: 0.6rem 1.5rem;
+  background: #667eea;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-done:hover {
+  background: #5568d3;
+}
+
+/* Upload Section Styles */
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1.5rem;
+}
+
+.header-content h1 {
+  margin-bottom: 0.25rem;
+}
+
+.header-content p {
+  margin: 0;
+  color: #666;
+}
+
+.btn-upload-toggle {
+  padding: 0.6rem 1.2rem;
+  background: #667eea;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.btn-upload-toggle:hover {
+  background: #5568d3;
+}
+
+.btn-upload-toggle.active {
+  background: #6c757d;
+}
+
+.upload-section {
+  background: white;
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  border: 2px dashed #e0e0e0;
+}
+
+.upload-section h3 {
+  margin: 0 0 1rem 0;
+  font-size: 1.1rem;
+  color: #333;
+}
+
+.upload-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.upload-row {
+  display: flex;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.upload-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.upload-field label {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #555;
+}
+
+.upload-select,
+.upload-date {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  min-width: 180px;
+  background: white;
+}
+
+.upload-select:focus,
+.upload-date:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+.upload-file-area {
+  margin-top: 0.5rem;
+}
+
+.file-input {
+  display: none;
+}
+
+.file-label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  border: 2px dashed #ccc;
+  border-radius: 8px;
+  background: #f9f9f9;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 0.95rem;
+  color: #666;
+}
+
+.file-label:hover {
+  border-color: #667eea;
+  background: #f0f4ff;
+}
+
+.file-selected {
+  color: #333;
+  font-weight: 500;
+}
+
+.upload-actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.btn-upload {
+  padding: 0.7rem 1.5rem;
+  background: #28a745;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-upload:hover:not(:disabled) {
+  background: #218838;
+}
+
+.btn-upload:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+.btn-clear {
+  padding: 0.7rem 1.25rem;
+  background: #f8f9fa;
+  color: #666;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-clear:hover {
+  background: #e9ecef;
+}
+
+/* Upload Results */
+.upload-result {
+  padding: 1.5rem;
+  border-radius: 8px;
+}
+
+.upload-result.success {
+  background: #d4edda;
+  border: 1px solid #c3e6cb;
+}
+
+.upload-result.error {
+  background: #f8d7da;
+  border: 1px solid #f5c6cb;
+}
+
+.result-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.result-icon {
+  font-size: 1.5rem;
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
+
+.upload-result.success .result-icon {
+  background: #28a745;
+  color: white;
+}
+
+.upload-result.error .result-icon {
+  background: #dc3545;
+  color: white;
+}
+
+.result-message {
+  font-size: 1rem;
+  font-weight: 500;
+}
+
+.upload-result.success .result-message {
+  color: #155724;
+}
+
+.upload-result.error .result-message {
+  color: #721c24;
+}
+
+.result-stats {
+  display: flex;
+  gap: 2rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.result-stats .stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0.75rem 1.5rem;
+  background: rgba(255, 255, 255, 0.7);
+  border-radius: 6px;
+}
+
+.result-stats .stat.warning {
+  background: #fff3cd;
+}
+
+.stat-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #333;
+}
+
+.stat-label {
+  font-size: 0.8rem;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.result-errors {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 6px;
+}
+
+.result-errors h4 {
+  margin: 0 0 0.5rem 0;
+  font-size: 0.9rem;
+  color: #721c24;
+}
+
+.result-errors ul {
+  margin: 0;
+  padding-left: 1.25rem;
+  font-size: 0.85rem;
+  color: #721c24;
+}
+
+.btn-new-upload {
+  margin-top: 1rem;
+  padding: 0.6rem 1.25rem;
+  background: #667eea;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-new-upload:hover {
+  background: #5568d3;
+}
+
+/* Inline Editing Styles */
+.editable-cell {
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  transition: background 0.15s;
+  display: inline-block;
+  min-width: 30px;
+}
+
+.editable-cell:hover {
+  background: #e3f2fd;
+}
+
+.inline-edit-input {
+  width: 100%;
+  max-width: 120px;
+  padding: 0.35rem 0.5rem;
+  border: 2px solid #667eea;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  outline: none;
+  background: white;
+}
+
+.inline-edit-input:focus {
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+}
+
+.inline-edit-input[type="number"] {
+  max-width: 80px;
+  text-align: center;
+}
+
+.inline-edit-select {
+  padding: 0.35rem 0.5rem;
+  border: 2px solid #667eea;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  outline: none;
+  background: white;
+  cursor: pointer;
+  min-width: 70px;
+}
+
+.inline-edit-select:focus {
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+}
+
+/* Make product name wider for editing */
+.product-name .inline-edit-input {
+  max-width: 280px;
+}
+
+/* Brand cell editing */
+.brand-cell .inline-edit-input {
+  max-width: 150px;
+}
+
+/* Catch Weight Toggle */
+.catch-weight-toggle {
+  background: none;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  width: 28px;
+  height: 28px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: #999;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.catch-weight-toggle:hover {
+  background: #f5f5f5;
+  border-color: #999;
+}
+
+.catch-weight-toggle.active {
+  background: #e3f2fd;
+  border-color: #1976d2;
+  color: #1976d2;
+}
+
+/* Add Product Button and Row */
+.btn-add-product {
+  padding: 0.6rem 1rem;
+  background: #28a745;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.btn-add-product:hover {
+  background: #218838;
+}
+
+.btn-add-product.active {
+  background: #6c757d;
+}
+
+.add-product-row {
+  background: #f0fff4 !important;
+  border-bottom: 2px solid #28a745 !important;
+}
+
+.add-product-row td {
+  padding: 0.75rem 0.5rem !important;
+}
+
+.add-product-row .inline-edit-input,
+.add-product-row .inline-edit-select {
+  width: 100%;
+  border-color: #28a745;
+}
+
+.btn-save-product {
+  padding: 0.5rem 1rem;
+  background: #28a745;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+  white-space: nowrap;
+}
+
+.btn-save-product:hover {
+  background: #218838;
+}
+
+.text-muted {
+  color: #999;
+}
+
+/* Sortable Headers */
+.sortable-header {
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+
+.sortable-header:hover {
+  background: #e9ecef;
+}
+
+.sortable-header.active {
+  background: #e3f2fd;
+  color: #1976d2;
 }

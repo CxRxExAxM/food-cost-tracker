@@ -3,7 +3,25 @@ import { Link } from 'react-router-dom';
 import axios from 'axios';
 import './Recipes.css';
 
-const API_URL = 'http://localhost:8000';
+const API_URL = import.meta.env.VITE_API_URL ?? '';
+
+// Allergen definitions with icons
+const ALLERGEN_ICONS = {
+  'Gluten': '🌾',
+  'Dairy': '🥛',
+  'Egg': '🥚',
+  'Fish': '🐟',
+  'Crustation': '🦐',
+  'Mollusk': '🦪',
+  'Tree Nuts': '🌰',
+  'Peanuts': '🥜',
+  'Soy': '🫘',
+  'Sesame': '⚪',
+  'Mustard': '🟡',
+  'Celery': '🥬',
+  'Lupin': '🌸',
+  'Sulphur Dioxide': '🧪'
+};
 
 function Recipes() {
   const [recipes, setRecipes] = useState([]);
@@ -634,22 +652,97 @@ function RecipeHeader({ recipe, editedRecipe, onFieldChange, onDelete }) {
 }
 
 function RecipeMetadata({ recipe, editedRecipe, onFieldChange }) {
+  const [units, setUnits] = useState([]);
+
+  useEffect(() => {
+    fetchUnits();
+  }, []);
+
+  const fetchUnits = async () => {
+    try {
+      const response = await axios.get(`${API_URL}/units`);
+      setUnits(response.data);
+    } catch (error) {
+      console.error('Error fetching units:', error);
+    }
+  };
+
   const currentYield = editedRecipe?.yield_amount !== undefined ? editedRecipe.yield_amount : recipe.yield_amount;
+  const currentYieldUnit = editedRecipe?.yield_unit_id !== undefined ? editedRecipe.yield_unit_id : recipe.yield_unit_id;
+  const currentServings = editedRecipe?.servings !== undefined ? editedRecipe.servings : recipe.servings;
+  const currentServingUnit = editedRecipe?.serving_unit_id !== undefined ? editedRecipe.serving_unit_id : recipe.serving_unit_id;
   const currentDescription = editedRecipe?.description !== undefined ? editedRecipe.description : recipe.description;
+
+  // Filter to common yield units
+  const yieldUnits = units.filter(u =>
+    ['ea', 'ct', 'doz', 'lb', 'oz', 'kg', 'g', 'gal', 'qt', 'pt', 'cup', 'L', 'mL'].includes(u.abbreviation)
+  );
+
+  // Serving units - portions (null) plus weight/volume units for serving sizes
+  const servingUnits = units.filter(u =>
+    ['oz', 'g', 'cup', 'mL', 'fl oz'].includes(u.abbreviation)
+  );
 
   return (
     <div className="recipe-metadata">
-      <div className="metadata-field">
-        <label>Yield:</label>
-        <input
-          type="number"
-          className="metadata-input"
-          value={currentYield || ''}
-          onChange={(e) => onFieldChange('yield_amount', parseFloat(e.target.value) || null)}
-          placeholder="4"
-          step="0.1"
-        />
-        <span className="metadata-unit">portions</span>
+      <div className="metadata-row">
+        <div className="metadata-field yield-field">
+          <label>Yield:</label>
+          <input
+            type="number"
+            className="metadata-input"
+            value={currentYield || ''}
+            onChange={(e) => onFieldChange('yield_amount', parseFloat(e.target.value) || null)}
+            placeholder="2"
+            step="0.1"
+          />
+          <select
+            className="metadata-select"
+            value={currentYieldUnit || ''}
+            onChange={(e) => onFieldChange('yield_unit_id', e.target.value ? parseInt(e.target.value) : null)}
+          >
+            <option value="">(select unit)</option>
+            <optgroup label="Count">
+              {yieldUnits.filter(u => ['ea', 'ct', 'doz'].includes(u.abbreviation)).map(unit => (
+                <option key={unit.id} value={unit.id}>{unit.name} ({unit.abbreviation})</option>
+              ))}
+            </optgroup>
+            <optgroup label="Weight">
+              {yieldUnits.filter(u => ['lb', 'oz', 'kg', 'g'].includes(u.abbreviation)).map(unit => (
+                <option key={unit.id} value={unit.id}>{unit.name} ({unit.abbreviation})</option>
+              ))}
+            </optgroup>
+            <optgroup label="Volume">
+              {yieldUnits.filter(u => ['gal', 'qt', 'pt', 'cup', 'L', 'mL'].includes(u.abbreviation)).map(unit => (
+                <option key={unit.id} value={unit.id}>{unit.name} ({unit.abbreviation})</option>
+              ))}
+            </optgroup>
+          </select>
+        </div>
+        <div className="metadata-field servings-field">
+          <label>Servings:</label>
+          <input
+            type="number"
+            className="metadata-input"
+            value={currentServings || ''}
+            onChange={(e) => onFieldChange('servings', parseFloat(e.target.value) || null)}
+            placeholder="8"
+            step={currentServingUnit ? "0.1" : "1"}
+            min="0.1"
+          />
+          <select
+            className="metadata-select"
+            value={currentServingUnit || ''}
+            onChange={(e) => onFieldChange('serving_unit_id', e.target.value ? parseInt(e.target.value) : null)}
+          >
+            <option value="">portions</option>
+            <optgroup label="Serving Size">
+              {servingUnits.map(unit => (
+                <option key={unit.id} value={unit.id}>{unit.name} ({unit.abbreviation})</option>
+              ))}
+            </optgroup>
+          </select>
+        </div>
       </div>
       <div className="metadata-field full-width">
         <label>Description:</label>
@@ -777,7 +870,6 @@ function RecipeIngredients({ recipe, onIngredientsChange }) {
               <th>Quantity</th>
               <th>Unit</th>
               <th>Yield %</th>
-              <th>Cost</th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -789,7 +881,6 @@ function RecipeIngredients({ recipe, onIngredientsChange }) {
                   <td>{ing.quantity}</td>
                   <td>{ing.unit_abbreviation}</td>
                   <td>{ing.yield_percentage}%</td>
-                  <td>TODO</td>
                   <td>
                     <button
                       className="btn-icon-small"
@@ -803,7 +894,7 @@ function RecipeIngredients({ recipe, onIngredientsChange }) {
               ))
             ) : (
               <tr>
-                <td colSpan="6" className="empty-cell">No ingredients yet</td>
+                <td colSpan="5" className="empty-cell">No ingredients yet</td>
               </tr>
             )}
             {showAddRow && (
@@ -868,7 +959,6 @@ function RecipeIngredients({ recipe, onIngredientsChange }) {
                     max="100"
                   />
                 </td>
-                <td>-</td>
                 <td>
                   <button
                     className="btn-icon-small btn-save-ingredient"
@@ -1073,25 +1163,209 @@ function RecipeMethod({ recipe, onMethodChange }) {
 }
 
 function RecipeCost({ recipe }) {
+  const [costData, setCostData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [isCollapsed, setIsCollapsed] = useState(false);
+
+  useEffect(() => {
+    if (recipe?.id) {
+      fetchCostData();
+    }
+  }, [recipe?.id]);
+
+  const fetchCostData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await axios.get(`${API_URL}/recipes/${recipe.id}/cost`);
+      setCostData(response.data);
+    } catch (err) {
+      console.error('Error fetching cost data:', err);
+      setError('Failed to calculate costs');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatCurrency = (value) => {
+    if (value === null || value === undefined) return '-';
+    return `$${value.toFixed(2)}`;
+  };
+
+  const ingredientsWithMissingPrices = costData?.ingredients?.filter(ing => !ing.has_price) || [];
+  const ingredientsWithPrices = costData?.ingredients?.filter(ing => ing.has_price) || [];
+
   return (
     <div className="recipe-section recipe-cost-section">
-      <h2>Cost Analysis</h2>
-      {/* TODO Phase 3: Implement cost calculations */}
-      <div className="cost-panel">
-        <div className="cost-summary">
-          <div className="cost-item">
-            <label>Total Cost:</label>
-            <span className="cost-value">TODO</span>
-          </div>
-          <div className="cost-item">
-            <label>Cost per Serving:</label>
-            <span className="cost-value">TODO</span>
-          </div>
-        </div>
-        <div className="cost-breakdown">
-          <p className="placeholder-text">Cost breakdown will appear here in Phase 3</p>
-        </div>
+      <div className="section-header-collapsible" onClick={() => setIsCollapsed(!isCollapsed)}>
+        <h2>
+          <span className="collapse-icon">{isCollapsed ? '▶' : '▼'}</span>
+          Cost Analysis
+        </h2>
+        {!isCollapsed && costData && (
+          <span className="cost-header-summary">
+            Total: {formatCurrency(costData.total_cost)}
+          </span>
+        )}
       </div>
+
+      {!isCollapsed && (
+        <div className="cost-panel">
+          {loading ? (
+            <div className="cost-loading">Calculating costs...</div>
+          ) : error ? (
+            <div className="cost-error">{error}</div>
+          ) : !costData ? (
+            <div className="cost-empty">No cost data available</div>
+          ) : (
+            <>
+              {/* Cost Summary */}
+              <div className="cost-summary">
+                <div className="cost-item cost-total">
+                  <label>Total Cost:</label>
+                  <span className="cost-value">{formatCurrency(costData.total_cost)}</span>
+                </div>
+                <div className="cost-item">
+                  <label>Cost per {costData.serving_unit_abbreviation || 'Serving'}:</label>
+                  <span className="cost-value">
+                    {costData.cost_per_serving !== null
+                      ? formatCurrency(costData.cost_per_serving)
+                      : <span className="no-yield">Set servings to calculate</span>
+                    }
+                  </span>
+                </div>
+                {(costData.yield_amount || costData.servings) && (
+                  <div className="cost-item cost-yield">
+                    {costData.yield_amount && costData.yield_unit_abbreviation && (
+                      <div>
+                        <label>Yield:</label>
+                        <span className="cost-value-small">
+                          {costData.yield_amount} {costData.yield_unit_abbreviation}
+                        </span>
+                      </div>
+                    )}
+                    {costData.servings && (
+                      <div>
+                        <label>Servings:</label>
+                        <span className="cost-value-small">
+                          {costData.servings} {costData.serving_unit_abbreviation || 'portions'}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Missing Price Warning */}
+              {ingredientsWithMissingPrices.length > 0 && (
+                <div className="cost-warning">
+                  <span className="warning-icon">⚠️</span>
+                  <span>
+                    {ingredientsWithMissingPrices.length} ingredient{ingredientsWithMissingPrices.length !== 1 ? 's' : ''} missing price data
+                  </span>
+                </div>
+              )}
+
+              {/* Cost Breakdown Table */}
+              {costData.ingredients && costData.ingredients.length > 0 && (
+                <div className="cost-breakdown">
+                  <h3>Cost Breakdown</h3>
+                  <table className="cost-breakdown-table">
+                    <thead>
+                      <tr>
+                        <th>Ingredient</th>
+                        <th>Qty</th>
+                        <th>Unit Price</th>
+                        <th>Cost</th>
+                        <th>%</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {costData.ingredients.map((ing) => (
+                        <tr
+                          key={ing.id}
+                          className={!ing.has_price ? 'missing-price' : ''}
+                        >
+                          <td className="ingredient-cell">
+                            {ing.common_name || ing.sub_recipe_name || 'Unknown'}
+                            {ing.sub_recipe_id && <span className="sub-recipe-badge">sub-recipe</span>}
+                          </td>
+                          <td className="qty-cell">
+                            {ing.quantity} {ing.unit_abbreviation}
+                          </td>
+                          <td className="price-cell">
+                            {ing.has_price ? (
+                              <span title={ing.price_source}>
+                                {ing.unit_price ? `$${ing.unit_price.toFixed(4)}` : '-'}
+                              </span>
+                            ) : (
+                              <span className="no-price">No price</span>
+                            )}
+                          </td>
+                          <td className="cost-cell">
+                            {ing.cost !== null ? formatCurrency(ing.cost) : '-'}
+                          </td>
+                          <td className="percent-cell">
+                            {ing.cost_percentage !== null ? `${ing.cost_percentage}%` : '-'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="total-row">
+                        <td colSpan="3">Total</td>
+                        <td className="cost-cell">{formatCurrency(costData.total_cost)}</td>
+                        <td className="percent-cell">100%</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              )}
+
+              {/* Allergen Summary */}
+              {costData.allergens && (
+                <div className="allergen-summary">
+                  <h3>Allergens & Dietary</h3>
+
+                  {/* Dietary Flags */}
+                  <div className="dietary-flags">
+                    <span className={`dietary-badge ${costData.allergens.vegan ? 'active' : 'inactive'}`}>
+                      🌱 {costData.allergens.vegan ? 'Vegan' : 'Not Vegan'}
+                    </span>
+                    <span className={`dietary-badge ${costData.allergens.vegetarian ? 'active' : 'inactive'}`}>
+                      🥗 {costData.allergens.vegetarian ? 'Vegetarian' : 'Not Vegetarian'}
+                    </span>
+                  </div>
+
+                  {/* Allergen List */}
+                  {costData.allergens.contains.length > 0 ? (
+                    <div className="allergen-contains">
+                      <div className="allergen-label">Contains:</div>
+                      <div className="allergen-badges">
+                        {costData.allergens.contains.map(allergen => (
+                          <span key={allergen} className="allergen-badge" title={allergen}>
+                            {ALLERGEN_ICONS[allergen] || '⚠️'} {allergen}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="allergen-none">
+                      No allergens flagged for this recipe's ingredients
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Refresh Button */}
+              <button className="btn-refresh-cost" onClick={fetchCostData}>
+                🔄 Refresh Costs
+              </button>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }

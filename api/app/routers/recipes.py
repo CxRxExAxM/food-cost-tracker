@@ -233,14 +233,284 @@ def calculate_recipe_cost(recipe_id: int):
     """
     Calculate total cost of a recipe with breakdown.
 
-    TODO Phase 3: Implement cost calculation
-    - Get latest prices for all ingredients
-    - Handle sub-recipes recursively
-    - Calculate cost per serving
-    - Return breakdown by ingredient
+    Returns:
+    - Total cost of all ingredients
+    - Cost per serving (if yield_amount is set)
+    - Breakdown by ingredient with prices and percentages
+    - Flags for missing price data
     """
-    # Placeholder - will implement in Phase 3
-    raise HTTPException(status_code=501, detail="Cost calculation not yet implemented")
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Get recipe with yield and serving unit info
+        cursor.execute("""
+            SELECT r.*,
+                   yu.abbreviation as yield_unit_abbreviation,
+                   su.abbreviation as serving_unit_abbreviation
+            FROM recipes r
+            LEFT JOIN units yu ON yu.id = r.yield_unit_id
+            LEFT JOIN units su ON su.id = r.serving_unit_id
+            WHERE r.id = ?
+        """, (recipe_id,))
+        recipe = dict_from_row(cursor.fetchone())
+
+        if not recipe:
+            raise HTTPException(status_code=404, detail="Recipe not found")
+
+        # Parse method JSON
+        if recipe.get('method'):
+            recipe['method'] = json.loads(recipe['method'])
+
+        # Calculate costs recursively
+        ingredients_with_costs, total_cost = _calculate_ingredient_costs(
+            cursor, recipe_id, visited=set()
+        )
+
+        # Calculate cost per serving (use servings field, fallback to yield_amount for backwards compat)
+        cost_per_serving = None
+        servings = recipe.get('servings') or recipe.get('yield_amount')
+        if servings and servings > 0:
+            cost_per_serving = total_cost / servings
+
+        # Add percentage of total to each ingredient
+        for ing in ingredients_with_costs:
+            if total_cost > 0 and ing.get('cost') is not None:
+                ing['cost_percentage'] = round((ing['cost'] / total_cost) * 100, 1)
+            else:
+                ing['cost_percentage'] = None
+
+        # Calculate allergens from all ingredients
+        allergen_summary = _calculate_recipe_allergens(cursor, recipe_id, visited=set())
+
+        return {
+            **recipe,
+            "total_cost": round(total_cost, 2),
+            "cost_per_serving": round(cost_per_serving, 2) if cost_per_serving else None,
+            "ingredients": ingredients_with_costs,
+            "allergens": allergen_summary
+        }
+
+
+def _calculate_ingredient_costs(cursor, recipe_id: int, visited: set) -> tuple[list[dict], float]:
+    """
+    Recursively calculate costs for all ingredients in a recipe.
+
+    Args:
+        cursor: Database cursor
+        recipe_id: Recipe ID to calculate
+        visited: Set of recipe IDs already visited (prevents infinite recursion)
+
+    Returns:
+        Tuple of (ingredients_with_costs, total_cost)
+    """
+    # Prevent infinite recursion from circular sub-recipe references
+    if recipe_id in visited:
+        return [], 0.0
+    visited.add(recipe_id)
+
+    # Get all ingredients for this recipe
+    cursor.execute("""
+        SELECT ri.*,
+               cp.common_name,
+               u.abbreviation as unit_abbreviation,
+               r.name as sub_recipe_name,
+               r.yield_amount as sub_recipe_yield
+        FROM recipe_ingredients ri
+        LEFT JOIN common_products cp ON cp.id = ri.common_product_id
+        LEFT JOIN units u ON u.id = ri.unit_id
+        LEFT JOIN recipes r ON r.id = ri.sub_recipe_id
+        WHERE ri.recipe_id = ?
+    """, (recipe_id,))
+
+    ingredients = dicts_from_rows(cursor.fetchall())
+    ingredients_with_costs = []
+    total_cost = 0.0
+
+    for ing in ingredients:
+        ing_cost = None
+        unit_price = None
+        has_price = False
+        price_source = None
+
+        if ing.get('common_product_id'):
+            # Get lowest unit price for this common product
+            cursor.execute("""
+                SELECT
+                    ph.unit_price,
+                    d.name as distributor_name,
+                    p.name as product_name,
+                    p.pack,
+                    p.size,
+                    u.abbreviation as product_unit
+                FROM products p
+                JOIN distributor_products dp ON dp.product_id = p.id
+                JOIN distributors d ON d.id = dp.distributor_id
+                LEFT JOIN units u ON u.id = p.unit_id
+                LEFT JOIN (
+                    SELECT distributor_product_id, unit_price,
+                           ROW_NUMBER() OVER (PARTITION BY distributor_product_id ORDER BY effective_date DESC) as rn
+                    FROM price_history
+                ) ph ON ph.distributor_product_id = dp.id AND ph.rn = 1
+                WHERE p.common_product_id = ? AND ph.unit_price IS NOT NULL
+                ORDER BY ph.unit_price ASC
+                LIMIT 1
+            """, (ing['common_product_id'],))
+
+            price_row = dict_from_row(cursor.fetchone())
+
+            if price_row and price_row.get('unit_price'):
+                unit_price = price_row['unit_price']
+                has_price = True
+                price_source = f"{price_row['distributor_name']}: {price_row['product_name']}"
+
+                # Calculate ingredient cost: quantity * unit_price * (yield_percentage / 100)
+                yield_pct = ing.get('yield_percentage', 100) or 100
+                ing_cost = ing['quantity'] * unit_price * (100 / yield_pct)
+                total_cost += ing_cost
+
+        elif ing.get('sub_recipe_id'):
+            # Recursively calculate sub-recipe cost
+            _, sub_recipe_total = _calculate_ingredient_costs(
+                cursor, ing['sub_recipe_id'], visited.copy()
+            )
+
+            if sub_recipe_total > 0:
+                has_price = True
+                price_source = f"Sub-recipe: {ing.get('sub_recipe_name', 'Unknown')}"
+
+                # If sub-recipe has yield, calculate cost per unit of yield
+                sub_yield = ing.get('sub_recipe_yield')
+                if sub_yield and sub_yield > 0:
+                    # Cost per unit of sub-recipe yield * quantity needed
+                    cost_per_yield_unit = sub_recipe_total / sub_yield
+                    ing_cost = cost_per_yield_unit * ing['quantity']
+                else:
+                    # Use full sub-recipe cost * quantity (assume quantity=1 means full recipe)
+                    ing_cost = sub_recipe_total * ing['quantity']
+
+                total_cost += ing_cost
+
+        ingredients_with_costs.append({
+            **ing,
+            'unit_price': round(unit_price, 4) if unit_price else None,
+            'cost': round(ing_cost, 2) if ing_cost else None,
+            'has_price': has_price,
+            'price_source': price_source
+        })
+
+    return ingredients_with_costs, total_cost
+
+
+# Allergen field names
+ALLERGEN_FIELDS = [
+    'allergen_gluten', 'allergen_dairy', 'allergen_egg', 'allergen_fish',
+    'allergen_crustation', 'allergen_mollusk', 'allergen_tree_nuts', 'allergen_peanuts',
+    'allergen_soy', 'allergen_sesame', 'allergen_mustard', 'allergen_celery',
+    'allergen_lupin', 'allergen_sulphur_dioxide', 'allergen_vegan', 'allergen_vegetarian'
+]
+
+
+def _calculate_recipe_allergens(cursor, recipe_id: int, visited: set) -> dict:
+    """
+    Calculate allergens for a recipe from all its ingredients.
+
+    Returns a dict with:
+    - contains: list of allergens present in any ingredient
+    - vegan: True if all ingredients are vegan-flagged
+    - vegetarian: True if all ingredients are vegetarian-flagged
+    - by_ingredient: list of which ingredients have which allergens
+    """
+    if recipe_id in visited:
+        return {"contains": [], "vegan": False, "vegetarian": False, "by_ingredient": []}
+    visited.add(recipe_id)
+
+    # Get all ingredients with their common product allergens
+    cursor.execute("""
+        SELECT ri.id, ri.common_product_id, ri.sub_recipe_id,
+               cp.common_name,
+               cp.allergen_gluten, cp.allergen_dairy, cp.allergen_egg, cp.allergen_fish,
+               cp.allergen_crustation, cp.allergen_mollusk, cp.allergen_tree_nuts,
+               cp.allergen_peanuts, cp.allergen_soy, cp.allergen_sesame,
+               cp.allergen_mustard, cp.allergen_celery, cp.allergen_lupin,
+               cp.allergen_sulphur_dioxide, cp.allergen_vegan, cp.allergen_vegetarian,
+               r.name as sub_recipe_name
+        FROM recipe_ingredients ri
+        LEFT JOIN common_products cp ON cp.id = ri.common_product_id
+        LEFT JOIN recipes r ON r.id = ri.sub_recipe_id
+        WHERE ri.recipe_id = ?
+    """, (recipe_id,))
+
+    ingredients = dicts_from_rows(cursor.fetchall())
+
+    # Track allergens across all ingredients
+    all_allergens = set()
+    all_vegan = True
+    all_vegetarian = True
+    by_ingredient = []
+    has_ingredients = False
+
+    for ing in ingredients:
+        has_ingredients = True
+        ing_allergens = []
+        ing_vegan = False
+        ing_vegetarian = False
+
+        if ing.get('common_product_id'):
+            # Check allergens from common product
+            for field in ALLERGEN_FIELDS:
+                if field in ['allergen_vegan', 'allergen_vegetarian']:
+                    continue  # Handle dietary flags separately
+                if ing.get(field):
+                    allergen_name = field.replace('allergen_', '').replace('_', ' ').title()
+                    ing_allergens.append(allergen_name)
+                    all_allergens.add(allergen_name)
+
+            ing_vegan = bool(ing.get('allergen_vegan'))
+            ing_vegetarian = bool(ing.get('allergen_vegetarian'))
+
+            if not ing_vegan:
+                all_vegan = False
+            if not ing_vegetarian:
+                all_vegetarian = False
+
+            by_ingredient.append({
+                "ingredient_id": ing['id'],
+                "name": ing['common_name'],
+                "allergens": ing_allergens,
+                "vegan": ing_vegan,
+                "vegetarian": ing_vegetarian
+            })
+
+        elif ing.get('sub_recipe_id'):
+            # Recursively get allergens from sub-recipe
+            sub_allergens = _calculate_recipe_allergens(cursor, ing['sub_recipe_id'], visited.copy())
+
+            all_allergens.update(sub_allergens.get('contains', []))
+            if not sub_allergens.get('vegan', False):
+                all_vegan = False
+            if not sub_allergens.get('vegetarian', False):
+                all_vegetarian = False
+
+            by_ingredient.append({
+                "ingredient_id": ing['id'],
+                "name": ing['sub_recipe_name'],
+                "is_sub_recipe": True,
+                "allergens": sub_allergens.get('contains', []),
+                "vegan": sub_allergens.get('vegan', False),
+                "vegetarian": sub_allergens.get('vegetarian', False)
+            })
+
+    # If no ingredients, dietary status is unknown
+    if not has_ingredients:
+        all_vegan = False
+        all_vegetarian = False
+
+    return {
+        "contains": sorted(list(all_allergens)),
+        "vegan": all_vegan,
+        "vegetarian": all_vegetarian,
+        "by_ingredient": by_ingredient
+    }
 
 
 @router.post("/{recipe_id}/duplicate", response_model=Recipe)

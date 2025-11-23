@@ -410,15 +410,62 @@
   border-radius: 8px;
 }
 
+.recipe-cost-section h2 {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+.section-header-collapsible {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  padding: 0.5rem;
+  margin: -0.5rem -0.5rem 0 -0.5rem;
+  border-radius: 6px;
+  transition: background 0.2s;
+}
+
+.section-header-collapsible:hover {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.collapse-icon {
+  font-size: 0.8rem;
+  margin-right: 0.5rem;
+  color: #999;
+}
+
+.cost-header-summary {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #667eea;
+}
+
 .cost-panel {
   background: white;
   border-radius: 6px;
   padding: 1rem;
+  margin-top: 1rem;
+}
+
+.cost-loading,
+.cost-error,
+.cost-empty {
+  text-align: center;
+  padding: 2rem;
+  color: #666;
+}
+
+.cost-error {
+  color: #f44336;
 }
 
 .cost-summary {
   display: flex;
   gap: 2rem;
+  flex-wrap: wrap;
   margin-bottom: 1.5rem;
   padding-bottom: 1rem;
   border-bottom: 1px solid #e0e0e0;
@@ -428,6 +475,10 @@
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
+}
+
+.cost-item.cost-total .cost-value {
+  font-size: 1.75rem;
 }
 
 .cost-item label {
@@ -442,8 +493,251 @@
   font-weight: 700;
 }
 
+.no-yield {
+  font-size: 0.9rem;
+  color: #999;
+  font-style: italic;
+}
+
+.cost-yield .cost-value {
+  font-size: 1.1rem;
+  color: #333;
+}
+
+.cost-value-small {
+  font-size: 1rem;
+  color: #667eea;
+  font-weight: 600;
+}
+
+/* Cost Warning */
+.cost-warning {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: 6px;
+  margin-bottom: 1rem;
+  color: #856404;
+  font-size: 0.9rem;
+}
+
+.warning-icon {
+  font-size: 1.1rem;
+}
+
+/* Cost Breakdown Table */
 .cost-breakdown {
+  margin-top: 1rem;
+}
+
+.cost-breakdown h3 {
+  font-size: 1rem;
+  color: #555;
+  margin-bottom: 0.75rem;
+  font-weight: 600;
+}
+
+.cost-breakdown-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.cost-breakdown-table thead {
+  background: #e9ecef;
+}
+
+.cost-breakdown-table th {
+  padding: 0.6rem 0.75rem;
+  text-align: left;
+  font-weight: 600;
+  color: #555;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.cost-breakdown-table td {
+  padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid #e0e0e0;
+  color: #333;
+}
+
+.cost-breakdown-table tbody tr:hover {
+  background: #f8f9fa;
+}
+
+.cost-breakdown-table .ingredient-cell {
+  max-width: 200px;
+}
+
+.cost-breakdown-table .qty-cell {
+  white-space: nowrap;
   color: #666;
+}
+
+.cost-breakdown-table .price-cell {
+  white-space: nowrap;
+  color: #666;
+}
+
+.cost-breakdown-table .cost-cell {
+  white-space: nowrap;
+  font-weight: 600;
+  color: #667eea;
+}
+
+.cost-breakdown-table .percent-cell {
+  white-space: nowrap;
+  color: #999;
+  text-align: right;
+}
+
+.cost-breakdown-table tfoot {
+  background: #f8f9fa;
+}
+
+.cost-breakdown-table .total-row td {
+  font-weight: 700;
+  border-top: 2px solid #667eea;
+  border-bottom: none;
+}
+
+.cost-breakdown-table .total-row .cost-cell {
+  font-size: 1rem;
+}
+
+/* Missing Price Row */
+.cost-breakdown-table tr.missing-price {
+  background: #fff8e1;
+}
+
+.cost-breakdown-table tr.missing-price:hover {
+  background: #fff3cd;
+}
+
+.no-price {
+  color: #f57c00;
+  font-style: italic;
+  font-size: 0.85rem;
+}
+
+/* Sub-recipe Badge */
+.sub-recipe-badge {
+  display: inline-block;
+  padding: 0.15rem 0.4rem;
+  background: #e3f2fd;
+  color: #1976d2;
+  border-radius: 3px;
+  font-size: 0.7rem;
+  margin-left: 0.5rem;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+/* Refresh Button */
+.btn-refresh-cost {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  padding: 0.5rem 1rem;
+  background: transparent;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  color: #666;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-refresh-cost:hover {
+  background: #f5f5f5;
+  border-color: #999;
+  color: #333;
+}
+
+/* Allergen Summary in Recipes */
+.allergen-summary {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid #e0e0e0;
+}
+
+.allergen-summary h3 {
+  font-size: 1rem;
+  color: #555;
+  margin: 0 0 1rem 0;
+  font-weight: 600;
+}
+
+.dietary-flags {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.dietary-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.dietary-badge.active {
+  background: #e8f5e9;
+  color: #2e7d32;
+  border: 1px solid #a5d6a7;
+}
+
+.dietary-badge.inactive {
+  background: #f5f5f5;
+  color: #999;
+  border: 1px solid #e0e0e0;
+}
+
+.allergen-contains {
+  margin-top: 0.75rem;
+}
+
+.allergen-label {
+  font-size: 0.85rem;
+  color: #666;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+}
+
+.allergen-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.allergen-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.65rem;
+  background: #fff3e0;
+  color: #e65100;
+  border: 1px solid #ffcc80;
+  border-radius: 16px;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.allergen-none {
+  font-size: 0.9rem;
+  color: #666;
+  font-style: italic;
+  padding: 0.5rem 0;
 }
 
 .placeholder-text {
@@ -569,6 +863,41 @@
 .metadata-unit {
   color: #666;
   font-size: 0.9rem;
+}
+
+.metadata-row {
+  display: flex;
+  gap: 2rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.yield-field,
+.servings-field {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.metadata-select {
+  padding: 0.35rem 0.5rem;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  background: white;
+  cursor: pointer;
+  transition: border-color 0.2s;
+  min-width: 120px;
+}
+
+.metadata-select:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+.metadata-select optgroup {
+  font-weight: 600;
+  color: #333;
 }
 
 .metadata-field.full-width {

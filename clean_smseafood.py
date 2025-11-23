@@ -14,18 +14,30 @@ COLUMNS_TO_OMIT = [
 ]
 
 
-def load_csv(file_path):
+def load_file(file_path, header_row=0):
     """
-    Load a CSV file into a pandas DataFrame.
+    Load a CSV or Excel file into a pandas DataFrame.
+    Automatically detects file type based on extension.
 
     Args:
-        file_path (str): Path to the CSV file
+        file_path (str): Path to the CSV or Excel file
+        header_row (int): Row to use as header (default 0)
 
     Returns:
         pd.DataFrame: Loaded data
     """
     try:
-        df = pd.read_csv(file_path)
+        file_lower = file_path.lower()
+        if file_lower.endswith('.csv'):
+            df = pd.read_csv(file_path, header=header_row)
+        elif file_lower.endswith('.xlsx'):
+            df = pd.read_excel(file_path, header=header_row, engine='openpyxl')
+        elif file_lower.endswith('.xls'):
+            df = pd.read_excel(file_path, header=header_row, engine='xlrd')
+        else:
+            print(f"Error: Unsupported file format. Use .csv, .xlsx, or .xls")
+            sys.exit(1)
+
         print(f"Successfully loaded {file_path}")
         print(f"Shape: {df.shape[0]} rows, {df.shape[1]} columns")
         return df
@@ -35,6 +47,12 @@ def load_csv(file_path):
     except Exception as e:
         print(f"Error loading file: {e}")
         sys.exit(1)
+
+
+# Backwards compatibility alias
+def load_csv(file_path):
+    """Deprecated: Use load_file() instead."""
+    return load_file(file_path, header_row=0)
 
 
 def preview_dataframe(df, rows=10):
@@ -82,15 +100,16 @@ def main():
 
     # Check if file path is provided
     if len(sys.argv) < 2:
-        print("Usage: python clean_smseafood.py <input_csv_file> [output_csv_file]")
-        print("\nExample: python clean_smseafood.py smseafood_data.csv cleaned_smseafood.csv")
+        print("Usage: python clean_smseafood.py <input_file> [output_csv_file]")
+        print("\nSupported formats: .csv, .xlsx, .xls")
+        print("Example: python clean_smseafood.py smseafood_data.xlsx cleaned_smseafood.csv")
         sys.exit(1)
 
     input_file = sys.argv[1]
     output_file = sys.argv[2] if len(sys.argv) > 2 else "cleaned_smseafood.csv"
 
-    # Load the CSV
-    df = load_csv(input_file)
+    # Load the file (CSV or Excel)
+    df = load_file(input_file, header_row=0)
 
     # Preview the data
     preview_dataframe(df)

@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel
 from typing import Optional
 from ..database import get_db, dicts_from_rows, dict_from_row
 from ..schemas import Product, ProductWithPrice
@@ -6,17 +7,77 @@ from ..schemas import Product, ProductWithPrice
 router = APIRouter(prefix="/products", tags=["products"])
 
 
-@router.get("", response_model=list[ProductWithPrice])
+class ProductCreate(BaseModel):
+    """Create a new product."""
+    name: str
+    brand: Optional[str] = None
+    pack: Optional[int] = None
+    size: Optional[float] = None
+    unit_id: Optional[int] = None
+    is_catch_weight: bool = False
+    distributor_id: Optional[int] = None
+    case_price: Optional[float] = None
+
+
+@router.post("")
+def create_product(product: ProductCreate):
+    """Create a new product with optional distributor link and price."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Insert the product
+        cursor.execute("""
+            INSERT INTO products (name, brand, pack, size, unit_id, is_catch_weight)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (product.name, product.brand, product.pack, product.size,
+              product.unit_id, product.is_catch_weight))
+
+        product_id = cursor.lastrowid
+
+        # If distributor specified, create distributor_product link
+        if product.distributor_id:
+            cursor.execute("""
+                INSERT INTO distributor_products (distributor_id, product_id, distributor_name)
+                VALUES (?, ?, ?)
+            """, (product.distributor_id, product_id, product.name))
+
+            distributor_product_id = cursor.lastrowid
+
+            # If price specified, add to price_history
+            if product.case_price is not None:
+                unit_price = None
+                if product.pack and product.size:
+                    unit_price = round(product.case_price / (product.pack * product.size), 2)
+
+                cursor.execute("""
+                    INSERT INTO price_history (distributor_product_id, case_price, unit_price, effective_date)
+                    VALUES (?, ?, ?, date('now'))
+                """, (distributor_product_id, product.case_price, unit_price))
+
+        conn.commit()
+
+        return {"message": "Product created successfully", "product_id": product_id}
+
+
+class ProductListResponse(BaseModel):
+    """Response model for product list with pagination info."""
+    products: list[ProductWithPrice]
+    total: int
+
+
+@router.get("", response_model=ProductListResponse)
 def list_products(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
     search: Optional[str] = None,
     distributor_id: Optional[int] = None,
     common_product_id: Optional[int] = None,
-    unmapped_only: bool = False
+    unmapped_only: bool = False,
+    sort_by: str = Query("name", description="Column to sort by"),
+    sort_dir: str = Query("asc", description="Sort direction: asc or desc")
 ):
     """
-    List products with optional filtering.
+    List products with optional filtering and sorting.
 
     - **skip**: Number of records to skip (pagination)
     - **limit**: Maximum number of records to return
@@ -24,12 +85,59 @@ def list_products(
     - **distributor_id**: Filter by distributor
     - **common_product_id**: Filter by common product mapping
     - **unmapped_only**: Show only products not mapped to common_products
+    - **sort_by**: Column to sort by (name, brand, distributor_name, pack, size, case_price, unit_price)
+    - **sort_dir**: Sort direction (asc or desc)
     """
     with get_db() as conn:
         cursor = conn.cursor()
 
-        # Build query
-        query = """
+        # Base WHERE clause
+        where_clause = "WHERE p.is_active = 1"
+        params = []
+
+        if search:
+            where_clause += " AND (p.name LIKE ? OR p.brand LIKE ?)"
+            search_term = f"%{search}%"
+            params.extend([search_term, search_term])
+
+        if distributor_id:
+            where_clause += " AND dp.distributor_id = ?"
+            params.append(distributor_id)
+
+        if common_product_id is not None:
+            where_clause += " AND p.common_product_id = ?"
+            params.append(common_product_id)
+
+        if unmapped_only:
+            where_clause += " AND p.common_product_id IS NULL"
+
+        # Count total matching products
+        count_query = f"""
+            SELECT COUNT(DISTINCT p.id)
+            FROM products p
+            LEFT JOIN distributor_products dp ON dp.product_id = p.id
+            {where_clause}
+        """
+        cursor.execute(count_query, params)
+        total = cursor.fetchone()[0]
+
+        # Map sort columns to actual SQL columns
+        sort_column_map = {
+            'name': 'p.name',
+            'brand': 'p.brand',
+            'distributor_name': 'd.name',
+            'pack': 'p.pack',
+            'size': 'p.size',
+            'unit': 'u.abbreviation',
+            'case_price': 'ph.case_price',
+            'unit_price': 'ph.unit_price',
+            'common_product_name': 'cp.common_name'
+        }
+        sort_col = sort_column_map.get(sort_by, 'p.name')
+        sort_direction = 'DESC' if sort_dir.lower() == 'desc' else 'ASC'
+
+        # Build main query
+        query = f"""
             SELECT
                 p.*,
                 d.name as distributor_name,
@@ -49,34 +157,16 @@ def list_products(
                        ROW_NUMBER() OVER (PARTITION BY distributor_product_id ORDER BY effective_date DESC) as rn
                 FROM price_history
             ) ph ON ph.distributor_product_id = dp.id AND ph.rn = 1
-            WHERE p.is_active = 1
+            {where_clause}
+            ORDER BY {sort_col} {sort_direction} NULLS LAST
+            LIMIT ? OFFSET ?
         """
-
-        params = []
-
-        if search:
-            query += " AND (p.name LIKE ? OR p.brand LIKE ?)"
-            search_term = f"%{search}%"
-            params.extend([search_term, search_term])
-
-        if distributor_id:
-            query += " AND dp.distributor_id = ?"
-            params.append(distributor_id)
-
-        if common_product_id is not None:
-            query += " AND p.common_product_id = ?"
-            params.append(common_product_id)
-
-        if unmapped_only:
-            query += " AND p.common_product_id IS NULL"
-
-        query += " ORDER BY p.name LIMIT ? OFFSET ?"
         params.extend([limit, skip])
 
         cursor.execute(query, params)
         products = dicts_from_rows(cursor.fetchall())
 
-        return products
+        return {"products": products, "total": total}
 
 
 @router.get("/{product_id}", response_model=ProductWithPrice)
@@ -163,13 +253,17 @@ def update_product(product_id: int, updates: dict):
     with get_db() as conn:
         cursor = conn.cursor()
 
-        # Check if product exists
-        cursor.execute("SELECT id FROM products WHERE id = ?", (product_id,))
-        if not cursor.fetchone():
+        # Check if product exists and get current values
+        cursor.execute("SELECT id, pack, size FROM products WHERE id = ?", (product_id,))
+        product = cursor.fetchone()
+        if not product:
             raise HTTPException(status_code=404, detail="Product not found")
 
+        current_pack = product[1]
+        current_size = product[2]
+
         # Build update query dynamically
-        allowed_fields = ['name', 'brand', 'pack', 'size', 'unit_id', 'common_product_id']
+        allowed_fields = ['name', 'brand', 'pack', 'size', 'unit_id', 'common_product_id', 'is_catch_weight']
         update_fields = []
         params = []
 
@@ -185,6 +279,23 @@ def update_product(product_id: int, updates: dict):
         query = f"UPDATE products SET {', '.join(update_fields)} WHERE id = ?"
 
         cursor.execute(query, params)
+
+        # Recalculate unit_price in price_history if pack or size changed
+        if 'pack' in updates or 'size' in updates:
+            new_pack = updates.get('pack', current_pack)
+            new_size = updates.get('size', current_size)
+
+            if new_pack and new_size:
+                # Update unit_price for all price_history records for this product
+                cursor.execute("""
+                    UPDATE price_history
+                    SET unit_price = ROUND(case_price / (? * ?), 2)
+                    WHERE distributor_product_id IN (
+                        SELECT id FROM distributor_products WHERE product_id = ?
+                    )
+                    AND case_price IS NOT NULL
+                """, (new_pack, new_size, product_id))
+
         conn.commit()
 
         return {"message": "Product updated successfully", "product_id": product_id}

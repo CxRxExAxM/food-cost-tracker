@@ -79,6 +79,7 @@ class ProductBase(BaseModel):
     size: Optional[float] = None
     unit_id: Optional[int] = None
     common_product_id: Optional[int] = None
+    is_catch_weight: bool = False
 
 
 class Product(ProductBase):
@@ -137,6 +138,10 @@ class RecipeIngredientBase(BaseModel):
 class RecipeIngredient(RecipeIngredientBase):
     id: int
     recipe_id: int
+    # Joined fields
+    common_name: Optional[str] = None
+    unit_abbreviation: Optional[str] = None
+    sub_recipe_name: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -151,8 +156,10 @@ class RecipeBase(BaseModel):
     description: Optional[str] = None
     category: Optional[str] = None
     category_path: Optional[str] = None  # Free-form folder structure
-    yield_amount: Optional[float] = None
-    yield_unit_id: Optional[int] = None
+    yield_amount: Optional[float] = None  # Physical yield (e.g., 2 lbs, 1 gal)
+    yield_unit_id: Optional[int] = None   # Unit for yield_amount
+    servings: Optional[float] = None      # Number of portions or serving size amount
+    serving_unit_id: Optional[int] = None # Unit for servings (None = portions)
     prep_time_minutes: Optional[int] = None  # Keeping for backward compatibility
     cook_time_minutes: Optional[int] = None  # Keeping for backward compatibility
     method: Optional[list[RecipeMethodStep]] = None  # List of numbered steps
@@ -178,11 +185,47 @@ class RecipeWithIngredients(Recipe):
     ingredients: list[RecipeIngredient] = []
 
 
+class IngredientWithCost(BaseModel):
+    """Ingredient with cost calculation details."""
+    id: int
+    recipe_id: int
+    common_product_id: Optional[int] = None
+    sub_recipe_id: Optional[int] = None
+    quantity: float
+    unit_id: Optional[int] = None
+    yield_percentage: Optional[float] = None
+    notes: Optional[str] = None
+    common_name: Optional[str] = None
+    unit_abbreviation: Optional[str] = None
+    sub_recipe_name: Optional[str] = None
+    sub_recipe_yield: Optional[float] = None
+    # Cost fields
+    unit_price: Optional[float] = None
+    cost: Optional[float] = None
+    cost_percentage: Optional[float] = None
+    has_price: bool = False
+    price_source: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class AllergenSummary(BaseModel):
+    """Allergen summary for a recipe."""
+    contains: list[str] = []
+    vegan: bool = False
+    vegetarian: bool = False
+    by_ingredient: list[dict] = []
+
+
 class RecipeWithCost(Recipe):
     """Recipe with cost calculation."""
     total_cost: float
     cost_per_serving: Optional[float] = None
-    ingredients: list[dict] = []  # Ingredients with prices
+    yield_unit_abbreviation: Optional[str] = None
+    serving_unit_abbreviation: Optional[str] = None  # None = portions
+    ingredients: list[IngredientWithCost] = []
+    allergens: Optional[AllergenSummary] = None
 
 
 # Price History
