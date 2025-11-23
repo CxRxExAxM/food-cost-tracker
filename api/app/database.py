@@ -36,9 +36,9 @@ def init_db():
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS distributors (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL UNIQUE,
-            code TEXT NOT NULL UNIQUE,
-            notes TEXT,
+            name TEXT UNIQUE NOT NULL,
+            code TEXT UNIQUE NOT NULL,
+            contact_info TEXT,
             is_active INTEGER DEFAULT 1,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -65,13 +65,10 @@ def init_db():
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS units (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL UNIQUE,
-            abbreviation TEXT NOT NULL UNIQUE,
-            type TEXT NOT NULL CHECK(type IN ('weight', 'volume', 'count', 'length')),
-            base_unit_id INTEGER,
-            conversion_factor REAL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (base_unit_id) REFERENCES units(id)
+            name TEXT UNIQUE NOT NULL,
+            abbreviation TEXT UNIQUE NOT NULL,
+            unit_type TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
 
@@ -79,23 +76,23 @@ def init_db():
     cursor.execute("SELECT COUNT(*) FROM units")
     if cursor.fetchone()[0] == 0:
         units = [
-            ('Pound', 'lb', 'weight', None, None),
-            ('Ounce', 'oz', 'weight', 1, 0.0625),
-            ('Kilogram', 'kg', 'weight', 1, 2.20462),
-            ('Gram', 'g', 'weight', 1, 0.00220462),
-            ('Gallon', 'gal', 'volume', None, None),
-            ('Quart', 'qt', 'volume', 5, 0.25),
-            ('Pint', 'pt', 'volume', 5, 0.125),
-            ('Cup', 'cup', 'volume', 5, 0.0625),
-            ('Fluid Ounce', 'fl oz', 'volume', 5, 0.0078125),
-            ('Liter', 'L', 'volume', 5, 0.264172),
-            ('Milliliter', 'mL', 'volume', 5, 0.000264172),
-            ('Each', 'ea', 'count', None, None),
-            ('Dozen', 'doz', 'count', 12, 12),
-            ('Case', 'case', 'count', 12, None),
+            ('Pound', 'lb', 'weight'),
+            ('Ounce', 'oz', 'weight'),
+            ('Kilogram', 'kg', 'weight'),
+            ('Gram', 'g', 'weight'),
+            ('Gallon', 'gal', 'volume'),
+            ('Quart', 'qt', 'volume'),
+            ('Pint', 'pt', 'volume'),
+            ('Cup', 'cup', 'volume'),
+            ('Fluid Ounce', 'fl oz', 'volume'),
+            ('Liter', 'L', 'volume'),
+            ('Milliliter', 'mL', 'volume'),
+            ('Each', 'ea', 'count'),
+            ('Dozen', 'doz', 'count'),
+            ('Case', 'case', 'count'),
         ]
         cursor.executemany(
-            "INSERT INTO units (name, abbreviation, type, base_unit_id, conversion_factor) VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO units (name, abbreviation, unit_type) VALUES (?, ?, ?)",
             units
         )
 
@@ -103,13 +100,30 @@ def init_db():
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS common_products (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL UNIQUE,
+            common_name TEXT UNIQUE NOT NULL,
             category TEXT,
-            default_unit_id INTEGER,
+            subcategory TEXT,
+            preferred_unit_id INTEGER REFERENCES units(id),
             notes TEXT,
+            is_active INTEGER DEFAULT 1,
+            allergen_vegan INTEGER DEFAULT 0,
+            allergen_vegetarian INTEGER DEFAULT 0,
+            allergen_gluten INTEGER DEFAULT 0,
+            allergen_crustation INTEGER DEFAULT 0,
+            allergen_egg INTEGER DEFAULT 0,
+            allergen_mollusk INTEGER DEFAULT 0,
+            allergen_fish INTEGER DEFAULT 0,
+            allergen_lupin INTEGER DEFAULT 0,
+            allergen_dairy INTEGER DEFAULT 0,
+            allergen_tree_nuts INTEGER DEFAULT 0,
+            allergen_peanuts INTEGER DEFAULT 0,
+            allergen_sesame INTEGER DEFAULT 0,
+            allergen_soy INTEGER DEFAULT 0,
+            allergen_sulphur_dioxide INTEGER DEFAULT 0,
+            allergen_mustard INTEGER DEFAULT 0,
+            allergen_celery INTEGER DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (default_unit_id) REFERENCES units(id)
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
 
@@ -117,63 +131,18 @@ def init_db():
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS products (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            distributor_id INTEGER NOT NULL,
-            distributor_code TEXT,
             name TEXT NOT NULL,
             description TEXT,
             brand TEXT,
-            pack_size TEXT,
-            unit_id INTEGER,
-            case_price REAL,
-            unit_price REAL,
-            price_per_unit REAL,
-            common_product_id INTEGER,
-            is_active INTEGER DEFAULT 1,
-            last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (distributor_id) REFERENCES distributors(id),
-            FOREIGN KEY (unit_id) REFERENCES units(id),
-            FOREIGN KEY (common_product_id) REFERENCES common_products(id)
-        )
-    """)
-
-    # Create recipes table
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS recipes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            description TEXT,
             category TEXT,
-            yield_amount REAL,
-            yield_unit_id INTEGER,
-            prep_time_minutes INTEGER,
-            cook_time_minutes INTEGER,
-            instructions TEXT,
-            notes TEXT,
+            pack INTEGER,
+            size REAL,
+            unit_id INTEGER REFERENCES units(id),
+            common_product_id INTEGER REFERENCES common_products(id),
+            is_catch_weight INTEGER DEFAULT 0,
             is_active INTEGER DEFAULT 1,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (yield_unit_id) REFERENCES units(id)
-        )
-    """)
-
-    # Create recipe_ingredients table
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS recipe_ingredients (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            recipe_id INTEGER NOT NULL,
-            common_product_id INTEGER,
-            product_id INTEGER,
-            quantity REAL NOT NULL,
-            unit_id INTEGER NOT NULL,
-            preparation TEXT,
-            notes TEXT,
-            sort_order INTEGER DEFAULT 0,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (recipe_id) REFERENCES recipes(id) ON DELETE CASCADE,
-            FOREIGN KEY (common_product_id) REFERENCES common_products(id),
-            FOREIGN KEY (product_id) REFERENCES products(id),
-            FOREIGN KEY (unit_id) REFERENCES units(id)
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
 
@@ -192,12 +161,21 @@ def init_db():
         )
     """)
 
-    # Create indexes for distributor_products
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_distributor_products_distributor ON distributor_products(distributor_id)")
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_distributor_products_product ON distributor_products(product_id)")
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_distributor_products_sku ON distributor_products(distributor_sku)")
+    # Create price_history table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS price_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            distributor_product_id INTEGER REFERENCES distributor_products(id) ON DELETE CASCADE,
+            case_price REAL NOT NULL,
+            unit_price REAL,
+            effective_date DATE NOT NULL,
+            import_batch_id TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(distributor_product_id, effective_date)
+        )
+    """)
 
-    # Create import_batches table for tracking CSV imports
+    # Create import_batches table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS import_batches (
             id TEXT PRIMARY KEY,
@@ -210,10 +188,58 @@ def init_db():
         )
     """)
 
+    # Create recipes table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS recipes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            description TEXT,
+            category TEXT,
+            category_path TEXT,
+            yield_amount REAL,
+            yield_unit_id INTEGER REFERENCES units(id),
+            servings REAL,
+            serving_unit_id INTEGER REFERENCES units(id),
+            prep_time_minutes INTEGER,
+            cook_time_minutes INTEGER,
+            method TEXT,
+            is_active INTEGER DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    # Create recipe_ingredients table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS recipe_ingredients (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            recipe_id INTEGER REFERENCES recipes(id) ON DELETE CASCADE,
+            common_product_id INTEGER REFERENCES common_products(id),
+            sub_recipe_id INTEGER REFERENCES recipes(id),
+            quantity REAL NOT NULL,
+            unit_id INTEGER REFERENCES units(id),
+            yield_percentage REAL DEFAULT 100.00,
+            notes TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    # Create indexes
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_products_common_product ON products(common_product_id)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_common_products_name ON common_products(common_name)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_distributor_products_distributor ON distributor_products(distributor_id)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_distributor_products_product ON distributor_products(product_id)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_distributor_products_sku ON distributor_products(distributor_sku)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_price_history_dist_prod ON price_history(distributor_product_id)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_price_history_date ON price_history(effective_date DESC)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_recipe_ingredients_recipe ON recipe_ingredients(recipe_id)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_recipe_ingredients_common_product ON recipe_ingredients(common_product_id)")
+
     conn.commit()
 
     # Verify tables were created
-    cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
     tables = [row[0] for row in cursor.fetchall()]
     print(f"[init_db] Tables created: {tables}")
 
