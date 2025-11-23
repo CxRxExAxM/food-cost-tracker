@@ -258,6 +258,93 @@ def init_db():
 
     conn.close()
 
+    # Run migrations for existing databases
+    run_migrations()
+
+
+def run_migrations():
+    """Run database migrations to add missing columns/tables to existing databases."""
+    print("[migrations] Checking for schema updates...")
+
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    migrations_run = 0
+
+    # Helper to check if column exists
+    def column_exists(table, column):
+        cursor.execute(f"PRAGMA table_info({table})")
+        columns = [row[1] for row in cursor.fetchall()]
+        return column in columns
+
+    # Helper to add column if missing
+    def add_column_if_missing(table, column, definition):
+        nonlocal migrations_run
+        if not column_exists(table, column):
+            cursor.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+            print(f"[migrations] Added {table}.{column}")
+            migrations_run += 1
+
+    # === RECIPES TABLE MIGRATIONS ===
+    add_column_if_missing('recipes', 'method', 'TEXT')
+    add_column_if_missing('recipes', 'category_path', 'TEXT')
+    add_column_if_missing('recipes', 'servings', 'REAL')
+    add_column_if_missing('recipes', 'serving_unit_id', 'INTEGER REFERENCES units(id)')
+
+    # === RECIPE_INGREDIENTS TABLE MIGRATIONS ===
+    add_column_if_missing('recipe_ingredients', 'sub_recipe_id', 'INTEGER REFERENCES recipes(id)')
+    add_column_if_missing('recipe_ingredients', 'yield_percentage', 'REAL DEFAULT 100.00')
+
+    # === UNITS TABLE - Add missing units ===
+    # Check for missing uppercase units and add them
+    required_units = [
+        ('Pound', 'LB', 'weight'),
+        ('Ounce', 'OZ', 'weight'),
+        ('Kilogram', 'KG', 'weight'),
+        ('Gram', 'G', 'weight'),
+        ('Gallon', 'GAL', 'volume'),
+        ('Quart', 'QT', 'volume'),
+        ('Pint', 'PT', 'volume'),
+        ('Cup', 'CUP', 'volume'),
+        ('Fluid Ounce', 'FL OZ', 'volume'),
+        ('Liter', 'L', 'volume'),
+        ('Milliliter', 'ML', 'volume'),
+        ('Tablespoon', 'TBSP', 'volume'),
+        ('Teaspoon', 'TSP', 'volume'),
+        ('Each', 'EA', 'count'),
+        ('Count', 'CT', 'count'),
+        ('Dozen', 'DOZ', 'count'),
+        ('Case', 'CASE', 'count'),
+        ('Box', 'BOX', 'count'),
+        ('Bag', 'BAG', 'count'),
+        ('Can', 'CAN', 'count'),
+        ('Jar', 'JAR', 'count'),
+        ('Pack', 'PACK', 'count'),
+        ('Bunch', 'BUNCH', 'count'),
+    ]
+
+    for name, abbrev, unit_type in required_units:
+        cursor.execute("SELECT id FROM units WHERE abbreviation = ?", (abbrev,))
+        if not cursor.fetchone():
+            try:
+                cursor.execute(
+                    "INSERT INTO units (name, abbreviation, unit_type) VALUES (?, ?, ?)",
+                    (name, abbrev, unit_type)
+                )
+                print(f"[migrations] Added unit: {abbrev}")
+                migrations_run += 1
+            except sqlite3.IntegrityError:
+                # Name might already exist with different abbreviation
+                pass
+
+    conn.commit()
+    conn.close()
+
+    if migrations_run > 0:
+        print(f"[migrations] Completed {migrations_run} migration(s)")
+    else:
+        print("[migrations] Database schema is up to date")
+
 
 @contextmanager
 def get_db():
