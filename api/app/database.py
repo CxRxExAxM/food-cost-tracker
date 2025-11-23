@@ -177,6 +177,26 @@ def init_db():
         )
     """)
 
+    # Create distributor_products junction table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS distributor_products (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            distributor_id INTEGER REFERENCES distributors(id) ON DELETE CASCADE,
+            product_id INTEGER REFERENCES products(id) ON DELETE CASCADE,
+            distributor_sku TEXT NOT NULL,
+            distributor_name TEXT,
+            is_available INTEGER DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(distributor_id, distributor_sku)
+        )
+    """)
+
+    # Create indexes for distributor_products
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_distributor_products_distributor ON distributor_products(distributor_id)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_distributor_products_product ON distributor_products(product_id)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_distributor_products_sku ON distributor_products(distributor_sku)")
+
     # Create import_batches table for tracking CSV imports
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS import_batches (
