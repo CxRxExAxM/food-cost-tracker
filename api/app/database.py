@@ -12,6 +12,7 @@ def init_db():
     """Initialize database with required tables if they don't exist."""
     # Ensure directory exists
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    print(f"[init_db] Initializing database at: {DB_PATH}")
 
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
@@ -190,6 +191,12 @@ def init_db():
     """)
 
     conn.commit()
+
+    # Verify tables were created
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+    tables = [row[0] for row in cursor.fetchall()]
+    print(f"[init_db] Tables created: {tables}")
+
     conn.close()
 
 
