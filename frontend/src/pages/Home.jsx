@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import './Home.css';
 
 function Home() {
-  const { user, logout } = useAuth();
+  const { user, logout, isAdmin } = useAuth();
   const navigate = useNavigate();
 
   const handleLogout = () => {
@@ -42,6 +42,15 @@ function Home() {
             <p>Create recipes and calculate costs based on current prices</p>
             <span className="card-arrow">-></span>
           </Link>
+
+          {isAdmin() && (
+            <Link to="/users" className="nav-card admin-card">
+              <div className="card-icon">👥</div>
+              <h2>Users</h2>
+              <p>Manage user accounts, roles, and permissions</p>
+              <span className="card-arrow">-></span>
+            </Link>
+          )}
         </div>
 
         <footer className="home-footer">

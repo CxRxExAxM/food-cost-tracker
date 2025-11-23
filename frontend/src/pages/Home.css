@@ -141,6 +141,14 @@
   transform: translateX(8px);
 }
 
+.nav-card.admin-card h2 {
+  color: #dc2626;
+}
+
+.nav-card.admin-card .card-arrow {
+  color: #dc2626;
+}
+
 .home-footer {
   text-align: center;
   color: white;
