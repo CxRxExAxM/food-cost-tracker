@@ -36,15 +36,7 @@ app.include_router(recipes.router)
 app.include_router(uploads.router)
 
 
-@app.get("/")
-def root():
-    """Root endpoint with API information."""
-    return {
-        "message": "Food Cost Tracker API",
-        "version": "1.0.0",
-        "docs": "/docs",
-        "openapi": "/openapi.json"
-    }
+# Note: Root endpoint is defined conditionally below based on whether frontend is built
 
 
 @app.get("/health")
@@ -57,9 +49,16 @@ def health_check():
 # This must come AFTER all API routes
 STATIC_DIR = Path(__file__).parent.parent.parent / "static"
 
-if STATIC_DIR.exists():
+if STATIC_DIR.exists() and (STATIC_DIR / "index.html").exists():
     # Serve static assets (JS, CSS, images)
-    app.mount("/assets", StaticFiles(directory=STATIC_DIR / "assets"), name="assets")
+    if (STATIC_DIR / "assets").exists():
+        app.mount("/assets", StaticFiles(directory=STATIC_DIR / "assets"), name="assets")
+
+    # Root route serves SPA
+    @app.get("/")
+    async def serve_spa_root():
+        """Serve the React SPA at root."""
+        return FileResponse(STATIC_DIR / "index.html")
 
     # Catch-all route for SPA - serve index.html for any non-API route
     @app.get("/{full_path:path}")
@@ -70,6 +69,15 @@ if STATIC_DIR.exists():
             return {"detail": "Not found"}
 
         index_file = STATIC_DIR / "index.html"
-        if index_file.exists():
-            return FileResponse(index_file)
-        return {"detail": "Frontend not built"}
+        return FileResponse(index_file)
+else:
+    # No frontend built - serve API info at root
+    @app.get("/")
+    def root():
+        """Root endpoint with API information."""
+        return {
+            "message": "Food Cost Tracker API",
+            "version": "1.0.0",
+            "docs": "/docs",
+            "openapi": "/openapi.json"
+        }
