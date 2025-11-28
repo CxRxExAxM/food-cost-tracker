@@ -1,0 +1,28 @@
+# Render.com configuration for DEV environment
+# This file documents the dev environment setup
+# The main production environment uses render.yaml
+
+services:
+  - type: web
+    name: food-cost-tracker-dev
+    env: python
+    branch: dev  # Watch dev branch for auto-deploys
+    buildCommand: cd frontend && npm install && npm run build && cd ../api && pip install -r ../requirements.txt
+    startCommand: cd api && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DATABASE_PATH
+        value: /var/data/food_cost_tracker.db
+      - key: SECRET_KEY
+        generateValue: true  # Render will generate a unique secret
+      - key: ENVIRONMENT
+        value: dev
+    disk:
+      name: food-cost-tracker-dev-disk
+      mountPath: /var/data
+      sizeGB: 1
+
+# Note: Once PostgreSQL is set up, add this section:
+# databases:
+#   - name: food-cost-tracker-dev-db
+#     databaseName: food_cost_dev
+#     user: food_cost_dev_user
