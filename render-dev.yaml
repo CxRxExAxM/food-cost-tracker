@@ -1,14 +1,16 @@
 # Render.com configuration for DEV environment
 # This file documents the dev environment setup
 # The main production environment uses render.yaml
+# NOTE: Requires Starter plan for disk support
 
 services:
   - type: web
     name: food-cost-tracker-dev
-    runtime: docker  # Must use Docker for disk support on free tier
+    runtime: docker
     branch: dev  # Watch dev branch for auto-deploys
     dockerfilePath: ./Dockerfile.render
     dockerContext: .
+    plan: starter  # Required for disk support
     envVars:
       - key: DATABASE_PATH
         value: /app/data/food_cost_tracker.db
