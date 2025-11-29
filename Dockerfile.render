@@ -33,6 +33,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY api/ ./api/
 COPY db/ ./db/
 
+# Copy Alembic configuration and migrations
+COPY alembic.ini ./
+COPY alembic/ ./alembic/
+
 # Copy built frontend from stage 1
 COPY --from=frontend-builder /frontend/dist ./static
 
