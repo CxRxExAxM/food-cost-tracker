@@ -9,10 +9,46 @@ from sqlalchemy.sql import func
 Base = declarative_base()
 
 
+class Organization(Base):
+    __tablename__ = 'organizations'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String, nullable=False)
+    slug = Column(String, unique=True, nullable=False)
+
+    # Subscription & tier management
+    subscription_tier = Column(String, nullable=False, default='free')
+    subscription_status = Column(String, nullable=False, default='active')
+    stripe_customer_id = Column(String, unique=True)
+    stripe_subscription_id = Column(String, unique=True)
+
+    # Tier limits
+    max_recipes = Column(Integer, default=5)  # Free tier: 5, Paid: -1 (unlimited)
+    max_distributors = Column(Integer, default=1)  # Free tier: 1, Paid: -1 (unlimited)
+    max_ai_parses_per_month = Column(Integer, default=10)  # Free tier: 10, Paid: -1 (unlimited)
+    ai_parses_used_this_month = Column(Integer, default=0)
+    ai_parses_reset_date = Column(DateTime)
+
+    # Contact info
+    contact_email = Column(String)
+    contact_phone = Column(String)
+
+    # Status
+    is_active = Column(Integer, default=1)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        CheckConstraint("subscription_tier IN ('free', 'paid', 'enterprise')", name='check_subscription_tier'),
+        CheckConstraint("subscription_status IN ('active', 'cancelled', 'past_due', 'trialing')", name='check_subscription_status'),
+    )
+
+
 class User(Base):
     __tablename__ = 'users'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    organization_id = Column(Integer, ForeignKey('organizations.id', ondelete='CASCADE'), nullable=False)
     email = Column(String, unique=True, nullable=False)
     username = Column(String, unique=True, nullable=False)
     hashed_password = Column(String, nullable=False)
@@ -53,7 +89,8 @@ class CommonProduct(Base):
     __tablename__ = 'common_products'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    common_name = Column(String, unique=True, nullable=False)
+    organization_id = Column(Integer, ForeignKey('organizations.id', ondelete='CASCADE'), nullable=False)
+    common_name = Column(String, nullable=False)
     category = Column(String)
     subcategory = Column(String)
     preferred_unit_id = Column(Integer, ForeignKey('units.id'))
@@ -83,6 +120,7 @@ class Product(Base):
     __tablename__ = 'products'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    organization_id = Column(Integer, ForeignKey('organizations.id', ondelete='CASCADE'), nullable=False)
     name = Column(String, nullable=False)
     description = Column(Text)
     brand = Column(String)
@@ -131,6 +169,7 @@ class ImportBatch(Base):
     __tablename__ = 'import_batches'
 
     id = Column(String, primary_key=True)
+    organization_id = Column(Integer, ForeignKey('organizations.id', ondelete='CASCADE'), nullable=False)
     distributor_id = Column(Integer, ForeignKey('distributors.id'))
     filename = Column(String, nullable=False)
     rows_imported = Column(Integer)
@@ -143,6 +182,7 @@ class Recipe(Base):
     __tablename__ = 'recipes'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    organization_id = Column(Integer, ForeignKey('organizations.id', ondelete='CASCADE'), nullable=False)
     name = Column(String, nullable=False)
     description = Column(Text)
     category = Column(String)
