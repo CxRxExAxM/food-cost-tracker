@@ -1,7 +1,8 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from typing import Optional
 from ..database import get_db, dicts_from_rows, dict_from_row
 from ..schemas import Recipe, RecipeCreate, RecipeWithIngredients, RecipeWithCost
+from ..auth import get_current_user
 import json
 
 router = APIRouter(prefix="/recipes", tags=["recipes"])
@@ -12,20 +13,17 @@ def list_recipes(
     skip: int = Query(0, ge=0),
     limit: int = Query(1000, ge=1, le=10000),
     search: Optional[str] = None,
-    category_path: Optional[str] = None
+    category_path: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
 ):
     """
-    List recipes with optional filtering.
-
-    TODO Phase 1: Implement basic listing
-    TODO Phase 2: Add category_path filtering for tree structure
-    TODO Phase 3: Add search across name, ingredients
+    List recipes with optional filtering (organization-scoped).
     """
     with get_db() as conn:
         cursor = conn.cursor()
 
-        query = "SELECT * FROM recipes WHERE is_active = 1"
-        params = []
+        query = "SELECT * FROM recipes WHERE organization_id = ? AND is_active = 1"
+        params = [current_user["organization_id"]]
 
         if search:
             query += " AND name LIKE ?"
@@ -50,19 +48,18 @@ def list_recipes(
 
 
 @router.get("/{recipe_id}", response_model=RecipeWithIngredients)
-def get_recipe(recipe_id: int):
+def get_recipe(recipe_id: int, current_user: dict = Depends(get_current_user)):
     """
-    Get a single recipe with ingredients.
-
-    TODO Phase 1: Basic recipe retrieval
-    TODO Phase 2: Include ingredients with details
-    TODO Phase 3: Include sub-recipe expansion
+    Get a single recipe with ingredients (organization-scoped).
     """
     with get_db() as conn:
         cursor = conn.cursor()
 
-        # Get recipe
-        cursor.execute("SELECT * FROM recipes WHERE id = ?", (recipe_id,))
+        # Get recipe - verify it belongs to user's organization
+        cursor.execute(
+            "SELECT * FROM recipes WHERE id = ? AND organization_id = ?",
+            (recipe_id, current_user["organization_id"])
+        )
         recipe = dict_from_row(cursor.fetchone())
 
         if not recipe:
@@ -91,13 +88,9 @@ def get_recipe(recipe_id: int):
 
 
 @router.post("", response_model=Recipe, status_code=201)
-def create_recipe(recipe: RecipeCreate):
+def create_recipe(recipe: RecipeCreate, current_user: dict = Depends(get_current_user)):
     """
-    Create a new recipe.
-
-    TODO Phase 1: Implement basic creation
-    TODO Phase 2: Handle ingredients creation
-    TODO Phase 3: Validate sub-recipe references
+    Create a new recipe in current user's organization.
     """
     with get_db() as conn:
         cursor = conn.cursor()
@@ -107,11 +100,13 @@ def create_recipe(recipe: RecipeCreate):
 
         cursor.execute("""
             INSERT INTO recipes (
+                organization_id,
                 name, description, category, category_path,
                 yield_amount, yield_unit_id, prep_time_minutes, cook_time_minutes,
                 method
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
+            current_user["organization_id"],
             recipe.name,
             recipe.description,
             recipe.category,
@@ -155,9 +150,9 @@ def create_recipe(recipe: RecipeCreate):
 
 
 @router.patch("/{recipe_id}", response_model=Recipe)
-def update_recipe(recipe_id: int, updates: dict):
+def update_recipe(recipe_id: int, updates: dict, current_user: dict = Depends(get_current_user)):
     """
-    Update a recipe.
+    Update a recipe (organization-scoped).
 
     TODO Phase 1: Implement basic updates
     TODO Phase 2: Handle ingredient updates
@@ -166,8 +161,8 @@ def update_recipe(recipe_id: int, updates: dict):
     with get_db() as conn:
         cursor = conn.cursor()
 
-        # Check if recipe exists
-        cursor.execute("SELECT id FROM recipes WHERE id = ?", (recipe_id,))
+        # Check if recipe exists and belongs to user's organization
+        cursor.execute("SELECT id FROM recipes WHERE id = ? AND organization_id = ?", (recipe_id, current_user["organization_id"]))
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Recipe not found")
 
@@ -192,8 +187,8 @@ def update_recipe(recipe_id: int, updates: dict):
         if not update_fields:
             raise HTTPException(status_code=400, detail="No valid fields to update")
 
-        params.append(recipe_id)
-        query = f"UPDATE recipes SET {', '.join(update_fields)} WHERE id = ?"
+        params.extend([recipe_id, current_user["organization_id"]])
+        query = f"UPDATE recipes SET {', '.join(update_fields)} WHERE id = ? AND organization_id = ?"
 
         cursor.execute(query, params)
         conn.commit()
@@ -209,16 +204,16 @@ def update_recipe(recipe_id: int, updates: dict):
 
 
 @router.delete("/{recipe_id}")
-def delete_recipe(recipe_id: int):
+def delete_recipe(recipe_id: int, current_user: dict = Depends(get_current_user)):
     """
-    Delete a recipe (soft delete).
+    Delete a recipe (soft delete, organization-scoped).
 
     TODO Phase 1: Implement soft delete
     """
     with get_db() as conn:
         cursor = conn.cursor()
 
-        cursor.execute("UPDATE recipes SET is_active = 0 WHERE id = ?", (recipe_id,))
+        cursor.execute("UPDATE recipes SET is_active = 0 WHERE id = ? AND organization_id = ?", (recipe_id, current_user["organization_id"]))
 
         if cursor.rowcount == 0:
             raise HTTPException(status_code=404, detail="Recipe not found")
@@ -229,9 +224,9 @@ def delete_recipe(recipe_id: int):
 
 
 @router.get("/{recipe_id}/cost", response_model=RecipeWithCost)
-def calculate_recipe_cost(recipe_id: int):
+def calculate_recipe_cost(recipe_id: int, current_user: dict = Depends(get_current_user)):
     """
-    Calculate total cost of a recipe with breakdown.
+    Calculate total cost of a recipe with breakdown (organization-scoped).
 
     Returns:
     - Total cost of all ingredients
@@ -250,8 +245,8 @@ def calculate_recipe_cost(recipe_id: int):
             FROM recipes r
             LEFT JOIN units yu ON yu.id = r.yield_unit_id
             LEFT JOIN units su ON su.id = r.serving_unit_id
-            WHERE r.id = ?
-        """, (recipe_id,))
+            WHERE r.id = ? AND r.organization_id = ?
+        """, (recipe_id, current_user["organization_id"]))
         recipe = dict_from_row(cursor.fetchone())
 
         if not recipe:

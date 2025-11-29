@@ -1,8 +1,9 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from pydantic import BaseModel
 from typing import Optional
 from ..database import get_db, dicts_from_rows, dict_from_row
 from ..schemas import Product, ProductWithPrice
+from ..auth import get_current_user
 
 router = APIRouter(prefix="/products", tags=["products"])
 
@@ -20,16 +21,16 @@ class ProductCreate(BaseModel):
 
 
 @router.post("")
-def create_product(product: ProductCreate):
-    """Create a new product with optional distributor link and price."""
+def create_product(product: ProductCreate, current_user: dict = Depends(get_current_user)):
+    """Create a new product with optional distributor link and price (organization-scoped)."""
     with get_db() as conn:
         cursor = conn.cursor()
 
         # Insert the product
         cursor.execute("""
-            INSERT INTO products (name, brand, pack, size, unit_id, is_catch_weight)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (product.name, product.brand, product.pack, product.size,
+            INSERT INTO products (organization_id, name, brand, pack, size, unit_id, is_catch_weight)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (current_user["organization_id"], product.name, product.brand, product.pack, product.size,
               product.unit_id, product.is_catch_weight))
 
         product_id = cursor.lastrowid
@@ -74,10 +75,11 @@ def list_products(
     common_product_id: Optional[int] = None,
     unmapped_only: bool = False,
     sort_by: str = Query("name", description="Column to sort by"),
-    sort_dir: str = Query("asc", description="Sort direction: asc or desc")
+    sort_dir: str = Query("asc", description="Sort direction: asc or desc"),
+    current_user: dict = Depends(get_current_user)
 ):
     """
-    List products with optional filtering and sorting.
+    List products with optional filtering and sorting (organization-scoped).
 
     - **skip**: Number of records to skip (pagination)
     - **limit**: Maximum number of records to return
@@ -91,9 +93,9 @@ def list_products(
     with get_db() as conn:
         cursor = conn.cursor()
 
-        # Base WHERE clause
-        where_clause = "WHERE p.is_active = 1"
-        params = []
+        # Base WHERE clause - filter by organization
+        where_clause = "WHERE p.is_active = 1 AND p.organization_id = ?"
+        params = [current_user["organization_id"]]
 
         if search:
             where_clause += " AND (p.name LIKE ? OR p.brand LIKE ?)"
@@ -170,8 +172,8 @@ def list_products(
 
 
 @router.get("/{product_id}", response_model=ProductWithPrice)
-def get_product(product_id: int):
-    """Get a single product by ID with latest price."""
+def get_product(product_id: int, current_user: dict = Depends(get_current_user)):
+    """Get a single product by ID with latest price (organization-scoped)."""
     with get_db() as conn:
         cursor = conn.cursor()
 
@@ -195,8 +197,8 @@ def get_product(product_id: int):
                        ROW_NUMBER() OVER (PARTITION BY distributor_product_id ORDER BY effective_date DESC) as rn
                 FROM price_history
             ) ph ON ph.distributor_product_id = dp.id AND ph.rn = 1
-            WHERE p.id = ?
-        """, (product_id,))
+            WHERE p.id = ? AND p.organization_id = ?
+        """, (product_id, current_user["organization_id"]))
 
         product = dict_from_row(cursor.fetchone())
 
@@ -207,25 +209,25 @@ def get_product(product_id: int):
 
 
 @router.patch("/{product_id}/map")
-def map_product_to_common(product_id: int, common_product_id: int):
-    """Map a product to a common product."""
+def map_product_to_common(product_id: int, common_product_id: int, current_user: dict = Depends(get_current_user)):
+    """Map a product to a common product (organization-scoped)."""
     with get_db() as conn:
         cursor = conn.cursor()
 
-        # Check if product exists
-        cursor.execute("SELECT id FROM products WHERE id = ?", (product_id,))
+        # Check if product exists and belongs to user's organization
+        cursor.execute("SELECT id FROM products WHERE id = ? AND organization_id = ?", (product_id, current_user["organization_id"]))
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Product not found")
 
-        # Check if common product exists
-        cursor.execute("SELECT id FROM common_products WHERE id = ?", (common_product_id,))
+        # Check if common product exists and belongs to user's organization
+        cursor.execute("SELECT id FROM common_products WHERE id = ? AND organization_id = ?", (common_product_id, current_user["organization_id"]))
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Common product not found")
 
         # Update mapping
         cursor.execute(
-            "UPDATE products SET common_product_id = ? WHERE id = ?",
-            (common_product_id, product_id)
+            "UPDATE products SET common_product_id = ? WHERE id = ? AND organization_id = ?",
+            (common_product_id, product_id, current_user["organization_id"])
         )
         conn.commit()
 
@@ -233,28 +235,32 @@ def map_product_to_common(product_id: int, common_product_id: int):
 
 
 @router.patch("/{product_id}/unmap")
-def unmap_product(product_id: int):
-    """Remove common product mapping from a product."""
+def unmap_product(product_id: int, current_user: dict = Depends(get_current_user)):
+    """Remove common product mapping from a product (organization-scoped)."""
     with get_db() as conn:
         cursor = conn.cursor()
 
         cursor.execute(
-            "UPDATE products SET common_product_id = NULL WHERE id = ?",
-            (product_id,)
+            "UPDATE products SET common_product_id = NULL WHERE id = ? AND organization_id = ?",
+            (product_id, current_user["organization_id"])
         )
+
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Product not found")
+
         conn.commit()
 
         return {"message": "Product unmapped successfully", "product_id": product_id}
 
 
 @router.patch("/{product_id}")
-def update_product(product_id: int, updates: dict):
-    """Update product fields (name, brand, pack, size, unit_id, common_product_id)."""
+def update_product(product_id: int, updates: dict, current_user: dict = Depends(get_current_user)):
+    """Update product fields (organization-scoped)."""
     with get_db() as conn:
         cursor = conn.cursor()
 
         # Check if product exists and get current values
-        cursor.execute("SELECT id, pack, size FROM products WHERE id = ?", (product_id,))
+        cursor.execute("SELECT id, pack, size FROM products WHERE id = ? AND organization_id = ?", (product_id, current_user["organization_id"]))
         product = cursor.fetchone()
         if not product:
             raise HTTPException(status_code=404, detail="Product not found")
@@ -275,8 +281,8 @@ def update_product(product_id: int, updates: dict):
         if not update_fields:
             raise HTTPException(status_code=400, detail="No valid fields to update")
 
-        params.append(product_id)
-        query = f"UPDATE products SET {', '.join(update_fields)} WHERE id = ?"
+        params.extend([product_id, current_user["organization_id"]])
+        query = f"UPDATE products SET {', '.join(update_fields)} WHERE id = ? AND organization_id = ?"
 
         cursor.execute(query, params)
 
