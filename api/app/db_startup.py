@@ -32,9 +32,12 @@ def run_migrations():
             if result.stdout:
                 print(result.stdout)
         except subprocess.CalledProcessError as e:
-            print(f"[db_startup] Migration failed: {e}")
+            print(f"[db_startup] Migration failed with exit code {e.returncode}")
+            print(f"[db_startup] Command: {e.cmd}")
+            if e.stdout:
+                print(f"[db_startup] STDOUT:\n{e.stdout}")
             if e.stderr:
-                print(e.stderr)
+                print(f"[db_startup] STDERR:\n{e.stderr}")
             raise
     else:
         print("[db_startup] SQLite detected - using init_db()")
