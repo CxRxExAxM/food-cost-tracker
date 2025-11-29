@@ -14,12 +14,18 @@ def run_migrations():
     if database_url and database_url.startswith('postgresql'):
         print("[db_startup] PostgreSQL detected - running migrations...")
         try:
-            # Run alembic upgrade head
+            # Find project root (where alembic.ini lives)
+            current_file = Path(__file__)
+            project_root = current_file.parent.parent.parent  # api/app/db_startup.py -> project root
+
+            # Run alembic upgrade head from project root
             result = subprocess.run(
                 ['alembic', 'upgrade', 'head'],
+                cwd=str(project_root),
                 capture_output=True,
                 text=True,
-                check=True
+                check=True,
+                env={**os.environ, 'DATABASE_URL': database_url}
             )
             print("[db_startup] Migrations completed successfully")
             if result.stdout:
