@@ -18,9 +18,10 @@ def run_migrations():
             current_file = Path(__file__)
             project_root = current_file.parent.parent.parent  # api/app/db_startup.py -> project root
 
-            # Run alembic upgrade head from project root
+            # Use python -m alembic instead of alembic command for better compatibility
+            import sys
             result = subprocess.run(
-                ['alembic', 'upgrade', 'head'],
+                [sys.executable, '-m', 'alembic', 'upgrade', 'head'],
                 cwd=str(project_root),
                 capture_output=True,
                 text=True,
