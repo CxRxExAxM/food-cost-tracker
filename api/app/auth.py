@@ -33,6 +33,7 @@ class Token(BaseModel):
 
 class TokenData(BaseModel):
     user_id: Optional[int] = None
+    organization_id: Optional[int] = None
     email: Optional[str] = None
     role: Optional[str] = None
 
@@ -52,6 +53,7 @@ class UserLogin(BaseModel):
 
 class UserResponse(BaseModel):
     id: int
+    organization_id: int
     email: str
     username: str
     full_name: Optional[str]
@@ -90,12 +92,13 @@ def decode_token(token: str) -> Optional[TokenData]:
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id_str = payload.get("sub")
+        organization_id: int = payload.get("organization_id")
         email: str = payload.get("email")
         role: str = payload.get("role")
         if user_id_str is None:
             return None
         user_id = int(user_id_str)
-        return TokenData(user_id=user_id, email=email, role=role)
+        return TokenData(user_id=user_id, organization_id=organization_id, email=email, role=role)
     except (JWTError, ValueError):
         return None
 

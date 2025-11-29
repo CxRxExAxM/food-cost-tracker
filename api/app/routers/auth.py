@@ -45,18 +45,19 @@ def register(user: UserCreate, current_user: dict = Depends(require_admin)):
                 detail="Invalid role. Must be: admin, chef, or viewer"
             )
 
-        # Create user
+        # Create user in same organization as the admin creating them
         hashed_password = get_password_hash(user.password)
         cursor.execute("""
-            INSERT INTO users (email, username, hashed_password, full_name, role)
-            VALUES (?, ?, ?, ?, ?)
-        """, (user.email, user.username, hashed_password, user.full_name, user.role))
+            INSERT INTO users (organization_id, email, username, hashed_password, full_name, role)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (current_user["organization_id"], user.email, user.username, hashed_password, user.full_name, user.role))
 
         conn.commit()
         user_id = cursor.lastrowid
 
         return {
             "id": user_id,
+            "organization_id": current_user["organization_id"],
             "email": user.email,
             "username": user.username,
             "full_name": user.full_name,
@@ -82,6 +83,7 @@ def login(credentials: UserLogin):
     access_token = create_access_token(
         data={
             "sub": str(user["id"]),
+            "organization_id": user["organization_id"],
             "email": user["email"],
             "role": user["role"]
         },
@@ -98,6 +100,7 @@ def get_current_user_info(current_user: dict = Depends(get_current_user)):
     """
     return {
         "id": current_user["id"],
+        "organization_id": current_user["organization_id"],
         "email": current_user["email"],
         "username": current_user["username"],
         "full_name": current_user["full_name"],
@@ -109,15 +112,16 @@ def get_current_user_info(current_user: dict = Depends(get_current_user)):
 @router.get("/users", response_model=list[UserResponse])
 def list_users(current_user: dict = Depends(require_admin)):
     """
-    List all users. Admin only.
+    List all users in current organization. Admin only.
     """
     with get_db() as conn:
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT id, email, username, full_name, role, is_active
+            SELECT id, organization_id, email, username, full_name, role, is_active
             FROM users
+            WHERE organization_id = ?
             ORDER BY username
-        """)
+        """, (current_user["organization_id"],))
         users = dicts_from_rows(cursor.fetchall())
         return [{**u, "is_active": bool(u["is_active"])} for u in users]
 
