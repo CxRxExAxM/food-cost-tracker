@@ -3,7 +3,7 @@ Database startup utilities.
 Handles both SQLite and PostgreSQL initialization.
 """
 import os
-import subprocess
+import sys
 from pathlib import Path
 
 
@@ -18,26 +18,28 @@ def run_migrations():
             current_file = Path(__file__)
             project_root = current_file.parent.parent.parent  # api/app/db_startup.py -> project root
 
-            # Use python -m alembic instead of alembic command for better compatibility
-            import sys
-            result = subprocess.run(
-                [sys.executable, '-m', 'alembic', 'upgrade', 'head'],
-                cwd=str(project_root),
-                capture_output=True,
-                text=True,
-                check=True,
-                env={**os.environ, 'DATABASE_URL': database_url}
-            )
+            # Change to project root for alembic
+            original_cwd = Path.cwd()
+            os.chdir(project_root)
+
+            # Import and run alembic directly
+            from alembic.config import Config
+            from alembic import command
+
+            alembic_cfg = Config("alembic.ini")
+            alembic_cfg.set_main_option("sqlalchemy.url", database_url)
+
+            print(f"[db_startup] Running migrations from {project_root}")
+            command.upgrade(alembic_cfg, "head")
             print("[db_startup] Migrations completed successfully")
-            if result.stdout:
-                print(result.stdout)
-        except subprocess.CalledProcessError as e:
-            print(f"[db_startup] Migration failed with exit code {e.returncode}")
-            print(f"[db_startup] Command: {e.cmd}")
-            if e.stdout:
-                print(f"[db_startup] STDOUT:\n{e.stdout}")
-            if e.stderr:
-                print(f"[db_startup] STDERR:\n{e.stderr}")
+
+            # Change back to original directory
+            os.chdir(original_cwd)
+
+        except Exception as e:
+            print(f"[db_startup] Migration failed: {type(e).__name__}: {e}")
+            import traceback
+            traceback.print_exc()
             raise
     else:
         print("[db_startup] SQLite detected - using init_db()")
