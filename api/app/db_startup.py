@@ -26,7 +26,9 @@ def run_migrations():
             from alembic.config import Config
             from alembic import command
 
-            alembic_cfg = Config("alembic.ini")
+            # Use absolute path to alembic.ini
+            alembic_ini_path = project_root / "alembic.ini"
+            alembic_cfg = Config(str(alembic_ini_path))
             alembic_cfg.set_main_option("sqlalchemy.url", database_url)
 
             print(f"[db_startup] Running migrations from {project_root}")
