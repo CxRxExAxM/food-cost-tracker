@@ -28,6 +28,10 @@ A comprehensive SaaS platform for F&B operations to manage food costs, track dis
 - **Price History Tracking** - Time-series price data for trend analysis
 
 ### Recent Additions
+- **Multi-Tenancy Support** - Organization-based data isolation for SaaS deployment
+  - Complete data separation between organizations
+  - Tier-based system (Free, Basic, Pro, Enterprise)
+  - Organization-scoped products, recipes, and pricing
 - **PostgreSQL Migration** - Multi-tenant database with Alembic migrations
 - **Automatic Database Initialization** - Detects SQLite vs PostgreSQL on startup
 - **Dev Environment** - Separate staging environment for testing features
@@ -123,38 +127,48 @@ Clean_Invoices/
 
 ### Core Tables
 
+**organizations**
+- Multi-tenant organization/account management
+- Tier system: free, basic, pro, enterprise
+- All data tables reference organization_id for isolation
+
 **users**
 - User accounts with role-based permissions
 - Roles: admin, chef, viewer
+- Belongs to one organization
 
 **distributors**
 - Food distributors (Sysco, Vesta, etc.)
+- Shared across organizations
 - Seeded with 6 default distributors
 
 **units**
 - Units of measure (LB, OZ, GAL, QT, EA, etc.)
 - Organized by type: weight, volume, count
+- Shared across organizations
 
 **common_products**
-- User-defined normalized ingredients
+- Organization-scoped normalized ingredients
 - Master ingredient library with allergen flags
 - Example: "Red Onion", "Chicken Breast 6oz"
 
 **products**
-- Distributor-specific products
+- Organization-scoped distributor-specific products
 - Pack size, unit, brand information
 - References common_products for mapping
 
 **distributor_products**
-- Junction table linking products to distributors
-- Stores SKU and distributor-specific names
+- Organization-scoped junction table
+- Links products to distributors with SKU
+- UNIQUE constraint: (organization_id, distributor_id, distributor_sku)
+- Allows different orgs to have different pricing for same SKUs
 
 **price_history**
 - Time-series price tracking
 - Links to distributor_products with effective dates
 
 **recipes**
-- Recipe definitions with yield, servings, method
+- Organization-scoped recipe definitions
 - Supports nested categories (Sauces/Hot Sauces)
 
 **recipe_ingredients**
@@ -163,7 +177,7 @@ Clean_Invoices/
 - Yield percentage for prep waste calculation
 
 **import_batches**
-- Tracks CSV import operations for audit trail
+- Organization-scoped CSV import audit trail
 
 ### Data Model Flow
 
@@ -430,13 +444,14 @@ venv/bin/alembic history
 ## Roadmap
 
 ### Completed ✅
+- **Multi-tenancy architecture** with organization-based data isolation
 - Multi-distributor import system
 - Product-to-common-product mapping
 - Recipe builder with folders
 - Live cost calculation with yield %
 - Allergen auto-aggregation
-- User authentication & roles
-- PostgreSQL migration
+- User authentication & roles with JWT
+- PostgreSQL migration with Alembic
 - Dev/staging environment
 
 ### In Progress 🚧

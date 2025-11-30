@@ -37,8 +37,8 @@ def upgrade() -> None:
     sa.Column('contact_email', sa.String(), nullable=True),
     sa.Column('contact_phone', sa.String(), nullable=True),
     sa.Column('is_active', sa.Integer(), nullable=True),
-    sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=True),
-    sa.Column('updated_at', sa.DateTime(), server_default=sa.text('now()'), nullable=True),
+    sa.Column('created_at', sa.DateTime(), server_default=sa.text('CURRENT_TIMESTAMP'), nullable=True),
+    sa.Column('updated_at', sa.DateTime(), server_default=sa.text('CURRENT_TIMESTAMP'), nullable=True),
     sa.CheckConstraint("subscription_status IN ('active', 'cancelled', 'past_due', 'trialing')", name='check_subscription_status'),
     sa.CheckConstraint("subscription_tier IN ('free', 'paid', 'enterprise')", name='check_subscription_tier'),
     sa.PrimaryKeyConstraint('id'),
@@ -68,22 +68,31 @@ def upgrade() -> None:
     conn.execute(sa.text("UPDATE recipes SET organization_id = 1 WHERE organization_id IS NULL"))
     conn.execute(sa.text("UPDATE import_batches SET organization_id = 1 WHERE organization_id IS NULL"))
 
-    # Step 5: Make organization_id NOT NULL and add foreign keys
-    op.alter_column('users', 'organization_id', nullable=False)
-    op.alter_column('common_products', 'organization_id', nullable=False)
-    op.alter_column('products', 'organization_id', nullable=False)
-    op.alter_column('recipes', 'organization_id', nullable=False)
-    op.alter_column('import_batches', 'organization_id', nullable=False)
+    # Step 5: For SQLite, use batch operations to make organization_id NOT NULL and add foreign keys
+    with op.batch_alter_table('users') as batch_op:
+        batch_op.alter_column('organization_id', nullable=False)
+        batch_op.create_foreign_key('fk_users_organization_id', 'organizations', ['organization_id'], ['id'], ondelete='CASCADE')
 
-    # Step 6: Add foreign key constraints
-    op.create_foreign_key(None, 'users', 'organizations', ['organization_id'], ['id'], ondelete='CASCADE')
-    op.create_foreign_key(None, 'common_products', 'organizations', ['organization_id'], ['id'], ondelete='CASCADE')
-    op.create_foreign_key(None, 'products', 'organizations', ['organization_id'], ['id'], ondelete='CASCADE')
-    op.create_foreign_key(None, 'recipes', 'organizations', ['organization_id'], ['id'], ondelete='CASCADE')
-    op.create_foreign_key(None, 'import_batches', 'organizations', ['organization_id'], ['id'], ondelete='CASCADE')
+    with op.batch_alter_table('common_products') as batch_op:
+        batch_op.alter_column('organization_id', nullable=False)
+        batch_op.create_foreign_key('fk_common_products_organization_id', 'organizations', ['organization_id'], ['id'], ondelete='CASCADE')
+        # Drop unique constraint on common_name (now organization-scoped)
+        try:
+            batch_op.drop_constraint('common_products_common_name_key', type_='unique')
+        except:
+            pass  # May not exist in SQLite
 
-    # Step 7: Drop unique constraint on common_products.common_name (now organization-scoped)
-    op.drop_constraint(op.f('common_products_common_name_key'), 'common_products', type_='unique')
+    with op.batch_alter_table('products') as batch_op:
+        batch_op.alter_column('organization_id', nullable=False)
+        batch_op.create_foreign_key('fk_products_organization_id', 'organizations', ['organization_id'], ['id'], ondelete='CASCADE')
+
+    with op.batch_alter_table('recipes') as batch_op:
+        batch_op.alter_column('organization_id', nullable=False)
+        batch_op.create_foreign_key('fk_recipes_organization_id', 'organizations', ['organization_id'], ['id'], ondelete='CASCADE')
+
+    with op.batch_alter_table('import_batches') as batch_op:
+        batch_op.alter_column('organization_id', nullable=False)
+        batch_op.create_foreign_key('fk_import_batches_organization_id', 'organizations', ['organization_id'], ['id'], ondelete='CASCADE')
 
 
 def downgrade() -> None:

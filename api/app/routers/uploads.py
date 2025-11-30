@@ -2,7 +2,7 @@
 Upload router for handling vendor CSV file uploads.
 Integrates vendor-specific cleaning and database import.
 """
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime, date
@@ -12,6 +12,7 @@ import uuid
 import re
 
 from ..database import get_db
+from ..auth import get_current_user
 
 router = APIRouter(prefix="/uploads", tags=["uploads"])
 
@@ -337,7 +338,8 @@ def get_distributors():
 async def upload_csv(
     file: UploadFile = File(...),
     distributor_code: str = Form(...),
-    effective_date: Optional[str] = Form(None)
+    effective_date: Optional[str] = Form(None),
+    current_user: dict = Depends(get_current_user)
 ):
     """
     Upload and process a vendor CSV or Excel file.
@@ -438,14 +440,16 @@ async def upload_csv(
 
                     unit_id = get_unit_id(cursor, unit_abbr) if unit_abbr else None
 
-                    # Check if product exists
+                    # Check if product exists (organization-scoped)
                     cursor.execute("""
                         SELECT p.id, dp.id
                         FROM products p
-                        LEFT JOIN distributor_products dp ON dp.product_id = p.id AND dp.distributor_id = ?
-                        WHERE p.name = ? AND (p.brand = ? OR (p.brand IS NULL AND ? IS NULL))
+                        LEFT JOIN distributor_products dp ON dp.product_id = p.id
+                            AND dp.distributor_id = ?
+                            AND dp.organization_id = ?
+                        WHERE p.organization_id = ? AND p.name = ? AND (p.brand = ? OR (p.brand IS NULL AND ? IS NULL))
                               AND p.pack = ? AND p.size = ?
-                    """, (distributor_id, product_name, brand, brand, pack, size))
+                    """, (distributor_id, current_user["organization_id"], current_user["organization_id"], product_name, brand, brand, pack, size))
 
                     existing = cursor.fetchone()
 
@@ -455,23 +459,23 @@ async def upload_csv(
 
                         if not distributor_product_id:
                             cursor.execute("""
-                                INSERT INTO distributor_products (distributor_id, product_id, distributor_sku, distributor_name)
-                                VALUES (?, ?, ?, ?)
-                            """, (distributor_id, product_id, sku, product_name))
+                                INSERT INTO distributor_products (organization_id, distributor_id, product_id, distributor_sku, distributor_name)
+                                VALUES (?, ?, ?, ?, ?)
+                            """, (current_user["organization_id"], distributor_id, product_id, sku, product_name))
                             distributor_product_id = cursor.lastrowid
                     else:
                         # Create new product
                         cursor.execute("""
-                            INSERT INTO products (name, brand, pack, size, unit_id, is_catch_weight)
-                            VALUES (?, ?, ?, ?, ?, ?)
-                        """, (product_name, brand, pack, size, unit_id, is_catch_weight))
+                            INSERT INTO products (organization_id, name, brand, pack, size, unit_id, is_catch_weight)
+                            VALUES (?, ?, ?, ?, ?, ?, ?)
+                        """, (current_user["organization_id"], product_name, brand, pack, size, unit_id, is_catch_weight))
                         product_id = cursor.lastrowid
                         new_products += 1
 
                         cursor.execute("""
-                            INSERT INTO distributor_products (distributor_id, product_id, distributor_sku, distributor_name)
-                            VALUES (?, ?, ?, ?)
-                        """, (distributor_id, product_id, sku, product_name))
+                            INSERT INTO distributor_products (organization_id, distributor_id, product_id, distributor_sku, distributor_name)
+                            VALUES (?, ?, ?, ?, ?)
+                        """, (current_user["organization_id"], distributor_id, product_id, sku, product_name))
                         distributor_product_id = cursor.lastrowid
 
                     # Insert/update price
