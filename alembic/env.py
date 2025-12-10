@@ -18,9 +18,19 @@ from api.app.models import Base
 config = context.config
 
 # Override sqlalchemy.url from environment variable
+# Support both DATABASE_URL (PostgreSQL) and DATABASE_PATH (SQLite on Render)
 database_url = os.getenv('DATABASE_URL')
+database_path = os.getenv('DATABASE_PATH')
+
 if database_url:
     config.set_main_option('sqlalchemy.url', database_url)
+elif database_path:
+    # Convert DATABASE_PATH to SQLite URL format
+    config.set_main_option('sqlalchemy.url', f'sqlite:///{database_path}')
+else:
+    # Fallback to local db folder for development
+    default_db = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'db', 'food_cost_tracker.db')
+    config.set_main_option('sqlalchemy.url', f'sqlite:///{default_db}')
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
