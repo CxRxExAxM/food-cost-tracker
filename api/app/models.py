@@ -23,9 +23,10 @@ class Organization(Base):
     stripe_subscription_id = Column(String, unique=True)
 
     # Tier limits
-    max_recipes = Column(Integer, default=5)  # Free tier: 5, Paid: -1 (unlimited)
-    max_distributors = Column(Integer, default=1)  # Free tier: 1, Paid: -1 (unlimited)
-    max_ai_parses_per_month = Column(Integer, default=10)  # Free tier: 10, Paid: -1 (unlimited)
+    max_users = Column(Integer, default=2)  # Free tier: 2, Basic: 5, Pro: 15, Enterprise: -1 (unlimited)
+    max_recipes = Column(Integer, default=5)  # Free tier: 5, Basic: 50, Pro: -1, Enterprise: -1 (unlimited)
+    max_distributors = Column(Integer, default=1)  # Free tier: 1, Basic: 3, Pro: -1, Enterprise: -1 (unlimited)
+    max_ai_parses_per_month = Column(Integer, default=10)  # Free tier: 10, Basic: 100, Pro: 500, Enterprise: -1 (unlimited)
     ai_parses_used_this_month = Column(Integer, default=0)
     ai_parses_reset_date = Column(DateTime)
 
@@ -39,7 +40,7 @@ class Organization(Base):
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
     __table_args__ = (
-        CheckConstraint("subscription_tier IN ('free', 'paid', 'enterprise')", name='check_subscription_tier'),
+        CheckConstraint("subscription_tier IN ('free', 'basic', 'pro', 'enterprise')", name='check_subscription_tier'),
         CheckConstraint("subscription_status IN ('active', 'cancelled', 'past_due', 'trialing')", name='check_subscription_status'),
     )
 

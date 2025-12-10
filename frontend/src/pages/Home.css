@@ -1,167 +1,232 @@
+/* Home Page - Dark Cyberpunk Theme */
+
 .home {
   min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  padding: 2rem;
+  background: var(--bg-primary);
+  padding: var(--space-8);
 }
 
 .home-container {
-  max-width: 900px;
+  max-width: 1200px;
   width: 100%;
 }
 
 .home-header {
   text-align: center;
-  color: white;
-  margin-bottom: 3rem;
+  margin-bottom: var(--space-12);
 }
 
 .header-top {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 2rem;
+  margin-bottom: var(--space-8);
+  padding: var(--space-4) 0;
 }
 
 .user-info {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--space-3);
 }
 
 .user-name {
-  font-weight: 500;
-  font-size: 1rem;
+  font-family: var(--font-primary);
+  font-weight: var(--font-weight-medium);
+  font-size: var(--text-base);
+  color: var(--text-primary);
 }
 
 .user-role {
-  padding: 0.25rem 0.75rem;
-  border-radius: 12px;
-  font-size: 0.75rem;
-  font-weight: 600;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-semibold);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: var(--tracking-wide);
 }
 
 .role-admin {
-  background: rgba(244, 67, 54, 0.2);
-  color: #ffcdd2;
+  background: var(--color-red-dim);
+  color: var(--color-red-bright);
 }
 
 .role-chef {
-  background: rgba(76, 175, 80, 0.2);
-  color: #c8e6c9;
+  background: var(--color-green-dim);
+  color: var(--color-green-bright);
 }
 
 .role-viewer {
-  background: rgba(33, 150, 243, 0.2);
-  color: #bbdefb;
+  background: var(--color-yellow-dim);
+  color: var(--color-yellow-bright);
 }
 
 .btn-logout {
-  padding: 0.5rem 1rem;
-  background: rgba(255, 255, 255, 0.15);
-  color: white;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: 6px;
-  font-size: 0.9rem;
+  padding: var(--space-2) var(--space-4);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  font-family: var(--font-primary);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--transition-base) var(--ease-in-out);
 }
 
 .btn-logout:hover {
-  background: rgba(255, 255, 255, 0.25);
-  border-color: rgba(255, 255, 255, 0.5);
+  background: var(--bg-tertiary);
+  border-color: var(--border-strong);
 }
 
 .home-header h1 {
-  font-size: 3.5rem;
-  margin-bottom: 1rem;
-  font-weight: 700;
+  font-family: var(--font-primary);
+  font-size: 4rem;
+  font-weight: var(--font-weight-bold);
+  line-height: var(--leading-tight);
+  letter-spacing: var(--tracking-tight);
+  color: var(--text-primary);
+  margin-bottom: var(--space-4);
 }
 
 .home-header p {
-  font-size: 1.25rem;
-  opacity: 0.9;
+  font-size: var(--text-xl);
+  color: var(--text-secondary);
+  font-weight: var(--font-weight-regular);
 }
 
+/* Navigation Cards */
 .nav-cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 2rem;
-  margin-bottom: 2rem;
+  gap: var(--space-6);
+  margin-bottom: var(--space-8);
 }
 
 .nav-card {
-  background: white;
-  border-radius: 12px;
-  padding: 2.5rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--space-8);
   text-decoration: none;
-  color: #333;
-  transition: all 0.3s ease;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  transition: all var(--transition-slow) var(--ease-in-out);
   position: relative;
   overflow: hidden;
 }
 
+.nav-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: var(--border-default);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform var(--transition-base) var(--ease-in-out);
+}
+
+.nav-card:hover::before {
+  transform: scaleX(1);
+}
+
 .nav-card:hover {
-  transform: translateY(-8px);
-  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15);
+  transform: translateY(-4px);
+  border-color: var(--border-default);
+  box-shadow: var(--shadow-lg);
 }
 
 .card-icon {
   font-size: 3rem;
-  margin-bottom: 1rem;
+  margin-bottom: var(--space-4);
+  color: var(--text-secondary);
+  transition: color var(--transition-base) var(--ease-in-out);
+}
+
+.nav-card:hover .card-icon {
+  color: var(--color-yellow);
 }
 
 .nav-card h2 {
-  font-size: 1.75rem;
-  margin-bottom: 0.5rem;
-  color: #667eea;
+  font-family: var(--font-primary);
+  font-size: var(--text-2xl);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+  margin-bottom: var(--space-2);
+  line-height: var(--leading-tight);
 }
 
 .nav-card p {
-  color: #666;
-  line-height: 1.6;
-  margin-bottom: 1.5rem;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  line-height: var(--leading-relaxed);
+  margin-bottom: var(--space-6);
 }
 
 .card-arrow {
   position: absolute;
-  bottom: 1.5rem;
-  right: 2rem;
+  bottom: var(--space-6);
+  right: var(--space-6);
   font-size: 1.5rem;
-  color: #667eea;
-  transition: transform 0.3s ease;
+  color: var(--text-tertiary);
+  transition: all var(--transition-base) var(--ease-in-out);
 }
 
 .nav-card:hover .card-arrow {
   transform: translateX(8px);
+  color: var(--color-yellow);
 }
 
-.nav-card.admin-card h2 {
-  color: #dc2626;
+/* Admin Card Accent */
+.nav-card.admin-card::before {
+  background: var(--color-red);
 }
 
-.nav-card.admin-card .card-arrow {
-  color: #dc2626;
+.nav-card.admin-card:hover .card-icon {
+  color: var(--color-red);
+}
+
+.nav-card.admin-card:hover .card-arrow {
+  color: var(--color-red);
 }
 
 .home-footer {
   text-align: center;
-  color: white;
-  opacity: 0.8;
-  font-size: 0.95rem;
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+  font-family: var(--font-mono);
+  letter-spacing: var(--tracking-wide);
 }
 
 @media (max-width: 768px) {
+  .home {
+    padding: var(--space-4);
+  }
+
   .home-header h1 {
     font-size: 2.5rem;
   }
 
+  .home-header p {
+    font-size: var(--text-base);
+  }
+
   .nav-cards {
     grid-template-columns: 1fr;
+    gap: var(--space-4);
+  }
+
+  .nav-card {
+    padding: var(--space-6);
+  }
+
+  .header-top {
+    flex-direction: column;
+    gap: var(--space-4);
+    align-items: flex-start;
   }
 }
