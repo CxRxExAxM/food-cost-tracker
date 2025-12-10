@@ -133,7 +133,14 @@ function Login() {
               >
                 Already have an account? Sign In
               </button>
-            ) : null}
+            ) : (
+              <button
+                className="btn-toggle-mode"
+                onClick={() => setIsSetup(true)}
+              >
+                Need to create a new account? Sign Up
+              </button>
+            )}
           </div>
         )}
       </div>
