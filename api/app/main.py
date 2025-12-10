@@ -5,12 +5,12 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from .routers import products, common_products, distributors, units, recipes, uploads, auth
+from .routers import products, common_products, distributors, units, recipes, uploads, auth, organizations
 from .db_startup import initialize_database
 
 app = FastAPI(
-    title="Food Cost Tracker API",
-    description="API for managing food costs, tracking prices from multiple distributors, and calculating recipe costs",
+    title="RestauranTek API",
+    description="Food Cost Tracker Module - API for managing food costs, tracking prices from multiple distributors, and calculating recipe costs",
     version="1.0.0"
 )
 
@@ -28,6 +28,7 @@ initialize_database()
 
 # Include routers
 app.include_router(auth.router)
+app.include_router(organizations.router)
 app.include_router(products.router)
 app.include_router(common_products.router)
 app.include_router(distributors.router)

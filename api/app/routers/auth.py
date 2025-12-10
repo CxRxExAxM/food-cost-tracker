@@ -10,6 +10,7 @@ from ..auth import (
     get_password_hash, authenticate_user, create_access_token,
     get_current_user, require_admin, ACCESS_TOKEN_EXPIRE_MINUTES
 )
+from ..tier_limits import check_user_limit_sql
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -20,6 +21,9 @@ def register(user: UserCreate, current_user: dict = Depends(require_admin)):
     Register a new user. Only admins can create new users.
     """
     with get_db() as conn:
+        # Check tier limits before creating user
+        check_user_limit_sql(conn, current_user["organization_id"])
+
         cursor = conn.cursor()
 
         # Check if email already exists
@@ -96,11 +100,25 @@ def login(credentials: UserLogin):
 @router.get("/me", response_model=UserResponse)
 def get_current_user_info(current_user: dict = Depends(get_current_user)):
     """
-    Get current logged-in user's information.
+    Get current logged-in user's information with organization details.
     """
+    from ..database import get_db, dict_from_row
+
+    # Fetch organization details
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT name, subscription_tier
+            FROM organizations
+            WHERE id = ?
+        """, (current_user["organization_id"],))
+        org = dict_from_row(cursor.fetchone())
+
     return {
         "id": current_user["id"],
         "organization_id": current_user["organization_id"],
+        "organization_name": org["name"] if org else None,
+        "organization_tier": org["subscription_tier"] if org else None,
         "email": current_user["email"],
         "username": current_user["username"],
         "full_name": current_user["full_name"],

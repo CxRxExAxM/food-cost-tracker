@@ -239,3 +239,75 @@ class PriceHistory(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# Organizations
+class OrganizationBase(BaseModel):
+    name: str
+    slug: str
+    subscription_tier: str
+    subscription_status: Optional[str] = 'active'
+    contact_email: Optional[str] = None
+    contact_phone: Optional[str] = None
+
+
+class OrganizationCreate(OrganizationBase):
+    pass
+
+
+class OrganizationUpdate(BaseModel):
+    name: Optional[str] = None
+    subscription_tier: Optional[str] = None
+    subscription_status: Optional[str] = None
+    contact_email: Optional[str] = None
+    contact_phone: Optional[str] = None
+    is_active: Optional[int] = None
+
+
+class OrganizationResponse(OrganizationBase):
+    id: int
+    max_users: int
+    max_recipes: int
+    max_distributors: int
+    max_ai_parses_per_month: int
+    ai_parses_used_this_month: int
+    is_active: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# Users
+class UserBase(BaseModel):
+    email: str
+    username: str
+    full_name: Optional[str] = None
+    role: str = 'viewer'
+
+
+class UserCreate(UserBase):
+    password: str
+    organization_id: int
+
+
+class UserUpdate(BaseModel):
+    email: Optional[str] = None
+    username: Optional[str] = None
+    full_name: Optional[str] = None
+    role: Optional[str] = None
+    is_active: Optional[int] = None
+
+
+class UserResponse(UserBase):
+    id: int
+    organization_id: int
+    organization_name: Optional[str] = None
+    organization_tier: Optional[str] = None
+    is_active: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True

@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import axios from '../lib/axios';
 import { useAuth } from '../context/AuthContext';
+import Navigation from '../components/Navigation';
 import './Users.css';
 
 const API_URL = import.meta.env.VITE_API_URL ?? '';
@@ -119,20 +120,12 @@ function Users() {
   }
 
   return (
-    <div className="users-page">
-      <header className="users-header">
-        <div className="header-left">
-          <Link to="/" className="back-link">← Back to Home</Link>
+    <>
+      <Navigation />
+      <div className="users-page">
+        <header className="users-header">
           <h1>User Management</h1>
-        </div>
-        <div className="header-right">
-          <div className="user-info">
-            <span className="user-name">{user?.full_name || user?.username}</span>
-            <span className={`user-role role-${user?.role}`}>{user?.role}</span>
-          </div>
-          <button className="btn-logout" onClick={handleLogout}>Sign Out</button>
-        </div>
-      </header>
+        </header>
 
       <main className="users-content">
         <div className="users-toolbar">
@@ -285,7 +278,8 @@ function Users() {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }
 

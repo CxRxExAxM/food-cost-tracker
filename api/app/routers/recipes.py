@@ -3,6 +3,7 @@ from typing import Optional
 from ..database import get_db, dicts_from_rows, dict_from_row
 from ..schemas import Recipe, RecipeCreate, RecipeWithIngredients, RecipeWithCost
 from ..auth import get_current_user
+from ..tier_limits import check_recipe_limit_sql
 import json
 
 router = APIRouter(prefix="/recipes", tags=["recipes"])
@@ -93,6 +94,9 @@ def create_recipe(recipe: RecipeCreate, current_user: dict = Depends(get_current
     Create a new recipe in current user's organization.
     """
     with get_db() as conn:
+        # Check tier limits before creating
+        check_recipe_limit_sql(conn, current_user["organization_id"])
+
         cursor = conn.cursor()
 
         # Serialize method to JSON

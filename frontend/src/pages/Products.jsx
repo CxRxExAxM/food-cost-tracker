@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
 import axios from '../lib/axios';
+import Navigation from '../components/Navigation';
 import './Products.css';
 
 const API_URL = import.meta.env.VITE_API_URL ?? '';
@@ -552,10 +552,10 @@ function Products() {
   };
 
   return (
-    <div className="container">
-      <Link to="/" className="back-link">← Back to Home</Link>
-
-      <div className="page-header">
+    <>
+      <Navigation />
+      <div className="container">
+        <div className="page-header">
         <div className="header-content">
           <h1>Products</h1>
           <p>View and manage distributor products</p>
@@ -983,7 +983,8 @@ function Products() {
           onUpdate={handleUpdateAllergens}
         />
       )}
-    </div>
+      </div>
+    </>
   );
 }
 

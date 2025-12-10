@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
 import axios from '../lib/axios';
+import Navigation from '../components/Navigation';
 import './Recipes.css';
 
 const API_URL = import.meta.env.VITE_API_URL ?? '';
@@ -460,10 +460,10 @@ function Recipes() {
   };
 
   return (
-    <div className="recipes-container">
-      <Link to="/" className="back-link">← Back to Home</Link>
-
-      <div className="recipes-layout">
+    <>
+      <Navigation />
+      <div className="recipes-container">
+        <div className="recipes-layout">
         {/* Left Panel - Explorer Tree */}
         <div className="recipes-explorer">
           <div className="explorer-header">
@@ -610,7 +610,8 @@ function Recipes() {
           onCreate={handleCreateFolder}
         />
       )}
-    </div>
+      </div>
+    </>
   );
 }
 

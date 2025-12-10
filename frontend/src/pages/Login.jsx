@@ -49,7 +49,8 @@ function Login() {
     <div className="login-container">
       <div className="login-card">
         <div className="login-header">
-          <h1>Food Cost Tracker</h1>
+          <h1>RestauranTek</h1>
+          <p className="login-subtitle">Food Cost Tracker</p>
           <p>{setupRequired || isSetup ? 'Create Admin Account' : 'Sign In'}</p>
         </div>
 
