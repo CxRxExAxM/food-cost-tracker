@@ -104,21 +104,33 @@ def get_current_user_info(current_user: dict = Depends(get_current_user)):
     """
     from ..database import get_db, dict_from_row
 
-    # Fetch organization details
-    with get_db() as conn:
-        cursor = conn.cursor()
-        cursor.execute("""
-            SELECT name, subscription_tier
-            FROM organizations
-            WHERE id = ?
-        """, (current_user["organization_id"],))
-        org = dict_from_row(cursor.fetchone())
+    # Fetch organization details if organization_id exists
+    org_name = None
+    org_tier = None
+
+    if current_user.get("organization_id"):
+        try:
+            with get_db() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT name, subscription_tier
+                    FROM organizations
+                    WHERE id = ?
+                """, (current_user["organization_id"],))
+                org = dict_from_row(cursor.fetchone())
+
+                if org:
+                    org_name = org["name"]
+                    org_tier = org["subscription_tier"]
+        except Exception as e:
+            # Log error but don't fail the request
+            print(f"Warning: Failed to fetch organization details: {e}")
 
     return {
         "id": current_user["id"],
-        "organization_id": current_user["organization_id"],
-        "organization_name": org["name"] if org else None,
-        "organization_tier": org["subscription_tier"] if org else None,
+        "organization_id": current_user.get("organization_id"),
+        "organization_name": org_name,
+        "organization_tier": org_tier,
         "email": current_user["email"],
         "username": current_user["username"],
         "full_name": current_user["full_name"],
