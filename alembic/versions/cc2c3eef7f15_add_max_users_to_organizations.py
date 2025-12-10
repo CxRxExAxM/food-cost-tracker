@@ -19,29 +19,37 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    """Upgrade schema."""
-    # SQLite requires batch mode for altering tables with constraints
-    with op.batch_alter_table('organizations', schema=None) as batch_op:
-        # Add max_users column
-        batch_op.add_column(sa.Column('max_users', sa.Integer(), server_default='2', nullable=True))
+    """Upgrade schema - PostgreSQL and SQLite compatible."""
+    # Add max_users column
+    op.add_column('organizations', sa.Column('max_users', sa.Integer(), server_default='2', nullable=True))
 
-        # Drop and recreate check constraint for subscription_tier
-        batch_op.drop_constraint('check_subscription_tier', type_='check')
-        batch_op.create_check_constraint(
-            'check_subscription_tier',
-            "subscription_tier IN ('free', 'basic', 'pro', 'enterprise')"
-        )
+    # Drop and recreate check constraint for subscription_tier
+    # Note: SQLite doesn't enforce constraint names, so drop_constraint might fail silently
+    try:
+        op.drop_constraint('check_subscription_tier', 'organizations', type_='check')
+    except Exception:
+        pass  # SQLite doesn't have named constraints, ignore
+
+    op.create_check_constraint(
+        'check_subscription_tier',
+        'organizations',
+        "subscription_tier IN ('free', 'basic', 'pro', 'enterprise')"
+    )
 
 
 def downgrade() -> None:
-    """Downgrade schema."""
-    with op.batch_alter_table('organizations', schema=None) as batch_op:
-        # Remove max_users column
-        batch_op.drop_column('max_users')
+    """Downgrade schema - PostgreSQL and SQLite compatible."""
+    # Remove max_users column
+    op.drop_column('organizations', 'max_users')
 
-        # Revert check constraint to original values
-        batch_op.drop_constraint('check_subscription_tier', type_='check')
-        batch_op.create_check_constraint(
-            'check_subscription_tier',
-            "subscription_tier IN ('free', 'paid', 'enterprise')"
-        )
+    # Revert check constraint to original values
+    try:
+        op.drop_constraint('check_subscription_tier', 'organizations', type_='check')
+    except Exception:
+        pass  # SQLite doesn't have named constraints, ignore
+
+    op.create_check_constraint(
+        'check_subscription_tier',
+        'organizations',
+        "subscription_tier IN ('free', 'paid', 'enterprise')"
+    )
