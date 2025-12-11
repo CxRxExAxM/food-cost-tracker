@@ -91,15 +91,20 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
 def decode_token(token: str) -> Optional[TokenData]:
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        print(f"[decode_token] Payload: {payload}")
         user_id_str = payload.get("sub")
         organization_id: int = payload.get("organization_id")
         email: str = payload.get("email")
         role: str = payload.get("role")
         if user_id_str is None:
+            print("[decode_token] No 'sub' in payload")
             return None
         user_id = int(user_id_str)
-        return TokenData(user_id=user_id, organization_id=organization_id, email=email, role=role)
-    except (JWTError, ValueError):
+        token_data = TokenData(user_id=user_id, organization_id=organization_id, email=email, role=role)
+        print(f"[decode_token] Success: {token_data}")
+        return token_data
+    except (JWTError, ValueError) as e:
+        print(f"[decode_token] Failed: {type(e).__name__}: {str(e)}")
         return None
 
 
@@ -112,10 +117,15 @@ def get_user_by_email(email: str):
 
 
 def get_user_by_id(user_id: int):
+    print(f"[get_user_by_id] Looking up user_id: {user_id}")
     with get_db() as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))
-        return dict_from_row(cursor.fetchone())
+        row = cursor.fetchone()
+        print(f"[get_user_by_id] Row type: {type(row)}, Row: {row}")
+        result = dict_from_row(row)
+        print(f"[get_user_by_id] Result type: {type(result)}, Result: {result}")
+        return result
 
 
 def authenticate_user(email: str, password: str):
@@ -138,23 +148,41 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         headers={"WWW-Authenticate": "Bearer"},
     )
 
-    token = credentials.credentials
-    token_data = decode_token(token)
+    try:
+        token = credentials.credentials
+        print(f"[get_current_user] Validating token: {token[:20]}...")
 
-    if token_data is None:
+        token_data = decode_token(token)
+        print(f"[get_current_user] Token decoded: {token_data}")
+
+        if token_data is None:
+            print("[get_current_user] Token decode failed")
+            raise credentials_exception
+
+        print(f"[get_current_user] Looking up user_id: {token_data.user_id}")
+        user = get_user_by_id(token_data.user_id)
+        print(f"[get_current_user] User found: {user is not None}")
+
+        if user is None:
+            print("[get_current_user] User not found in database")
+            raise credentials_exception
+
+        if not user["is_active"]:
+            print("[get_current_user] User is inactive")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="User account is disabled"
+            )
+
+        print(f"[get_current_user] Success - returning user {user.get('id')}")
+        return user
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[get_current_user] Unexpected error: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
         raise credentials_exception
-
-    user = get_user_by_id(token_data.user_id)
-    if user is None:
-        raise credentials_exception
-
-    if not user["is_active"]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User account is disabled"
-        )
-
-    return user
 
 
 # Role-based access control dependencies
