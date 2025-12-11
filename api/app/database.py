@@ -354,6 +354,60 @@ def run_migrations():
         print("[migrations] Database schema is up to date")
 
 
+class DatabaseCursorWrapper:
+    """Wrapper for database cursors that converts SQLite ? placeholders to PostgreSQL %s."""
+    def __init__(self, cursor, use_postgres):
+        self.cursor = cursor
+        self.use_postgres = use_postgres
+
+    def execute(self, query, params=None):
+        """Execute query, converting placeholders if needed."""
+        if self.use_postgres and params:
+            # Convert SQLite ? placeholders to PostgreSQL %s
+            query = query.replace('?', '%s')
+        return self.cursor.execute(query, params)
+
+    def fetchone(self):
+        return self.cursor.fetchone()
+
+    def fetchall(self):
+        return self.cursor.fetchall()
+
+    def fetchmany(self, size=None):
+        return self.cursor.fetchmany(size) if size else self.cursor.fetchmany()
+
+    @property
+    def lastrowid(self):
+        if self.use_postgres:
+            # PostgreSQL doesn't have lastrowid, need to use RETURNING
+            return None
+        return self.cursor.lastrowid
+
+    @property
+    def rowcount(self):
+        return self.cursor.rowcount
+
+
+class DatabaseConnectionWrapper:
+    """Wrapper for database connections that returns wrapped cursors."""
+    def __init__(self, conn, use_postgres):
+        self.conn = conn
+        self.use_postgres = use_postgres
+
+    def cursor(self):
+        """Return wrapped cursor that handles placeholder conversion."""
+        return DatabaseCursorWrapper(self.conn.cursor(), self.use_postgres)
+
+    def commit(self):
+        return self.conn.commit()
+
+    def rollback(self):
+        return self.conn.rollback()
+
+    def close(self):
+        return self.conn.close()
+
+
 @contextmanager
 def get_db():
     """Context manager for database connections - supports PostgreSQL and SQLite."""
@@ -361,7 +415,7 @@ def get_db():
         # PostgreSQL connection
         conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
         try:
-            yield conn
+            yield DatabaseConnectionWrapper(conn, True)
         finally:
             conn.close()
     else:
@@ -369,7 +423,7 @@ def get_db():
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row  # Return rows as dictionaries
         try:
-            yield conn
+            yield DatabaseConnectionWrapper(conn, False)
         finally:
             conn.close()
 
