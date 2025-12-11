@@ -1,55 +1,17 @@
 """
-SQLAlchemy models for Food Cost Tracker.
-Converted from SQLite schema in database.py
+SQLAlchemy models for Food Cost Tracker - PostgreSQL schema.
 """
-from sqlalchemy import Column, Integer, String, Text, Float, DateTime, ForeignKey, CheckConstraint
+from sqlalchemy import Column, Integer, String, Text, Float, DateTime, ForeignKey, CheckConstraint, UniqueConstraint
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.sql import func
 
 Base = declarative_base()
 
 
-class Organization(Base):
-    __tablename__ = 'organizations'
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    name = Column(String, nullable=False)
-    slug = Column(String, unique=True, nullable=False)
-
-    # Subscription & tier management
-    subscription_tier = Column(String, nullable=False, default='free')
-    subscription_status = Column(String, nullable=False, default='active')
-    stripe_customer_id = Column(String, unique=True)
-    stripe_subscription_id = Column(String, unique=True)
-
-    # Tier limits
-    max_users = Column(Integer, default=2)  # Free tier: 2, Basic: 5, Pro: 15, Enterprise: -1 (unlimited)
-    max_recipes = Column(Integer, default=5)  # Free tier: 5, Basic: 50, Pro: -1, Enterprise: -1 (unlimited)
-    max_distributors = Column(Integer, default=1)  # Free tier: 1, Basic: 3, Pro: -1, Enterprise: -1 (unlimited)
-    max_ai_parses_per_month = Column(Integer, default=10)  # Free tier: 10, Basic: 100, Pro: 500, Enterprise: -1 (unlimited)
-    ai_parses_used_this_month = Column(Integer, default=0)
-    ai_parses_reset_date = Column(DateTime)
-
-    # Contact info
-    contact_email = Column(String)
-    contact_phone = Column(String)
-
-    # Status
-    is_active = Column(Integer, default=1)
-    created_at = Column(DateTime, server_default=func.now())
-    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
-
-    __table_args__ = (
-        CheckConstraint("subscription_tier IN ('free', 'basic', 'pro', 'enterprise')", name='check_subscription_tier'),
-        CheckConstraint("subscription_status IN ('active', 'cancelled', 'past_due', 'trialing')", name='check_subscription_status'),
-    )
-
-
 class User(Base):
     __tablename__ = 'users'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    organization_id = Column(Integer, ForeignKey('organizations.id', ondelete='CASCADE'), nullable=False)
     email = Column(String, unique=True, nullable=False)
     username = Column(String, unique=True, nullable=False)
     hashed_password = Column(String, nullable=False)
@@ -90,13 +52,14 @@ class CommonProduct(Base):
     __tablename__ = 'common_products'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    organization_id = Column(Integer, ForeignKey('organizations.id', ondelete='CASCADE'), nullable=False)
-    common_name = Column(String, nullable=False)
+    common_name = Column(String, unique=True, nullable=False)
     category = Column(String)
     subcategory = Column(String)
     preferred_unit_id = Column(Integer, ForeignKey('units.id'))
     notes = Column(Text)
     is_active = Column(Integer, default=1)
+
+    # Allergen flags
     allergen_vegan = Column(Integer, default=0)
     allergen_vegetarian = Column(Integer, default=0)
     allergen_gluten = Column(Integer, default=0)
@@ -113,6 +76,7 @@ class CommonProduct(Base):
     allergen_sulphur_dioxide = Column(Integer, default=0)
     allergen_mustard = Column(Integer, default=0)
     allergen_celery = Column(Integer, default=0)
+
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
@@ -121,7 +85,6 @@ class Product(Base):
     __tablename__ = 'products'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    organization_id = Column(Integer, ForeignKey('organizations.id', ondelete='CASCADE'), nullable=False)
     name = Column(String, nullable=False)
     description = Column(Text)
     brand = Column(String)
@@ -140,8 +103,8 @@ class DistributorProduct(Base):
     __tablename__ = 'distributor_products'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    distributor_id = Column(Integer, ForeignKey('distributors.id', ondelete='CASCADE'))
-    product_id = Column(Integer, ForeignKey('products.id', ondelete='CASCADE'))
+    distributor_id = Column(Integer, ForeignKey('distributors.id', ondelete='CASCADE'), nullable=False)
+    product_id = Column(Integer, ForeignKey('products.id', ondelete='CASCADE'), nullable=False)
     distributor_sku = Column(String, nullable=False)
     distributor_name = Column(String)
     is_available = Column(Integer, default=1)
@@ -149,8 +112,7 @@ class DistributorProduct(Base):
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
     __table_args__ = (
-        CheckConstraint('distributor_id IS NOT NULL AND distributor_sku IS NOT NULL',
-                       name='unique_distributor_sku'),
+        UniqueConstraint('distributor_id', 'distributor_sku', name='unique_distributor_sku'),
     )
 
 
@@ -158,19 +120,22 @@ class PriceHistory(Base):
     __tablename__ = 'price_history'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    distributor_product_id = Column(Integer, ForeignKey('distributor_products.id', ondelete='CASCADE'))
+    distributor_product_id = Column(Integer, ForeignKey('distributor_products.id', ondelete='CASCADE'), nullable=False)
     case_price = Column(Float, nullable=False)
     unit_price = Column(Float)
     effective_date = Column(DateTime, nullable=False)
     import_batch_id = Column(String)
     created_at = Column(DateTime, server_default=func.now())
 
+    __table_args__ = (
+        UniqueConstraint('distributor_product_id', 'effective_date', name='unique_price_per_date'),
+    )
+
 
 class ImportBatch(Base):
     __tablename__ = 'import_batches'
 
     id = Column(String, primary_key=True)
-    organization_id = Column(Integer, ForeignKey('organizations.id', ondelete='CASCADE'), nullable=False)
     distributor_id = Column(Integer, ForeignKey('distributors.id'))
     filename = Column(String, nullable=False)
     rows_imported = Column(Integer)
@@ -183,7 +148,6 @@ class Recipe(Base):
     __tablename__ = 'recipes'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    organization_id = Column(Integer, ForeignKey('organizations.id', ondelete='CASCADE'), nullable=False)
     name = Column(String, nullable=False)
     description = Column(Text)
     category = Column(String)
@@ -204,7 +168,7 @@ class RecipeIngredient(Base):
     __tablename__ = 'recipe_ingredients'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    recipe_id = Column(Integer, ForeignKey('recipes.id', ondelete='CASCADE'))
+    recipe_id = Column(Integer, ForeignKey('recipes.id', ondelete='CASCADE'), nullable=False)
     common_product_id = Column(Integer, ForeignKey('common_products.id'))
     sub_recipe_id = Column(Integer, ForeignKey('recipes.id'))
     quantity = Column(Float, nullable=False)

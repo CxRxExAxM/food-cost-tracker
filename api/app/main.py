@@ -5,7 +5,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from .routers import products, common_products, distributors, units, recipes, uploads, auth, organizations
+from .routers import products, common_products, distributors, units, recipes, uploads, auth
 from .db_startup import initialize_database
 
 app = FastAPI(
@@ -23,12 +23,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize database on startup (SQLite or PostgreSQL)
+# Initialize database on startup (PostgreSQL with Alembic migrations)
 initialize_database()
 
 # Include routers
 app.include_router(auth.router)
-app.include_router(organizations.router)
 app.include_router(products.router)
 app.include_router(common_products.router)
 app.include_router(distributors.router)
