@@ -16,7 +16,7 @@ def list_common_products(
     current_user: dict = Depends(get_current_user)
 ):
     """
-    List common products with optional filtering (organization-scoped).
+    List common products with optional filtering .
 
     - **skip**: Number of records to skip (pagination)
     - **limit**: Maximum number of records to return
@@ -26,18 +26,18 @@ def list_common_products(
     with get_db() as conn:
         cursor = conn.cursor()
 
-        query = "SELECT * FROM common_products WHERE is_active = 1 AND organization_id = ?"
-        params = [current_user["organization_id"]]
+        query = "SELECT * FROM common_products WHERE is_active = 1"
+        params = []
 
         if search:
-            query += " AND common_name LIKE ?"
+            query += " AND common_name LIKE %s"
             params.append(f"%{search}%")
 
         if category:
-            query += " AND category = ?"
+            query += " AND category = %s"
             params.append(category)
 
-        query += " ORDER BY common_name LIMIT ? OFFSET ?"
+        query += " ORDER BY common_name LIMIT %s OFFSET %s"
         params.extend([limit, skip])
 
         cursor.execute(query, params)
@@ -48,10 +48,10 @@ def list_common_products(
 
 @router.get("/{common_product_id}", response_model=CommonProduct)
 def get_common_product(common_product_id: int, current_user: dict = Depends(get_current_user)):
-    """Get a single common product by ID (organization-scoped)."""
+    """Get a single common product by ID ."""
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM common_products WHERE id = ? AND organization_id = ?", (common_product_id, current_user["organization_id"]))
+        cursor.execute("SELECT * FROM common_products WHERE id = %s", (common_product_id))
         common_product = dict_from_row(cursor.fetchone())
 
         if not common_product:
@@ -62,14 +62,14 @@ def get_common_product(common_product_id: int, current_user: dict = Depends(get_
 
 @router.post("", response_model=CommonProduct, status_code=201)
 def create_common_product(common_product: CommonProductCreate, current_user: dict = Depends(get_current_user)):
-    """Create a new common product (organization-scoped)."""
+    """Create a new common product ."""
     with get_db() as conn:
         cursor = conn.cursor()
 
         # Check if common_name already exists in this organization
         cursor.execute(
-            "SELECT id FROM common_products WHERE common_name = ? AND organization_id = ?",
-            (common_product.common_name, current_user["organization_id"])
+            "SELECT id FROM common_products WHERE common_name = %s",
+            (common_product.common_name)
         )
         if cursor.fetchone():
             raise HTTPException(
@@ -78,10 +78,9 @@ def create_common_product(common_product: CommonProductCreate, current_user: dic
             )
 
         cursor.execute("""
-            INSERT INTO common_products (organization_id, common_name, category, subcategory, preferred_unit_id, notes)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO common_products (common_name, category, subcategory, preferred_unit_id, notes)
+            VALUES (%s, %s, %s, %s, %s)
         """, (
-            current_user["organization_id"],
             common_product.common_name,
             common_product.category,
             common_product.subcategory,
@@ -92,19 +91,19 @@ def create_common_product(common_product: CommonProductCreate, current_user: dic
 
         # Fetch the created common product
         common_product_id = cursor.lastrowid
-        cursor.execute("SELECT * FROM common_products WHERE id = ?", (common_product_id,))
+        cursor.execute("SELECT * FROM common_products WHERE id = %s", (common_product_id,))
 
         return dict_from_row(cursor.fetchone())
 
 
 @router.patch("/{common_product_id}", response_model=CommonProduct)
 def update_common_product(common_product_id: int, update: CommonProductUpdate, current_user: dict = Depends(get_current_user)):
-    """Update a common product (organization-scoped)."""
+    """Update a common product ."""
     with get_db() as conn:
         cursor = conn.cursor()
 
         # Check if exists and belongs to user's organization
-        cursor.execute("SELECT id FROM common_products WHERE id = ? AND organization_id = ?", (common_product_id, current_user["organization_id"]))
+        cursor.execute("SELECT id FROM common_products WHERE id = %s", (common_product_id))
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Common product not found")
 
@@ -113,32 +112,32 @@ def update_common_product(common_product_id: int, update: CommonProductUpdate, c
         params = []
 
         for field, value in update.model_dump(exclude_unset=True).items():
-            update_fields.append(f"{field} = ?")
+            update_fields.append(f"{field} = %s")
             params.append(value)
 
         if not update_fields:
             raise HTTPException(status_code=400, detail="No fields to update")
 
-        params.extend([common_product_id, current_user["organization_id"]])
-        query = f"UPDATE common_products SET {', '.join(update_fields)} WHERE id = ? AND organization_id = ?"
+        params.extend([common_product_id])
+        query = f"UPDATE common_products SET {', '.join(update_fields)} WHERE id = %s"
 
         cursor.execute(query, params)
         conn.commit()
 
         # Return updated common product
-        cursor.execute("SELECT * FROM common_products WHERE id = ?", (common_product_id,))
+        cursor.execute("SELECT * FROM common_products WHERE id = %s", (common_product_id,))
         return dict_from_row(cursor.fetchone())
 
 
 @router.delete("/{common_product_id}")
 def delete_common_product(common_product_id: int, current_user: dict = Depends(get_current_user)):
-    """Soft delete a common product (organization-scoped)."""
+    """Soft delete a common product ."""
     with get_db() as conn:
         cursor = conn.cursor()
 
         cursor.execute(
-            "UPDATE common_products SET is_active = 0 WHERE id = ? AND organization_id = ?",
-            (common_product_id, current_user["organization_id"])
+            "UPDATE common_products SET is_active = 0 WHERE id = %s",
+            (common_product_id)
         )
 
         if cursor.rowcount == 0:
@@ -151,12 +150,12 @@ def delete_common_product(common_product_id: int, current_user: dict = Depends(g
 
 @router.get("/{common_product_id}/products")
 def get_common_product_products(common_product_id: int, current_user: dict = Depends(get_current_user)):
-    """Get all distributor products mapped to this common product (organization-scoped)."""
+    """Get all distributor products mapped to this common product ."""
     with get_db() as conn:
         cursor = conn.cursor()
 
         # Check if common product exists and belongs to user's organization
-        cursor.execute("SELECT id FROM common_products WHERE id = ? AND organization_id = ?", (common_product_id, current_user["organization_id"]))
+        cursor.execute("SELECT id FROM common_products WHERE id = %s", (common_product_id))
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Common product not found")
 
@@ -178,9 +177,9 @@ def get_common_product_products(common_product_id: int, current_user: dict = Dep
                        ROW_NUMBER() OVER (PARTITION BY distributor_product_id ORDER BY effective_date DESC) as rn
                 FROM price_history
             ) ph ON ph.distributor_product_id = dp.id AND ph.rn = 1
-            WHERE p.common_product_id = ? AND p.organization_id = ?
+            WHERE p.common_product_id = %s AND p.organization_id = %s
             ORDER BY ph.unit_price ASC
-        """, (common_product_id, current_user["organization_id"]))
+        """, (common_product_id))
 
         products = dicts_from_rows(cursor.fetchall())
 

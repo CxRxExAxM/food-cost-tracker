@@ -17,23 +17,23 @@ def list_recipes(
     current_user: dict = Depends(get_current_user)
 ):
     """
-    List recipes with optional filtering (organization-scoped).
+    List recipes with optional filtering .
     """
     with get_db() as conn:
         cursor = conn.cursor()
 
-        query = "SELECT * FROM recipes WHERE organization_id = ? AND is_active = 1"
-        params = [current_user["organization_id"]]
+        query = "SELECT * FROM recipes WHERE is_active = 1"
+        params = []
 
         if search:
-            query += " AND name LIKE ?"
+            query += " AND name LIKE %s"
             params.append(f"%{search}%")
 
         if category_path:
-            query += " AND category_path LIKE ?"
+            query += " AND category_path LIKE %s"
             params.append(f"{category_path}%")
 
-        query += " ORDER BY category_path, name LIMIT ? OFFSET ?"
+        query += " ORDER BY category_path, name LIMIT %s OFFSET %s"
         params.extend([limit, skip])
 
         cursor.execute(query, params)
@@ -50,15 +50,15 @@ def list_recipes(
 @router.get("/{recipe_id}", response_model=RecipeWithIngredients)
 def get_recipe(recipe_id: int, current_user: dict = Depends(get_current_user)):
     """
-    Get a single recipe with ingredients (organization-scoped).
+    Get a single recipe with ingredients .
     """
     with get_db() as conn:
         cursor = conn.cursor()
 
         # Get recipe - verify it belongs to user's organization
         cursor.execute(
-            "SELECT * FROM recipes WHERE id = ? AND organization_id = ?",
-            (recipe_id, current_user["organization_id"])
+            "SELECT * FROM recipes WHERE id = %s",
+            (recipe_id)
         )
         recipe = dict_from_row(cursor.fetchone())
 
@@ -79,7 +79,7 @@ def get_recipe(recipe_id: int, current_user: dict = Depends(get_current_user)):
             LEFT JOIN common_products cp ON cp.id = ri.common_product_id
             LEFT JOIN units u ON u.id = ri.unit_id
             LEFT JOIN recipes r ON r.id = ri.sub_recipe_id
-            WHERE ri.recipe_id = ?
+            WHERE ri.recipe_id = %s
         """, (recipe_id,))
 
         recipe['ingredients'] = dicts_from_rows(cursor.fetchall())
@@ -100,13 +100,11 @@ def create_recipe(recipe: RecipeCreate, current_user: dict = Depends(get_current
 
         cursor.execute("""
             INSERT INTO recipes (
-                organization_id,
                 name, description, category, category_path,
                 yield_amount, yield_unit_id, prep_time_minutes, cook_time_minutes,
                 method
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
         """, (
-            current_user["organization_id"],
             recipe.name,
             recipe.description,
             recipe.category,
@@ -126,7 +124,7 @@ def create_recipe(recipe: RecipeCreate, current_user: dict = Depends(get_current
                 INSERT INTO recipe_ingredients (
                     recipe_id, common_product_id, sub_recipe_id,
                     quantity, unit_id, yield_percentage, notes
-                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s)
             """, (
                 recipe_id,
                 ingredient.common_product_id,
@@ -140,7 +138,7 @@ def create_recipe(recipe: RecipeCreate, current_user: dict = Depends(get_current
         conn.commit()
 
         # Fetch created recipe
-        cursor.execute("SELECT * FROM recipes WHERE id = ?", (recipe_id,))
+        cursor.execute("SELECT * FROM recipes WHERE id = %s", (recipe_id,))
         created_recipe = dict_from_row(cursor.fetchone())
 
         if created_recipe.get('method'):
@@ -152,7 +150,7 @@ def create_recipe(recipe: RecipeCreate, current_user: dict = Depends(get_current
 @router.patch("/{recipe_id}", response_model=Recipe)
 def update_recipe(recipe_id: int, updates: dict, current_user: dict = Depends(get_current_user)):
     """
-    Update a recipe (organization-scoped).
+    Update a recipe .
 
     TODO Phase 1: Implement basic updates
     TODO Phase 2: Handle ingredient updates
@@ -162,7 +160,7 @@ def update_recipe(recipe_id: int, updates: dict, current_user: dict = Depends(ge
         cursor = conn.cursor()
 
         # Check if recipe exists and belongs to user's organization
-        cursor.execute("SELECT id FROM recipes WHERE id = ? AND organization_id = ?", (recipe_id, current_user["organization_id"]))
+        cursor.execute("SELECT id FROM recipes WHERE id = %s", (recipe_id))
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Recipe not found")
 
@@ -181,20 +179,20 @@ def update_recipe(recipe_id: int, updates: dict, current_user: dict = Depends(ge
                 # Serialize method if present
                 if field == 'method' and value:
                     value = json.dumps(value)
-                update_fields.append(f"{field} = ?")
+                update_fields.append(f"{field} = %s")
                 params.append(value)
 
         if not update_fields:
             raise HTTPException(status_code=400, detail="No valid fields to update")
 
-        params.extend([recipe_id, current_user["organization_id"]])
-        query = f"UPDATE recipes SET {', '.join(update_fields)} WHERE id = ? AND organization_id = ?"
+        params.extend([recipe_id])
+        query = f"UPDATE recipes SET {', '.join(update_fields)} WHERE id = %s"
 
         cursor.execute(query, params)
         conn.commit()
 
         # Fetch updated recipe
-        cursor.execute("SELECT * FROM recipes WHERE id = ?", (recipe_id,))
+        cursor.execute("SELECT * FROM recipes WHERE id = %s", (recipe_id,))
         updated_recipe = dict_from_row(cursor.fetchone())
 
         if updated_recipe.get('method'):
@@ -206,14 +204,14 @@ def update_recipe(recipe_id: int, updates: dict, current_user: dict = Depends(ge
 @router.delete("/{recipe_id}")
 def delete_recipe(recipe_id: int, current_user: dict = Depends(get_current_user)):
     """
-    Delete a recipe (soft delete, organization-scoped).
+    Delete a recipe (soft delete, ).
 
     TODO Phase 1: Implement soft delete
     """
     with get_db() as conn:
         cursor = conn.cursor()
 
-        cursor.execute("UPDATE recipes SET is_active = 0 WHERE id = ? AND organization_id = ?", (recipe_id, current_user["organization_id"]))
+        cursor.execute("UPDATE recipes SET is_active = 0 WHERE id = %s", (recipe_id))
 
         if cursor.rowcount == 0:
             raise HTTPException(status_code=404, detail="Recipe not found")
@@ -226,7 +224,7 @@ def delete_recipe(recipe_id: int, current_user: dict = Depends(get_current_user)
 @router.get("/{recipe_id}/cost", response_model=RecipeWithCost)
 def calculate_recipe_cost(recipe_id: int, current_user: dict = Depends(get_current_user)):
     """
-    Calculate total cost of a recipe with breakdown (organization-scoped).
+    Calculate total cost of a recipe with breakdown .
 
     Returns:
     - Total cost of all ingredients
@@ -245,8 +243,8 @@ def calculate_recipe_cost(recipe_id: int, current_user: dict = Depends(get_curre
             FROM recipes r
             LEFT JOIN units yu ON yu.id = r.yield_unit_id
             LEFT JOIN units su ON su.id = r.serving_unit_id
-            WHERE r.id = ? AND r.organization_id = ?
-        """, (recipe_id, current_user["organization_id"]))
+            WHERE r.id = %s
+        """, (recipe_id,))
         recipe = dict_from_row(cursor.fetchone())
 
         if not recipe:
@@ -314,7 +312,7 @@ def _calculate_ingredient_costs(cursor, recipe_id: int, visited: set) -> tuple[l
         LEFT JOIN common_products cp ON cp.id = ri.common_product_id
         LEFT JOIN units u ON u.id = ri.unit_id
         LEFT JOIN recipes r ON r.id = ri.sub_recipe_id
-        WHERE ri.recipe_id = ?
+        WHERE ri.recipe_id = %s
     """, (recipe_id,))
 
     ingredients = dicts_from_rows(cursor.fetchall())
@@ -346,7 +344,7 @@ def _calculate_ingredient_costs(cursor, recipe_id: int, visited: set) -> tuple[l
                            ROW_NUMBER() OVER (PARTITION BY distributor_product_id ORDER BY effective_date DESC) as rn
                     FROM price_history
                 ) ph ON ph.distributor_product_id = dp.id AND ph.rn = 1
-                WHERE p.common_product_id = ? AND ph.unit_price IS NOT NULL
+                WHERE p.common_product_id = %s AND ph.unit_price IS NOT NULL
                 ORDER BY ph.unit_price ASC
                 LIMIT 1
             """, (ing['common_product_id'],))
@@ -432,7 +430,7 @@ def _calculate_recipe_allergens(cursor, recipe_id: int, visited: set) -> dict:
         FROM recipe_ingredients ri
         LEFT JOIN common_products cp ON cp.id = ri.common_product_id
         LEFT JOIN recipes r ON r.id = ri.sub_recipe_id
-        WHERE ri.recipe_id = ?
+        WHERE ri.recipe_id = %s
     """, (recipe_id,))
 
     ingredients = dicts_from_rows(cursor.fetchall())
@@ -531,7 +529,7 @@ def add_ingredient(recipe_id: int, ingredient: dict):
         cursor = conn.cursor()
 
         # Verify recipe exists
-        cursor.execute("SELECT id FROM recipes WHERE id = ?", (recipe_id,))
+        cursor.execute("SELECT id FROM recipes WHERE id = %s", (recipe_id,))
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Recipe not found")
 
@@ -550,7 +548,7 @@ def add_ingredient(recipe_id: int, ingredient: dict):
             INSERT INTO recipe_ingredients (
                 recipe_id, common_product_id, sub_recipe_id,
                 quantity, unit_id, yield_percentage, notes
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s)
         """, (
             recipe_id,
             common_product_id,
@@ -574,7 +572,7 @@ def add_ingredient(recipe_id: int, ingredient: dict):
             LEFT JOIN common_products cp ON cp.id = ri.common_product_id
             LEFT JOIN units u ON u.id = ri.unit_id
             LEFT JOIN recipes r ON r.id = ri.sub_recipe_id
-            WHERE ri.id = ?
+            WHERE ri.id = %s
         """, (ingredient_id,))
 
         return dict_from_row(cursor.fetchone())
@@ -591,7 +589,7 @@ def update_ingredient(recipe_id: int, ingredient_id: int, updates: dict):
         # Verify ingredient exists and belongs to recipe
         cursor.execute("""
             SELECT id FROM recipe_ingredients
-            WHERE id = ? AND recipe_id = ?
+            WHERE id = %s AND recipe_id = %s
         """, (ingredient_id, recipe_id))
 
         if not cursor.fetchone():
@@ -604,14 +602,14 @@ def update_ingredient(recipe_id: int, ingredient_id: int, updates: dict):
 
         for field, value in updates.items():
             if field in allowed_fields:
-                update_fields.append(f"{field} = ?")
+                update_fields.append(f"{field} = %s")
                 params.append(value)
 
         if not update_fields:
             raise HTTPException(status_code=400, detail="No valid fields to update")
 
         params.append(ingredient_id)
-        query = f"UPDATE recipe_ingredients SET {', '.join(update_fields)} WHERE id = ?"
+        query = f"UPDATE recipe_ingredients SET {', '.join(update_fields)} WHERE id = %s"
 
         cursor.execute(query, params)
         conn.commit()
@@ -626,7 +624,7 @@ def update_ingredient(recipe_id: int, ingredient_id: int, updates: dict):
             LEFT JOIN common_products cp ON cp.id = ri.common_product_id
             LEFT JOIN units u ON u.id = ri.unit_id
             LEFT JOIN recipes r ON r.id = ri.sub_recipe_id
-            WHERE ri.id = ?
+            WHERE ri.id = %s
         """, (ingredient_id,))
 
         return dict_from_row(cursor.fetchone())
@@ -642,7 +640,7 @@ def remove_ingredient(recipe_id: int, ingredient_id: int):
 
         cursor.execute("""
             DELETE FROM recipe_ingredients
-            WHERE id = ? AND recipe_id = ?
+            WHERE id = %s AND recipe_id = %s
         """, (ingredient_id, recipe_id))
 
         if cursor.rowcount == 0:

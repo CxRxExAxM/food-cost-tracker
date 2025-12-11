@@ -22,15 +22,15 @@ class ProductCreate(BaseModel):
 
 @router.post("")
 def create_product(product: ProductCreate, current_user: dict = Depends(get_current_user)):
-    """Create a new product with optional distributor link and price (organization-scoped)."""
+    """Create a new product with optional distributor link and price ."""
     with get_db() as conn:
         cursor = conn.cursor()
 
         # Insert the product
         cursor.execute("""
-            INSERT INTO products (organization_id, name, brand, pack, size, unit_id, is_catch_weight)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (current_user["organization_id"], product.name, product.brand, product.pack, product.size,
+            INSERT INTO products (name, brand, pack, size, unit_id, is_catch_weight)
+            VALUES (%s, %s, %s, %s, %s, %s)
+        """, (product.name, product.brand, product.pack, product.size,
               product.unit_id, product.is_catch_weight))
 
         product_id = cursor.lastrowid
@@ -39,7 +39,7 @@ def create_product(product: ProductCreate, current_user: dict = Depends(get_curr
         if product.distributor_id:
             cursor.execute("""
                 INSERT INTO distributor_products (distributor_id, product_id, distributor_name)
-                VALUES (?, ?, ?)
+                VALUES (%s, %s, %s)
             """, (product.distributor_id, product_id, product.name))
 
             distributor_product_id = cursor.lastrowid
@@ -52,7 +52,7 @@ def create_product(product: ProductCreate, current_user: dict = Depends(get_curr
 
                 cursor.execute("""
                     INSERT INTO price_history (distributor_product_id, case_price, unit_price, effective_date)
-                    VALUES (?, ?, ?, date('now'))
+                    VALUES (%s, %s, %s, date('now'))
                 """, (distributor_product_id, product.case_price, unit_price))
 
         conn.commit()
@@ -79,7 +79,7 @@ def list_products(
     current_user: dict = Depends(get_current_user)
 ):
     """
-    List products with optional filtering and sorting (organization-scoped).
+    List products with optional filtering and sorting .
 
     - **skip**: Number of records to skip (pagination)
     - **limit**: Maximum number of records to return
@@ -94,20 +94,20 @@ def list_products(
         cursor = conn.cursor()
 
         # Base WHERE clause - filter by organization
-        where_clause = "WHERE p.is_active = 1 AND p.organization_id = ?"
-        params = [current_user["organization_id"]]
+        where_clause = "WHERE p.is_active = 1 AND p.organization_id = %s"
+        params = []
 
         if search:
-            where_clause += " AND (p.name LIKE ? OR p.brand LIKE ?)"
+            where_clause += " AND (p.name LIKE %s OR p.brand LIKE %s)"
             search_term = f"%{search}%"
             params.extend([search_term, search_term])
 
         if distributor_id:
-            where_clause += " AND dp.distributor_id = ?"
+            where_clause += " AND dp.distributor_id = %s"
             params.append(distributor_id)
 
         if common_product_id is not None:
-            where_clause += " AND p.common_product_id = ?"
+            where_clause += " AND p.common_product_id = %s"
             params.append(common_product_id)
 
         if unmapped_only:
@@ -161,7 +161,7 @@ def list_products(
             ) ph ON ph.distributor_product_id = dp.id AND ph.rn = 1
             {where_clause}
             ORDER BY {sort_col} {sort_direction} NULLS LAST
-            LIMIT ? OFFSET ?
+            LIMIT %s OFFSET %s
         """
         params.extend([limit, skip])
 
@@ -173,7 +173,7 @@ def list_products(
 
 @router.get("/{product_id}", response_model=ProductWithPrice)
 def get_product(product_id: int, current_user: dict = Depends(get_current_user)):
-    """Get a single product by ID with latest price (organization-scoped)."""
+    """Get a single product by ID with latest price ."""
     with get_db() as conn:
         cursor = conn.cursor()
 
@@ -197,8 +197,8 @@ def get_product(product_id: int, current_user: dict = Depends(get_current_user))
                        ROW_NUMBER() OVER (PARTITION BY distributor_product_id ORDER BY effective_date DESC) as rn
                 FROM price_history
             ) ph ON ph.distributor_product_id = dp.id AND ph.rn = 1
-            WHERE p.id = ? AND p.organization_id = ?
-        """, (product_id, current_user["organization_id"]))
+            WHERE p.id = %s AND p.organization_id = %s
+        """, (product_id))
 
         product = dict_from_row(cursor.fetchone())
 
@@ -210,24 +210,24 @@ def get_product(product_id: int, current_user: dict = Depends(get_current_user))
 
 @router.patch("/{product_id}/map")
 def map_product_to_common(product_id: int, common_product_id: int, current_user: dict = Depends(get_current_user)):
-    """Map a product to a common product (organization-scoped)."""
+    """Map a product to a common product ."""
     with get_db() as conn:
         cursor = conn.cursor()
 
         # Check if product exists and belongs to user's organization
-        cursor.execute("SELECT id FROM products WHERE id = ? AND organization_id = ?", (product_id, current_user["organization_id"]))
+        cursor.execute("SELECT id FROM products WHERE id = %s", (product_id))
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Product not found")
 
         # Check if common product exists and belongs to user's organization
-        cursor.execute("SELECT id FROM common_products WHERE id = ? AND organization_id = ?", (common_product_id, current_user["organization_id"]))
+        cursor.execute("SELECT id FROM common_products WHERE id = %s", (common_product_id))
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Common product not found")
 
         # Update mapping
         cursor.execute(
-            "UPDATE products SET common_product_id = ? WHERE id = ? AND organization_id = ?",
-            (common_product_id, product_id, current_user["organization_id"])
+            "UPDATE products SET common_product_id = %s WHERE id = %s",
+            (common_product_id, product_id)
         )
         conn.commit()
 
@@ -236,13 +236,13 @@ def map_product_to_common(product_id: int, common_product_id: int, current_user:
 
 @router.patch("/{product_id}/unmap")
 def unmap_product(product_id: int, current_user: dict = Depends(get_current_user)):
-    """Remove common product mapping from a product (organization-scoped)."""
+    """Remove common product mapping from a product ."""
     with get_db() as conn:
         cursor = conn.cursor()
 
         cursor.execute(
-            "UPDATE products SET common_product_id = NULL WHERE id = ? AND organization_id = ?",
-            (product_id, current_user["organization_id"])
+            "UPDATE products SET common_product_id = NULL WHERE id = %s",
+            (product_id)
         )
 
         if cursor.rowcount == 0:
@@ -255,12 +255,12 @@ def unmap_product(product_id: int, current_user: dict = Depends(get_current_user
 
 @router.patch("/{product_id}")
 def update_product(product_id: int, updates: dict, current_user: dict = Depends(get_current_user)):
-    """Update product fields (organization-scoped)."""
+    """Update product fields ."""
     with get_db() as conn:
         cursor = conn.cursor()
 
         # Check if product exists and get current values
-        cursor.execute("SELECT id, pack, size FROM products WHERE id = ? AND organization_id = ?", (product_id, current_user["organization_id"]))
+        cursor.execute("SELECT id, pack, size FROM products WHERE id = %s", (product_id))
         product = cursor.fetchone()
         if not product:
             raise HTTPException(status_code=404, detail="Product not found")
@@ -275,14 +275,14 @@ def update_product(product_id: int, updates: dict, current_user: dict = Depends(
 
         for field, value in updates.items():
             if field in allowed_fields:
-                update_fields.append(f"{field} = ?")
+                update_fields.append(f"{field} = %s")
                 params.append(value)
 
         if not update_fields:
             raise HTTPException(status_code=400, detail="No valid fields to update")
 
-        params.extend([product_id, current_user["organization_id"]])
-        query = f"UPDATE products SET {', '.join(update_fields)} WHERE id = ? AND organization_id = ?"
+        params.extend([product_id])
+        query = f"UPDATE products SET {', '.join(update_fields)} WHERE id = %s"
 
         cursor.execute(query, params)
 
@@ -295,9 +295,9 @@ def update_product(product_id: int, updates: dict, current_user: dict = Depends(
                 # Update unit_price for all price_history records for this product
                 cursor.execute("""
                     UPDATE price_history
-                    SET unit_price = ROUND(case_price / (? * ?), 2)
+                    SET unit_price = ROUND(case_price / (%s * %s), 2)
                     WHERE distributor_product_id IN (
-                        SELECT id FROM distributor_products WHERE product_id = ?
+                        SELECT id FROM distributor_products WHERE product_id = %s
                     )
                     AND case_price IS NOT NULL
                 """, (new_pack, new_size, product_id))

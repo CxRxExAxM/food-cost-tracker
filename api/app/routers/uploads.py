@@ -302,7 +302,7 @@ def clean_dataframe(df: pd.DataFrame, vendor_code: str) -> pd.DataFrame:
 
 def get_distributor_id(cursor, distributor_code: str) -> int:
     """Get distributor ID from code."""
-    cursor.execute("SELECT id FROM distributors WHERE code = ?", (distributor_code,))
+    cursor.execute("SELECT id FROM distributors WHERE code = %s", (distributor_code,))
     result = cursor.fetchone()
     if not result:
         raise ValueError(f"Distributor '{distributor_code}' not found in database")
@@ -314,12 +314,12 @@ def get_unit_id(cursor, unit_abbr: str) -> Optional[int]:
     if not unit_abbr or unit_abbr == 'nan':
         return None
 
-    cursor.execute("SELECT id FROM units WHERE LOWER(abbreviation) = LOWER(?)", (unit_abbr,))
+    cursor.execute("SELECT id FROM units WHERE LOWER(abbreviation) = LOWER(%s)", (unit_abbr,))
     result = cursor.fetchone()
     if result:
         return result[0]
 
-    cursor.execute("SELECT id FROM units WHERE LOWER(name) LIKE LOWER(?)", (f"%{unit_abbr}%",))
+    cursor.execute("SELECT id FROM units WHERE LOWER(name) LIKE LOWER(%s)", (f"%{unit_abbr}%",))
     result = cursor.fetchone()
     return result[0] if result else None
 
@@ -406,7 +406,7 @@ async def upload_csv(
             # Create import batch
             cursor.execute("""
                 INSERT INTO import_batches (id, distributor_id, filename, import_date)
-                VALUES (?, ?, ?, ?)
+                VALUES (%s, %s, %s, %s)
             """, (batch_id, distributor_id, file.filename, datetime.now()))
 
             # Process each row
@@ -440,16 +440,16 @@ async def upload_csv(
 
                     unit_id = get_unit_id(cursor, unit_abbr) if unit_abbr else None
 
-                    # Check if product exists (organization-scoped)
+                    # Check if product exists 
                     cursor.execute("""
                         SELECT p.id, dp.id
                         FROM products p
                         LEFT JOIN distributor_products dp ON dp.product_id = p.id
-                            AND dp.distributor_id = ?
-                            AND dp.organization_id = ?
-                        WHERE p.organization_id = ? AND p.name = ? AND (p.brand = ? OR (p.brand IS NULL AND ? IS NULL))
-                              AND p.pack = ? AND p.size = ?
-                    """, (distributor_id, current_user["organization_id"], current_user["organization_id"], product_name, brand, brand, pack, size))
+                            AND dp.distributor_id = %s
+                            AND dp.organization_id = %s
+                        WHERE p.organization_id = %s AND p.name = %s AND (p.brand = %s OR (p.brand IS NULL AND %s IS NULL))
+                              AND p.pack = %s AND p.size = %s
+                    """, (distributor_id, product_name, brand, brand, pack, size))
 
                     existing = cursor.fetchone()
 
@@ -459,43 +459,43 @@ async def upload_csv(
 
                         if not distributor_product_id:
                             cursor.execute("""
-                                INSERT INTO distributor_products (organization_id, distributor_id, product_id, distributor_sku, distributor_name)
-                                VALUES (?, ?, ?, ?, ?)
-                            """, (current_user["organization_id"], distributor_id, product_id, sku, product_name))
+                                INSERT INTO distributor_products (distributor_id, product_id, distributor_sku, distributor_name)
+                                VALUES (%s, %s, %s, %s, %s)
+                            """, (distributor_id, product_id, sku, product_name))
                             distributor_product_id = cursor.lastrowid
                     else:
                         # Create new product
                         cursor.execute("""
-                            INSERT INTO products (organization_id, name, brand, pack, size, unit_id, is_catch_weight)
-                            VALUES (?, ?, ?, ?, ?, ?, ?)
-                        """, (current_user["organization_id"], product_name, brand, pack, size, unit_id, is_catch_weight))
+                            INSERT INTO products (name, brand, pack, size, unit_id, is_catch_weight)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s)
+                        """, (product_name, brand, pack, size, unit_id, is_catch_weight))
                         product_id = cursor.lastrowid
                         new_products += 1
 
                         cursor.execute("""
-                            INSERT INTO distributor_products (organization_id, distributor_id, product_id, distributor_sku, distributor_name)
-                            VALUES (?, ?, ?, ?, ?)
-                        """, (current_user["organization_id"], distributor_id, product_id, sku, product_name))
+                            INSERT INTO distributor_products (distributor_id, product_id, distributor_sku, distributor_name)
+                            VALUES (%s, %s, %s, %s, %s)
+                        """, (distributor_id, product_id, sku, product_name))
                         distributor_product_id = cursor.lastrowid
 
                     # Insert/update price
                     if case_price is not None:
                         cursor.execute("""
                             SELECT id FROM price_history
-                            WHERE distributor_product_id = ? AND effective_date = ?
+                            WHERE distributor_product_id = %s AND effective_date = %s
                         """, (distributor_product_id, eff_date))
 
                         if cursor.fetchone():
                             cursor.execute("""
                                 UPDATE price_history
-                                SET case_price = ?, unit_price = ?, import_batch_id = ?
-                                WHERE distributor_product_id = ? AND effective_date = ?
+                                SET case_price = %s, unit_price = %s, import_batch_id = %s
+                                WHERE distributor_product_id = %s AND effective_date = %s
                             """, (case_price, unit_price, batch_id, distributor_product_id, eff_date))
                             updated_prices += 1
                         else:
                             cursor.execute("""
                                 INSERT INTO price_history (distributor_product_id, case_price, unit_price, effective_date, import_batch_id)
-                                VALUES (?, ?, ?, ?, ?)
+                                VALUES (%s, %s, %s, %s, %s)
                             """, (distributor_product_id, case_price, unit_price, eff_date, batch_id))
 
                     rows_imported += 1
@@ -508,8 +508,8 @@ async def upload_csv(
             # Update batch statistics
             cursor.execute("""
                 UPDATE import_batches
-                SET rows_imported = ?, rows_failed = ?
-                WHERE id = ?
+                SET rows_imported = %s, rows_failed = %s
+                WHERE id = %s
             """, (rows_imported, rows_failed, batch_id))
 
             conn.commit()
@@ -541,7 +541,7 @@ def get_upload_history(limit: int = 20):
             FROM import_batches ib
             JOIN distributors d ON d.id = ib.distributor_id
             ORDER BY ib.import_date DESC
-            LIMIT ?
+            LIMIT %s
         """, (limit,))
 
         rows = cursor.fetchall()
