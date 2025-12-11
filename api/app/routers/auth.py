@@ -235,12 +235,20 @@ def initial_setup(user: UserCreate):
                 detail="Setup already completed. Users exist in the system."
             )
 
+        # Create default organization first
+        cursor.execute("""
+            INSERT INTO organizations (name, slug, subscription_tier, subscription_status)
+            VALUES (?, ?, 'free', 'active')
+        """, ("Default Organization", "default"))
+        conn.commit()
+        organization_id = cursor.lastrowid
+
         # Create admin user
         hashed_password = get_password_hash(user.password)
         cursor.execute("""
-            INSERT INTO users (email, username, hashed_password, full_name, role)
-            VALUES (?, ?, ?, ?, 'admin')
-        """, (user.email, user.username, hashed_password, user.full_name))
+            INSERT INTO users (organization_id, email, username, hashed_password, full_name, role)
+            VALUES (?, ?, ?, ?, ?, 'admin')
+        """, (organization_id, user.email, user.username, hashed_password, user.full_name))
 
         conn.commit()
         user_id = cursor.lastrowid
@@ -249,6 +257,7 @@ def initial_setup(user: UserCreate):
         access_token = create_access_token(
             data={
                 "sub": str(user_id),
+                "organization_id": organization_id,
                 "email": user.email,
                 "role": "admin"
             },
