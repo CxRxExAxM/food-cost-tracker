@@ -3,9 +3,17 @@ import sqlite3
 from pathlib import Path
 from contextlib import contextmanager
 
-# Use DATABASE_PATH env var if set (for Render), otherwise use local db folder
-_default_db_path = Path(__file__).parent.parent.parent / "db" / "food_cost_tracker.db"
-DB_PATH = Path(os.getenv("DATABASE_PATH", str(_default_db_path)))
+# Check if using PostgreSQL or SQLite
+DATABASE_URL = os.getenv("DATABASE_URL")
+USE_POSTGRES = DATABASE_URL and DATABASE_URL.startswith("postgresql")
+
+if USE_POSTGRES:
+    import psycopg2
+    from psycopg2.extras import RealDictCursor
+else:
+    # Use DATABASE_PATH env var if set (for Render), otherwise use local db folder
+    _default_db_path = Path(__file__).parent.parent.parent / "db" / "food_cost_tracker.db"
+    DB_PATH = Path(os.getenv("DATABASE_PATH", str(_default_db_path)))
 
 
 def init_db():
@@ -348,20 +356,33 @@ def run_migrations():
 
 @contextmanager
 def get_db():
-    """Context manager for database connections."""
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row  # Return rows as dictionaries
-    try:
-        yield conn
-    finally:
-        conn.close()
+    """Context manager for database connections - supports PostgreSQL and SQLite."""
+    if USE_POSTGRES:
+        # PostgreSQL connection
+        conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
+        try:
+            yield conn
+        finally:
+            conn.close()
+    else:
+        # SQLite connection
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row  # Return rows as dictionaries
+        try:
+            yield conn
+        finally:
+            conn.close()
 
 
 def dict_from_row(row):
-    """Convert sqlite3.Row to dictionary."""
-    return dict(row) if row else None
+    """Convert database row to dictionary - works with both PostgreSQL and SQLite."""
+    if row is None:
+        return None
+    # Both psycopg2 RealDictCursor and sqlite3.Row can be converted with dict()
+    return dict(row)
 
 
 def dicts_from_rows(rows):
-    """Convert list of sqlite3.Row to list of dictionaries."""
+    """Convert list of database rows to list of dictionaries - works with both PostgreSQL and SQLite."""
+    # Both psycopg2 RealDictCursor and sqlite3.Row can be converted with dict()
     return [dict(row) for row in rows]
