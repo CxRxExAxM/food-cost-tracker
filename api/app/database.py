@@ -535,11 +535,14 @@ def dict_from_row(row):
     """Convert database row to dictionary - works with both PostgreSQL and SQLite."""
     if row is None:
         return None
+    # Handle UniversalRow (our wrapper)
+    if isinstance(row, UniversalRow):
+        return row._dict
     # Both psycopg2 RealDictCursor and sqlite3.Row can be converted with dict()
     return dict(row)
 
 
 def dicts_from_rows(rows):
     """Convert list of database rows to list of dictionaries - works with both PostgreSQL and SQLite."""
-    # Both psycopg2 RealDictCursor and sqlite3.Row can be converted with dict()
-    return [dict(row) for row in rows]
+    # Handle UniversalRow (our wrapper) and standard row objects
+    return [row._dict if isinstance(row, UniversalRow) else dict(row) for row in rows]
