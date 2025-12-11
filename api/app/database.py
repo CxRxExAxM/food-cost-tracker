@@ -354,6 +354,82 @@ def run_migrations():
         print("[migrations] Database schema is up to date")
 
 
+class UniversalRow:
+    """Row object that supports both tuple-style [0] and dict-style ['col'] access.
+
+    This allows code to work with both SQLite (which returns sqlite3.Row objects)
+    and PostgreSQL (which returns RealDictRow objects) transparently.
+    """
+    def __init__(self, data, use_postgres):
+        if data is None:
+            self._dict = None
+            self._list = None
+            self._original = None
+        elif use_postgres:
+            # RealDictCursor returns dict-like RealDictRow
+            self._dict = dict(data)
+            self._list = list(self._dict.values())
+            self._original = None
+        else:
+            # sqlite3.Row already supports both access methods
+            self._original = data
+            self._dict = dict(data)
+            self._list = None
+
+    def __getitem__(self, key):
+        if self._dict is None:
+            raise TypeError("'NoneType' object is not subscriptable")
+
+        if isinstance(key, int):
+            # Integer indexing [0], [1], etc
+            if self._list is not None:
+                return self._list[key]
+            else:
+                # For SQLite, use original row which supports integer indexing
+                return self._original[key]
+        else:
+            # String indexing ['column_name']
+            return self._dict[key]
+
+    def __iter__(self):
+        """Make the row iterable, returning values in order."""
+        if self._dict is None:
+            return iter([])
+        if self._list is not None:
+            return iter(self._list)
+        return iter(self._original)
+
+    def __len__(self):
+        """Return number of columns."""
+        if self._dict is None:
+            return 0
+        return len(self._dict)
+
+    def get(self, key, default=None):
+        """Dict-style get method with default value."""
+        if self._dict is None:
+            return default
+        return self._dict.get(key, default)
+
+    def keys(self):
+        """Return column names."""
+        if self._dict is None:
+            return []
+        return self._dict.keys()
+
+    def values(self):
+        """Return column values."""
+        if self._dict is None:
+            return []
+        return self._dict.values()
+
+    def items(self):
+        """Return (column, value) pairs."""
+        if self._dict is None:
+            return []
+        return self._dict.items()
+
+
 class DatabaseCursorWrapper:
     """Wrapper for database cursors that converts SQLite ? placeholders to PostgreSQL %s."""
     def __init__(self, cursor, use_postgres):
@@ -387,13 +463,21 @@ class DatabaseCursorWrapper:
         return result
 
     def fetchone(self):
-        return self.cursor.fetchone()
+        """Fetch one row and wrap it in UniversalRow for consistent access."""
+        result = self.cursor.fetchone()
+        if result is None:
+            return None
+        return UniversalRow(result, self.use_postgres)
 
     def fetchall(self):
-        return self.cursor.fetchall()
+        """Fetch all rows and wrap them in UniversalRow for consistent access."""
+        results = self.cursor.fetchall()
+        return [UniversalRow(row, self.use_postgres) for row in results]
 
     def fetchmany(self, size=None):
-        return self.cursor.fetchmany(size) if size else self.cursor.fetchmany()
+        """Fetch many rows and wrap them in UniversalRow for consistent access."""
+        results = self.cursor.fetchmany(size) if size else self.cursor.fetchmany()
+        return [UniversalRow(row, self.use_postgres) for row in results]
 
     @property
     def lastrowid(self):
