@@ -43,43 +43,71 @@ export function AuthProvider({ children }) {
   };
 
   const login = async (email, password) => {
-    const response = await axios.post(`${API_URL}/auth/login`, {
-      email,
-      password
-    });
+    try {
+      console.log('[AuthContext] Starting login...');
+      const response = await axios.post(`${API_URL}/auth/login`, {
+        email,
+        password
+      });
 
-    const { access_token } = response.data;
-    localStorage.setItem('token', access_token);
+      console.log('[AuthContext] Login response:', response.data);
+      const { access_token } = response.data;
 
-    // Fetch user info
-    const userResponse = await axios.get(`${API_URL}/auth/me`, {
-      headers: { Authorization: `Bearer ${access_token}` }
-    });
+      if (!access_token) {
+        throw new Error('No access token received from server');
+      }
 
-    setUser(userResponse.data);
-    setSetupRequired(false);
-    return userResponse.data;
+      localStorage.setItem('token', access_token);
+      console.log('[AuthContext] Token saved, fetching user info...');
+
+      // Fetch user info
+      const userResponse = await axios.get(`${API_URL}/auth/me`, {
+        headers: { Authorization: `Bearer ${access_token}` }
+      });
+
+      console.log('[AuthContext] User info received:', userResponse.data);
+      setUser(userResponse.data);
+      setSetupRequired(false);
+      return userResponse.data;
+    } catch (error) {
+      console.error('[AuthContext] Login failed:', error);
+      throw error;
+    }
   };
 
   const setup = async (email, username, password, fullName) => {
-    const response = await axios.post(`${API_URL}/auth/setup`, {
-      email,
-      username,
-      password,
-      full_name: fullName
-    });
+    try {
+      console.log('[AuthContext] Starting setup...');
+      const response = await axios.post(`${API_URL}/auth/setup`, {
+        email,
+        username,
+        password,
+        full_name: fullName
+      });
 
-    const { access_token } = response.data;
-    localStorage.setItem('token', access_token);
+      console.log('[AuthContext] Setup response:', response.data);
+      const { access_token } = response.data;
 
-    // Fetch user info
-    const userResponse = await axios.get(`${API_URL}/auth/me`, {
-      headers: { Authorization: `Bearer ${access_token}` }
-    });
+      if (!access_token) {
+        throw new Error('No access token received from server');
+      }
 
-    setUser(userResponse.data);
-    setSetupRequired(false);
-    return userResponse.data;
+      localStorage.setItem('token', access_token);
+      console.log('[AuthContext] Token saved, fetching user info...');
+
+      // Fetch user info
+      const userResponse = await axios.get(`${API_URL}/auth/me`, {
+        headers: { Authorization: `Bearer ${access_token}` }
+      });
+
+      console.log('[AuthContext] User info received:', userResponse.data);
+      setUser(userResponse.data);
+      setSetupRequired(false);
+      return userResponse.data;
+    } catch (error) {
+      console.error('[AuthContext] Setup failed:', error);
+      throw error;
+    }
   };
 
   const logout = () => {
