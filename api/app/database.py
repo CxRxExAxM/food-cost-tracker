@@ -359,13 +359,32 @@ class DatabaseCursorWrapper:
     def __init__(self, cursor, use_postgres):
         self.cursor = cursor
         self.use_postgres = use_postgres
+        self._last_insert_id = None
 
     def execute(self, query, params=None):
         """Execute query, converting placeholders if needed."""
-        if self.use_postgres and params:
-            # Convert SQLite ? placeholders to PostgreSQL %s
-            query = query.replace('?', '%s')
-        return self.cursor.execute(query, params)
+        if self.use_postgres:
+            if params:
+                # Convert SQLite ? placeholders to PostgreSQL %s
+                query = query.replace('?', '%s')
+            # For INSERT statements, add RETURNING id to support lastrowid
+            if query.strip().upper().startswith('INSERT'):
+                if 'RETURNING' not in query.upper():
+                    query = query.rstrip(';') + ' RETURNING id'
+        result = self.cursor.execute(query, params)
+
+        # Store the returned id for lastrowid property
+        if self.use_postgres and query.strip().upper().startswith('INSERT'):
+            try:
+                returned_row = self.cursor.fetchone()
+                if returned_row:
+                    self._last_insert_id = returned_row.get('id') or returned_row[0]
+                else:
+                    self._last_insert_id = None
+            except:
+                self._last_insert_id = None
+
+        return result
 
     def fetchone(self):
         return self.cursor.fetchone()
@@ -379,8 +398,8 @@ class DatabaseCursorWrapper:
     @property
     def lastrowid(self):
         if self.use_postgres:
-            # PostgreSQL doesn't have lastrowid, need to use RETURNING
-            return None
+            # Return the ID captured from RETURNING clause
+            return self._last_insert_id
         return self.cursor.lastrowid
 
     @property
