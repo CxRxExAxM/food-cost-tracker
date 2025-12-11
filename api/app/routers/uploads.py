@@ -98,6 +98,20 @@ class UploadResult(BaseModel):
     errors: list[str] = []
 
 
+@router.get("/distributors")
+def get_upload_distributors():
+    """
+    Get list of distributors for the upload form.
+    Public endpoint - no auth required.
+    """
+    from ..database import dicts_from_rows
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, name, code FROM distributors WHERE is_active = 1 ORDER BY name")
+        distributors = dicts_from_rows(cursor.fetchall())
+        return distributors
+
+
 def parse_vesta_packaging(value):
     """
     Parse Vesta packaging value into pack, size, and unit.
