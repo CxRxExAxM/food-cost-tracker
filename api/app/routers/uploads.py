@@ -454,14 +454,13 @@ async def upload_csv(
 
                     unit_id = get_unit_id(cursor, unit_abbr) if unit_abbr else None
 
-                    # Check if product exists 
+                    # Check if product exists
                     cursor.execute("""
                         SELECT p.id, dp.id
                         FROM products p
                         LEFT JOIN distributor_products dp ON dp.product_id = p.id
                             AND dp.distributor_id = %s
-                            AND dp.organization_id = %s
-                        WHERE p.organization_id = %s AND p.name = %s AND (p.brand = %s OR (p.brand IS NULL AND %s IS NULL))
+                        WHERE p.name = %s AND (p.brand = %s OR (p.brand IS NULL AND %s IS NULL))
                               AND p.pack = %s AND p.size = %s
                     """, (distributor_id, product_name, brand, brand, pack, size))
 
