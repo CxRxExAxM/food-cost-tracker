@@ -66,10 +66,13 @@ function Admin() {
     });
 
     if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Failed to fetch organization:', response.status, errorText);
       throw new Error('Failed to fetch organization');
     }
 
     const data = await response.json();
+    console.log('Organization response:', data);
     setOrganization(data);
     setFormData({
       name: data.name || '',
@@ -91,6 +94,7 @@ function Admin() {
     }
 
     const data = await response.json();
+    console.log('Stats response:', data);
     setStats(data);
   };
 
@@ -107,6 +111,7 @@ function Admin() {
     }
 
     const data = await response.json();
+    console.log('Users response:', data);
     setUsers(data);
   };
 
@@ -270,7 +275,7 @@ function Admin() {
           </div>
 
           {/* Usage Statistics Card */}
-          {stats && (
+          {stats && stats.users && stats.recipes && stats.products && (
             <div className="admin-card">
               <div className="admin-card-header">
                 <BarChart3 size={24} />
