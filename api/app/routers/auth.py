@@ -31,7 +31,7 @@ def check_setup_status():
 @router.post("/setup", response_model=Token)
 def initial_setup(user: UserCreate):
     """
-    Initial setup endpoint - creates the first admin user.
+    Initial setup endpoint - creates the first organization and admin user.
     Only works if no users exist yet.
     """
     with get_db() as conn:
@@ -48,24 +48,38 @@ def initial_setup(user: UserCreate):
                 detail="Setup already completed"
             )
 
-        # Create first admin user
+        # Create first organization (extract from email or use default)
+        org_name = user.email.split('@')[0].replace('.', ' ').title() + "'s Organization"
+        org_slug = user.email.split('@')[0].replace('.', '_').lower()
+
+        cursor.execute("""
+            INSERT INTO organizations (name, slug, subscription_tier, subscription_status)
+            VALUES (%s, %s, 'free', 'active')
+            RETURNING id
+        """, (org_name, org_slug))
+
+        result = cursor.fetchone()
+        organization_id = result["id"]
+
+        # Create first admin user with organization
         hashed_password = get_password_hash(user.password)
         cursor.execute("""
-            INSERT INTO users (email, username, hashed_password, full_name, role)
-            VALUES (%s, %s, %s, %s, 'admin')
+            INSERT INTO users (email, username, hashed_password, full_name, role, organization_id)
+            VALUES (%s, %s, %s, %s, 'admin', %s)
             RETURNING id
-        """, (user.email, user.username, hashed_password, user.full_name))
+        """, (user.email, user.username, hashed_password, user.full_name, organization_id))
 
         result = cursor.fetchone()
         user_id = result["id"]
         conn.commit()
 
-        # Generate token
+        # Generate token with organization_id
         access_token = create_access_token(
             data={
                 "sub": str(user_id),
                 "email": user.email,
-                "role": "admin"
+                "role": "admin",
+                "organization_id": organization_id
             },
             expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
         )
@@ -75,7 +89,7 @@ def initial_setup(user: UserCreate):
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 def register(user: UserCreate, current_user: dict = Depends(require_admin)):
-    """Register a new user. Only admins can create new users."""
+    """Register a new user in the same organization. Only admins can create new users."""
     with get_db() as conn:
         cursor = conn.cursor()
 
@@ -102,13 +116,14 @@ def register(user: UserCreate, current_user: dict = Depends(require_admin)):
                 detail="Invalid role. Must be: admin, chef, or viewer"
             )
 
-        # Create user
+        # Create user in the same organization as current user
+        organization_id = current_user["organization_id"]
         hashed_password = get_password_hash(user.password)
         cursor.execute("""
-            INSERT INTO users (email, username, hashed_password, full_name, role)
-            VALUES (%s, %s, %s, %s, %s)
+            INSERT INTO users (email, username, hashed_password, full_name, role, organization_id)
+            VALUES (%s, %s, %s, %s, %s, %s)
             RETURNING id
-        """, (user.email, user.username, hashed_password, user.full_name, user.role))
+        """, (user.email, user.username, hashed_password, user.full_name, user.role, organization_id))
 
         result = cursor.fetchone()
         user_id = result["id"]
@@ -120,7 +135,8 @@ def register(user: UserCreate, current_user: dict = Depends(require_admin)):
             "username": user.username,
             "full_name": user.full_name,
             "role": user.role,
-            "is_active": True
+            "is_active": True,
+            "organization_id": organization_id
         }
 
 
@@ -140,7 +156,8 @@ def login(credentials: UserLogin):
         data={
             "sub": str(user["id"]),
             "email": user["email"],
-            "role": user["role"]
+            "role": user["role"],
+            "organization_id": user["organization_id"]
         },
         expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     )
@@ -157,20 +174,22 @@ def get_current_user_info(current_user: dict = Depends(get_current_user)):
         "username": current_user["username"],
         "full_name": current_user["full_name"],
         "role": current_user["role"],
-        "is_active": bool(current_user["is_active"])
+        "is_active": bool(current_user["is_active"]),
+        "organization_id": current_user["organization_id"]
     }
 
 
 @router.get("/users", response_model=list[UserResponse])
 def list_users(current_user: dict = Depends(require_admin)):
-    """List all users. Admin only."""
+    """List all users in the same organization. Admin only."""
     with get_db() as conn:
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT id, email, username, full_name, role, is_active
+            SELECT id, email, username, full_name, role, is_active, organization_id
             FROM users
+            WHERE organization_id = %s
             ORDER BY username
-        """)
+        """, (current_user["organization_id"],))
         users = dicts_from_rows(cursor.fetchall())
         return [{**u, "is_active": bool(u["is_active"])} for u in users]
 
@@ -181,11 +200,11 @@ def update_user(user_id: int, updates: UserUpdate, current_user: dict = Depends(
     with get_db() as conn:
         cursor = conn.cursor()
 
-        # Check user exists
-        cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))
+        # Check user exists and is in same organization
+        cursor.execute("SELECT * FROM users WHERE id = %s AND organization_id = %s", (user_id, current_user["organization_id"]))
         user = dict_from_row(cursor.fetchone())
         if not user:
-            raise HTTPException(status_code=404, detail="User not found")
+            raise HTTPException(status_code=404, detail="User not found in your organization")
 
         # Build update query
         update_fields = []
