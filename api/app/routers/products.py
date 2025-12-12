@@ -26,23 +26,24 @@ def create_product(product: ProductCreate, current_user: dict = Depends(get_curr
     with get_db() as conn:
         cursor = conn.cursor()
 
-        # Insert the product
+        # Insert the product with organization_id
+        organization_id = current_user["organization_id"]
         cursor.execute("""
-            INSERT INTO products (name, brand, pack, size, unit_id, is_catch_weight)
-            VALUES (%s, %s, %s, %s, %s, %s)
+            INSERT INTO products (name, brand, pack, size, unit_id, is_catch_weight, organization_id)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
             RETURNING id
         """, (product.name, product.brand, product.pack, product.size,
-              product.unit_id, product.is_catch_weight))
+              product.unit_id, product.is_catch_weight, organization_id))
 
         product_id = cursor.fetchone()["id"]
 
         # If distributor specified, create distributor_product link
         if product.distributor_id:
             cursor.execute("""
-                INSERT INTO distributor_products (distributor_id, product_id, distributor_name)
-                VALUES (%s, %s, %s)
+                INSERT INTO distributor_products (distributor_id, product_id, distributor_name, organization_id)
+                VALUES (%s, %s, %s, %s)
                 RETURNING id
-            """, (product.distributor_id, product_id, product.name))
+            """, (product.distributor_id, product_id, product.name, organization_id))
 
             distributor_product_id = cursor.fetchone()["id"]
 
@@ -95,9 +96,9 @@ def list_products(
     with get_db() as conn:
         cursor = conn.cursor()
 
-        # Base WHERE clause
-        where_clause = "WHERE p.is_active = 1"
-        params = []
+        # Base WHERE clause with organization filter
+        where_clause = "WHERE p.is_active = 1 AND p.organization_id = %s"
+        params = [current_user["organization_id"]]
 
         if search:
             where_clause += " AND (p.name LIKE %s OR p.brand LIKE %s)"
@@ -199,13 +200,13 @@ def get_product(product_id: int, current_user: dict = Depends(get_current_user))
                        ROW_NUMBER() OVER (PARTITION BY distributor_product_id ORDER BY effective_date DESC) as rn
                 FROM price_history
             ) ph ON ph.distributor_product_id = dp.id AND ph.rn = 1
-            WHERE p.id = %s
-        """, (product_id,))
+            WHERE p.id = %s AND p.organization_id = %s
+        """, (product_id, current_user["organization_id"]))
 
         product = dict_from_row(cursor.fetchone())
 
         if not product:
-            raise HTTPException(status_code=404, detail="Product not found")
+            raise HTTPException(status_code=404, detail="Product not found in your organization")
 
         return product
 
@@ -217,12 +218,14 @@ def map_product_to_common(product_id: int, common_product_id: int, current_user:
         cursor = conn.cursor()
 
         # Check if product exists and belongs to user's organization
-        cursor.execute("SELECT id FROM products WHERE id = %s", (product_id,))
+        cursor.execute("SELECT id FROM products WHERE id = %s AND organization_id = %s",
+                      (product_id, current_user["organization_id"]))
         if not cursor.fetchone():
-            raise HTTPException(status_code=404, detail="Product not found")
+            raise HTTPException(status_code=404, detail="Product not found in your organization")
 
         # Check if common product exists and belongs to user's organization
-        cursor.execute("SELECT id FROM common_products WHERE id = %s", (common_product_id,))
+        cursor.execute("SELECT id FROM common_products WHERE id = %s AND organization_id = %s",
+                      (common_product_id, current_user["organization_id"]))
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Common product not found")
 
@@ -243,12 +246,12 @@ def unmap_product(product_id: int, current_user: dict = Depends(get_current_user
         cursor = conn.cursor()
 
         cursor.execute(
-            "UPDATE products SET common_product_id = NULL WHERE id = %s",
-            (product_id,)
+            "UPDATE products SET common_product_id = NULL WHERE id = %s AND organization_id = %s",
+            (product_id, current_user["organization_id"])
         )
 
         if cursor.rowcount == 0:
-            raise HTTPException(status_code=404, detail="Product not found")
+            raise HTTPException(status_code=404, detail="Product not found in your organization")
 
         conn.commit()
 
@@ -262,10 +265,11 @@ def update_product(product_id: int, updates: dict, current_user: dict = Depends(
         cursor = conn.cursor()
 
         # Check if product exists and get current values
-        cursor.execute("SELECT id, pack, size FROM products WHERE id = %s", (product_id,))
+        cursor.execute("SELECT id, pack, size FROM products WHERE id = %s AND organization_id = %s",
+                      (product_id, current_user["organization_id"]))
         product = cursor.fetchone()
         if not product:
-            raise HTTPException(status_code=404, detail="Product not found")
+            raise HTTPException(status_code=404, detail="Product not found in your organization")
 
         current_pack = product["pack"]
         current_size = product["size"]

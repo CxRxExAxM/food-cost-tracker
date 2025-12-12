@@ -418,11 +418,12 @@ async def upload_csv(
             # Get distributor ID
             distributor_id = get_distributor_id(cursor, distributor_code)
 
-            # Create import batch
+            # Create import batch with organization_id
+            organization_id = current_user["organization_id"]
             cursor.execute("""
-                INSERT INTO import_batches (id, distributor_id, filename, import_date)
-                VALUES (%s, %s, %s, %s)
-            """, (batch_id, distributor_id, file.filename, datetime.now()))
+                INSERT INTO import_batches (id, distributor_id, filename, import_date, organization_id)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (batch_id, distributor_id, file.filename, datetime.now(), organization_id))
 
             # Process each row
             for idx, row in df.iterrows():
@@ -460,15 +461,15 @@ async def upload_csv(
 
                     unit_id = get_unit_id(cursor, unit_abbr) if unit_abbr else None
 
-                    # Check if product exists
+                    # Check if product exists in this organization
                     cursor.execute("""
                         SELECT p.id as product_id, dp.id as distributor_product_id
                         FROM products p
                         LEFT JOIN distributor_products dp ON dp.product_id = p.id
                             AND dp.distributor_id = %s
                         WHERE p.name = %s AND (p.brand = %s OR (p.brand IS NULL AND %s IS NULL))
-                              AND p.pack = %s AND p.size = %s
-                    """, (distributor_id, product_name, brand, brand, pack, size))
+                              AND p.pack = %s AND p.size = %s AND p.organization_id = %s
+                    """, (distributor_id, product_name, brand, brand, pack, size, organization_id))
 
                     existing = cursor.fetchone()
 
@@ -478,26 +479,26 @@ async def upload_csv(
 
                         if not distributor_product_id:
                             cursor.execute("""
-                                INSERT INTO distributor_products (distributor_id, product_id, distributor_sku, distributor_name)
-                                VALUES (%s, %s, %s, %s)
+                                INSERT INTO distributor_products (distributor_id, product_id, distributor_sku, distributor_name, organization_id)
+                                VALUES (%s, %s, %s, %s, %s)
                                 RETURNING id
-                            """, (distributor_id, product_id, sku, product_name))
+                            """, (distributor_id, product_id, sku, product_name, organization_id))
                             distributor_product_id = cursor.fetchone()["id"]
                     else:
-                        # Create new product
+                        # Create new product with organization_id
                         cursor.execute("""
-                            INSERT INTO products (name, brand, pack, size, unit_id, is_catch_weight)
-                            VALUES (%s, %s, %s, %s, %s, %s)
+                            INSERT INTO products (name, brand, pack, size, unit_id, is_catch_weight, organization_id)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s)
                             RETURNING id
-                        """, (product_name, brand, pack, size, unit_id, int(is_catch_weight)))
+                        """, (product_name, brand, pack, size, unit_id, int(is_catch_weight), organization_id))
                         product_id = cursor.fetchone()["id"]
                         new_products += 1
 
                         cursor.execute("""
-                            INSERT INTO distributor_products (distributor_id, product_id, distributor_sku, distributor_name)
-                            VALUES (%s, %s, %s, %s)
+                            INSERT INTO distributor_products (distributor_id, product_id, distributor_sku, distributor_name, organization_id)
+                            VALUES (%s, %s, %s, %s, %s)
                             RETURNING id
-                        """, (distributor_id, product_id, sku, product_name))
+                        """, (distributor_id, product_id, sku, product_name, organization_id))
                         distributor_product_id = cursor.fetchone()["id"]
 
                     # Insert/update price

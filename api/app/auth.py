@@ -35,6 +35,7 @@ class TokenData(BaseModel):
     user_id: Optional[int] = None
     email: Optional[str] = None
     role: Optional[str] = None
+    organization_id: Optional[int] = None
 
 
 class UserCreate(BaseModel):
@@ -57,6 +58,7 @@ class UserResponse(BaseModel):
     full_name: Optional[str]
     role: str
     is_active: bool
+    organization_id: int
 
 
 class UserUpdate(BaseModel):
@@ -92,10 +94,11 @@ def decode_token(token: str) -> Optional[TokenData]:
         user_id_str = payload.get("sub")
         email: str = payload.get("email")
         role: str = payload.get("role")
+        organization_id: int = payload.get("organization_id")
         if user_id_str is None:
             return None
         user_id = int(user_id_str)
-        return TokenData(user_id=user_id, email=email, role=role)
+        return TokenData(user_id=user_id, email=email, role=role, organization_id=organization_id)
     except (JWTError, ValueError):
         return None
 

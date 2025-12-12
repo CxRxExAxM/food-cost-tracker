@@ -26,8 +26,8 @@ def list_common_products(
     with get_db() as conn:
         cursor = conn.cursor()
 
-        query = "SELECT * FROM common_products WHERE is_active = 1"
-        params = []
+        query = "SELECT * FROM common_products WHERE is_active = 1 AND organization_id = %s"
+        params = [current_user["organization_id"]]
 
         if search:
             query += " AND common_name LIKE %s"
@@ -51,11 +51,12 @@ def get_common_product(common_product_id: int, current_user: dict = Depends(get_
     """Get a single common product by ID ."""
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM common_products WHERE id = %s", (common_product_id,))
+        cursor.execute("SELECT * FROM common_products WHERE id = %s AND organization_id = %s",
+                      (common_product_id, current_user["organization_id"]))
         common_product = dict_from_row(cursor.fetchone())
 
         if not common_product:
-            raise HTTPException(status_code=404, detail="Common product not found")
+            raise HTTPException(status_code=404, detail="Common product not found in your organization")
 
         return common_product
 
@@ -67,26 +68,50 @@ def create_common_product(common_product: CommonProductCreate, current_user: dic
         cursor = conn.cursor()
 
         # Check if common_name already exists in this organization
+        organization_id = current_user["organization_id"]
         cursor.execute(
-            "SELECT id FROM common_products WHERE common_name = %s",
-            (common_product.common_name,)
+            "SELECT id FROM common_products WHERE common_name = %s AND organization_id = %s",
+            (common_product.common_name, organization_id)
         )
         if cursor.fetchone():
             raise HTTPException(
                 status_code=400,
-                detail=f"Common product '{common_product.common_name}' already exists"
+                detail=f"Common product '{common_product.common_name}' already exists in your organization"
             )
 
         cursor.execute("""
-            INSERT INTO common_products (common_name, category, subcategory, preferred_unit_id, notes)
-            VALUES (%s, %s, %s, %s, %s)
+            INSERT INTO common_products (
+                common_name, category, subcategory, preferred_unit_id, notes, organization_id,
+                allergen_vegan, allergen_vegetarian, allergen_gluten, allergen_crustation,
+                allergen_egg, allergen_mollusk, allergen_fish, allergen_lupin, allergen_dairy,
+                allergen_tree_nuts, allergen_peanuts, allergen_sesame, allergen_soy,
+                allergen_sulphur_dioxide, allergen_mustard, allergen_celery
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING *
         """, (
             common_product.common_name,
             common_product.category,
             common_product.subcategory,
             common_product.preferred_unit_id,
-            common_product.notes
+            common_product.notes,
+            organization_id,
+            int(common_product.allergen_vegan),
+            int(common_product.allergen_vegetarian),
+            int(common_product.allergen_gluten),
+            int(common_product.allergen_crustation),
+            int(common_product.allergen_egg),
+            int(common_product.allergen_mollusk),
+            int(common_product.allergen_fish),
+            int(common_product.allergen_lupin),
+            int(common_product.allergen_dairy),
+            int(common_product.allergen_tree_nuts),
+            int(common_product.allergen_peanuts),
+            int(common_product.allergen_sesame),
+            int(common_product.allergen_soy),
+            int(common_product.allergen_sulphur_dioxide),
+            int(common_product.allergen_mustard),
+            int(common_product.allergen_celery)
         ))
 
         result = dict_from_row(cursor.fetchone())
@@ -103,9 +128,10 @@ def update_common_product(common_product_id: int, update: CommonProductUpdate, c
             cursor = conn.cursor()
 
             # Check if exists and belongs to user's organization
-            cursor.execute("SELECT id FROM common_products WHERE id = %s", (common_product_id,))
+            cursor.execute("SELECT id FROM common_products WHERE id = %s AND organization_id = %s",
+                          (common_product_id, current_user["organization_id"]))
             if not cursor.fetchone():
-                raise HTTPException(status_code=404, detail="Common product not found")
+                raise HTTPException(status_code=404, detail="Common product not found in your organization")
 
             # Build update query dynamically
             update_fields = []
@@ -149,12 +175,12 @@ def delete_common_product(common_product_id: int, current_user: dict = Depends(g
         cursor = conn.cursor()
 
         cursor.execute(
-            "UPDATE common_products SET is_active = 0 WHERE id = %s",
-            (common_product_id,)
+            "UPDATE common_products SET is_active = 0 WHERE id = %s AND organization_id = %s",
+            (common_product_id, current_user["organization_id"])
         )
 
         if cursor.rowcount == 0:
-            raise HTTPException(status_code=404, detail="Common product not found")
+            raise HTTPException(status_code=404, detail="Common product not found in your organization")
 
         conn.commit()
 
@@ -168,9 +194,10 @@ def get_common_product_products(common_product_id: int, current_user: dict = Dep
         cursor = conn.cursor()
 
         # Check if common product exists and belongs to user's organization
-        cursor.execute("SELECT id FROM common_products WHERE id = %s", (common_product_id,))
+        cursor.execute("SELECT id FROM common_products WHERE id = %s AND organization_id = %s",
+                      (common_product_id, current_user["organization_id"]))
         if not cursor.fetchone():
-            raise HTTPException(status_code=404, detail="Common product not found")
+            raise HTTPException(status_code=404, detail="Common product not found in your organization")
 
         cursor.execute("""
             SELECT
@@ -190,9 +217,9 @@ def get_common_product_products(common_product_id: int, current_user: dict = Dep
                        ROW_NUMBER() OVER (PARTITION BY distributor_product_id ORDER BY effective_date DESC) as rn
                 FROM price_history
             ) ph ON ph.distributor_product_id = dp.id AND ph.rn = 1
-            WHERE p.common_product_id = %s
+            WHERE p.common_product_id = %s AND p.organization_id = %s
             ORDER BY ph.unit_price ASC
-        """, (common_product_id,))
+        """, (common_product_id, current_user["organization_id"]))
 
         products = dicts_from_rows(cursor.fetchall())
 

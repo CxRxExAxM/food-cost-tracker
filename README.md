@@ -29,6 +29,14 @@ A comprehensive platform for F&B operations to manage food costs, track distribu
 - **Price History Tracking** - Time-series price data for trend analysis
 
 ### Recently Completed ✅
+- **Multi-Tenancy Support** (Dec 12, 2025)
+  - Complete organization-based data isolation
+  - Tier-based system (Free, Basic, Pro, Enterprise)
+  - Organizations table with subscription management
+  - All data scoped to organizations (products, recipes, users, imports)
+  - Tested and verified data isolation between organizations
+  - See MULTI_TENANCY_DEC12.md for details
+
 - **PostgreSQL Migration** (Dec 11, 2025)
   - Clean PostgreSQL-only architecture
   - Removed dual SQLite/PostgreSQL complexity
@@ -36,10 +44,10 @@ A comprehensive platform for F&B operations to manage food costs, track distribu
   - See POSTGRESQL_MIGRATION_DEC11.md for details
 
 ### Upcoming Features 📋
-- **Multi-Tenancy Support** - Organization-based SaaS deployment
-  - Complete data separation between organizations
-  - Tier-based system (Free, Basic, Pro, Enterprise)
-  - Organization admin interface
+- **Organization Admin UI** - Frontend interface for organization management
+  - Organization settings page
+  - User invitation system
+  - Tier limits display and enforcement
 - **AI Recipe Parser**
   - Upload Word/PDF recipe documents
   - Claude API extracts ingredients automatically
@@ -125,15 +133,22 @@ Clean_Invoices/
 
 ### Core Tables
 
+**organizations** 🆕
+- Multi-tenant organization management
+- Subscription tiers: free, basic, pro, enterprise
+- Tier-based limits (max_users, max_recipes)
+- All user data scoped to organizations
+
 **users**
 - User accounts with role-based permissions (admin, chef, viewer)
 - JWT authentication with bcrypt password hashing
+- Scoped to organization (organization_id foreign key)
 
-**distributors** (seeded)
+**distributors** (seeded, shared)
 - 6 food distributors (Sysco, Vesta, etc.)
-- Shared across all users
+- Shared across all organizations
 
-**units** (seeded)
+**units** (seeded, shared)
 - 23 units of measure (LB, OZ, GAL, QT, EA, etc.)
 - Organized by type: weight, volume, count
 
@@ -141,15 +156,18 @@ Clean_Invoices/
 - Normalized ingredient library (e.g., "Red Onion", "Chicken Breast 6oz")
 - Master products with allergen flags
 - Used for consistent recipe ingredients
+- Scoped to organization (organization_id foreign key)
 
 **products**
 - Distributor-specific products with pack size, pricing
 - Maps to common_products for normalization
 - Tracks brand, catch weight status
+- Scoped to organization (organization_id foreign key)
 
 **distributor_products**
 - Junction table linking products to distributors
 - Stores distributor SKU numbers
+- Scoped to organization (organization_id foreign key)
 
 **price_history**
 - Time-series pricing data
@@ -159,6 +177,7 @@ Clean_Invoices/
 - Recipe definitions with category hierarchy
 - Yield amount and unit
 - Method stored as JSON
+- Scoped to organization (organization_id foreign key)
 
 **recipe_ingredients**
 - Recipe components referencing common_products
@@ -167,6 +186,7 @@ Clean_Invoices/
 
 **import_batches**
 - CSV import audit trail
+- Scoped to organization (organization_id foreign key)
 
 ### Data Model Flow
 
