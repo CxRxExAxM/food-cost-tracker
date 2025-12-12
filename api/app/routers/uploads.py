@@ -320,7 +320,8 @@ def get_distributor_id(cursor, distributor_code: str) -> int:
     result = cursor.fetchone()
     if not result:
         raise ValueError(f"Distributor '{distributor_code}' not found in database")
-    return result["id"]  # Use column name instead of index for RealDictCursor
+    # RealDictCursor returns dict, must use column name not index
+    return result["id"]
 
 
 def get_unit_id(cursor, unit_abbr: str) -> Optional[int]:
