@@ -540,6 +540,10 @@ async def upload_csv(
 
         except Exception as e:
             conn.rollback()
+            # Log the full error for debugging
+            import traceback
+            print(f"[ERROR] Upload failed: {str(e)}")
+            traceback.print_exc()
             raise HTTPException(status_code=500, detail=f"Import failed: {str(e)}")
 
 
