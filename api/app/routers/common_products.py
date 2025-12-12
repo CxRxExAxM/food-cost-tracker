@@ -98,34 +98,44 @@ def create_common_product(common_product: CommonProductCreate, current_user: dic
 @router.patch("/{common_product_id}", response_model=CommonProduct)
 def update_common_product(common_product_id: int, update: CommonProductUpdate, current_user: dict = Depends(get_current_user)):
     """Update a common product ."""
-    with get_db() as conn:
-        cursor = conn.cursor()
+    try:
+        with get_db() as conn:
+            cursor = conn.cursor()
 
-        # Check if exists and belongs to user's organization
-        cursor.execute("SELECT id FROM common_products WHERE id = %s", (common_product_id,))
-        if not cursor.fetchone():
-            raise HTTPException(status_code=404, detail="Common product not found")
+            # Check if exists and belongs to user's organization
+            cursor.execute("SELECT id FROM common_products WHERE id = %s", (common_product_id,))
+            if not cursor.fetchone():
+                raise HTTPException(status_code=404, detail="Common product not found")
 
-        # Build update query dynamically
-        update_fields = []
-        params = []
+            # Build update query dynamically
+            update_fields = []
+            params = []
 
-        for field, value in update.model_dump(exclude_unset=True).items():
-            update_fields.append(f"{field} = %s")
-            params.append(value)
+            for field, value in update.model_dump(exclude_unset=True).items():
+                update_fields.append(f"{field} = %s")
+                params.append(value)
 
-        if not update_fields:
-            raise HTTPException(status_code=400, detail="No fields to update")
+            if not update_fields:
+                raise HTTPException(status_code=400, detail="No fields to update")
 
-        params.extend([common_product_id])
-        query = f"UPDATE common_products SET {', '.join(update_fields)} WHERE id = %s"
+            params.append(common_product_id)
+            query = f"UPDATE common_products SET {', '.join(update_fields)} WHERE id = %s"
 
-        cursor.execute(query, params)
-        conn.commit()
+            print(f"[DEBUG] Update query: {query}")
+            print(f"[DEBUG] Params: {params}")
+            cursor.execute(query, params)
+            conn.commit()
 
-        # Return updated common product
-        cursor.execute("SELECT * FROM common_products WHERE id = %s", (common_product_id,))
-        return dict_from_row(cursor.fetchone())
+            # Return updated common product
+            cursor.execute("SELECT * FROM common_products WHERE id = %s", (common_product_id,))
+            return dict_from_row(cursor.fetchone())
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        print(f"[ERROR] Update common product failed: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Update failed: {str(e)}")
 
 
 @router.delete("/{common_product_id}")
