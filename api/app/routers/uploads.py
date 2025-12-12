@@ -487,7 +487,7 @@ async def upload_csv(
                         cursor.execute("""
                             INSERT INTO products (name, brand, pack, size, unit_id, is_catch_weight)
                             VALUES (%s, %s, %s, %s, %s, %s)
-                        """, (product_name, brand, pack, size, unit_id, is_catch_weight))
+                        """, (product_name, brand, pack, size, unit_id, int(is_catch_weight)))
                         product_id = cursor.lastrowid
                         new_products += 1
 
@@ -574,10 +574,10 @@ def get_upload_history(limit: int = 20):
 
         rows = cursor.fetchall()
         return [{
-            "id": row[0],
-            "distributor_name": row[1],
-            "filename": row[2],
-            "import_date": row[3],
-            "rows_imported": row[4],
-            "rows_failed": row[5]
+            "id": row["id"],
+            "distributor_name": row["distributor_name"],
+            "filename": row["filename"],
+            "import_date": row["import_date"],
+            "rows_imported": row["rows_imported"],
+            "rows_failed": row["rows_failed"]
         } for row in rows]

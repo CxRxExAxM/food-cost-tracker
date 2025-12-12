@@ -115,13 +115,13 @@ def list_products(
 
         # Count total matching products
         count_query = f"""
-            SELECT COUNT(DISTINCT p.id)
+            SELECT COUNT(DISTINCT p.id) as count
             FROM products p
             LEFT JOIN distributor_products dp ON dp.product_id = p.id
             {where_clause}
         """
         cursor.execute(count_query, params)
-        total = cursor.fetchone()[0]
+        total = cursor.fetchone()["count"]
 
         # Map sort columns to actual SQL columns
         sort_column_map = {
@@ -260,13 +260,13 @@ def update_product(product_id: int, updates: dict, current_user: dict = Depends(
         cursor = conn.cursor()
 
         # Check if product exists and get current values
-        cursor.execute("SELECT id, pack, size FROM products WHERE id = %s", (product_id))
+        cursor.execute("SELECT id, pack, size FROM products WHERE id = %s", (product_id,))
         product = cursor.fetchone()
         if not product:
             raise HTTPException(status_code=404, detail="Product not found")
 
-        current_pack = product[1]
-        current_size = product[2]
+        current_pack = product["pack"]
+        current_size = product["size"]
 
         # Build update query dynamically
         allowed_fields = ['name', 'brand', 'pack', 'size', 'unit_id', 'common_product_id', 'is_catch_weight']
