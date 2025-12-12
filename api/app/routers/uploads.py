@@ -320,7 +320,7 @@ def get_distributor_id(cursor, distributor_code: str) -> int:
     result = cursor.fetchone()
     if not result:
         raise ValueError(f"Distributor '{distributor_code}' not found in database")
-    return result[0]
+    return result["id"]  # Use column name instead of index for RealDictCursor
 
 
 def get_unit_id(cursor, unit_abbr: str) -> Optional[int]:
@@ -331,11 +331,11 @@ def get_unit_id(cursor, unit_abbr: str) -> Optional[int]:
     cursor.execute("SELECT id FROM units WHERE LOWER(abbreviation) = LOWER(%s)", (unit_abbr,))
     result = cursor.fetchone()
     if result:
-        return result[0]
+        return result["id"]  # Use column name instead of index
 
     cursor.execute("SELECT id FROM units WHERE LOWER(name) LIKE LOWER(%s)", (f"%{unit_abbr}%",))
     result = cursor.fetchone()
-    return result[0] if result else None
+    return result["id"] if result else None  # Use column name instead of index
 
 
 @router.get("/distributors")
