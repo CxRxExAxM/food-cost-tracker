@@ -346,7 +346,7 @@ def get_distributors():
         cursor = conn.cursor()
         cursor.execute("SELECT id, name, code FROM distributors WHERE is_active = 1 ORDER BY name")
         rows = cursor.fetchall()
-        return [{"id": row[0], "name": row[1], "code": row[2]} for row in rows]
+        return [{"id": row["id"], "name": row["name"], "code": row["code"]} for row in rows]
 
 
 @router.post("/csv", response_model=UploadResult)
@@ -457,7 +457,7 @@ async def upload_csv(
 
                     # Check if product exists
                     cursor.execute("""
-                        SELECT p.id, dp.id
+                        SELECT p.id as product_id, dp.id as distributor_product_id
                         FROM products p
                         LEFT JOIN distributor_products dp ON dp.product_id = p.id
                             AND dp.distributor_id = %s
@@ -467,28 +467,28 @@ async def upload_csv(
 
                     existing = cursor.fetchone()
 
-                    if existing and existing[0]:
-                        product_id = existing[0]
-                        distributor_product_id = existing[1]
+                    if existing and existing["product_id"]:
+                        product_id = existing["product_id"]
+                        distributor_product_id = existing["distributor_product_id"]
 
                         if not distributor_product_id:
                             cursor.execute("""
                                 INSERT INTO distributor_products (distributor_id, product_id, distributor_sku, distributor_name)
-                                VALUES (%s, %s, %s, %s, %s)
+                                VALUES (%s, %s, %s, %s)
                             """, (distributor_id, product_id, sku, product_name))
                             distributor_product_id = cursor.lastrowid
                     else:
                         # Create new product
                         cursor.execute("""
                             INSERT INTO products (name, brand, pack, size, unit_id, is_catch_weight)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s)
+                            VALUES (%s, %s, %s, %s, %s, %s)
                         """, (product_name, brand, pack, size, unit_id, is_catch_weight))
                         product_id = cursor.lastrowid
                         new_products += 1
 
                         cursor.execute("""
                             INSERT INTO distributor_products (distributor_id, product_id, distributor_sku, distributor_name)
-                            VALUES (%s, %s, %s, %s, %s)
+                            VALUES (%s, %s, %s, %s)
                         """, (distributor_id, product_id, sku, product_name))
                         distributor_product_id = cursor.lastrowid
 
