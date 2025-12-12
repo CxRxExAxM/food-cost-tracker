@@ -93,8 +93,8 @@ def list_products(
     with get_db() as conn:
         cursor = conn.cursor()
 
-        # Base WHERE clause - filter by organization
-        where_clause = "WHERE p.is_active = 1 AND p.organization_id = %s"
+        # Base WHERE clause
+        where_clause = "WHERE p.is_active = 1"
         params = []
 
         if search:
