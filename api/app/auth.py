@@ -58,6 +58,7 @@ class UserResponse(BaseModel):
     full_name: Optional[str]
     role: str
     is_active: bool
+    organization_id: int
 
 
 class UserUpdate(BaseModel):
