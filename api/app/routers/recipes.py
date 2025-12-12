@@ -22,8 +22,8 @@ def list_recipes(
     with get_db() as conn:
         cursor = conn.cursor()
 
-        query = "SELECT * FROM recipes WHERE is_active = 1"
-        params = []
+        query = "SELECT * FROM recipes WHERE is_active = 1 AND organization_id = %s"
+        params = [current_user["organization_id"]]
 
         if search:
             query += " AND name LIKE %s"
@@ -58,13 +58,13 @@ def get_recipe(recipe_id: int, current_user: dict = Depends(get_current_user)):
 
             # Get recipe - verify it belongs to user's organization
             cursor.execute(
-                "SELECT * FROM recipes WHERE id = %s",
-                (recipe_id,)
+                "SELECT * FROM recipes WHERE id = %s AND organization_id = %s",
+                (recipe_id, current_user["organization_id"])
             )
             recipe = dict_from_row(cursor.fetchone())
 
             if not recipe:
-                raise HTTPException(status_code=404, detail="Recipe not found")
+                raise HTTPException(status_code=404, detail="Recipe not found in your organization")
 
             # Parse method JSON
             if recipe.get('method'):
@@ -106,12 +106,13 @@ def create_recipe(recipe: RecipeCreate, current_user: dict = Depends(get_current
         # Serialize method to JSON
         method_json = json.dumps([step.dict() for step in recipe.method]) if recipe.method else None
 
+        organization_id = current_user["organization_id"]
         cursor.execute("""
             INSERT INTO recipes (
                 name, description, category, category_path,
                 yield_amount, yield_unit_id, prep_time_minutes, cook_time_minutes,
-                method
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                method, organization_id
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
         """, (
             recipe.name,
@@ -122,7 +123,8 @@ def create_recipe(recipe: RecipeCreate, current_user: dict = Depends(get_current
             recipe.yield_unit_id,
             recipe.prep_time_minutes,
             recipe.cook_time_minutes,
-            method_json
+            method_json,
+            organization_id
         ))
 
         recipe_id = cursor.fetchone()["id"]
@@ -169,9 +171,10 @@ def update_recipe(recipe_id: int, updates: dict, current_user: dict = Depends(ge
         cursor = conn.cursor()
 
         # Check if recipe exists and belongs to user's organization
-        cursor.execute("SELECT id FROM recipes WHERE id = %s", (recipe_id,))
+        cursor.execute("SELECT id FROM recipes WHERE id = %s AND organization_id = %s",
+                      (recipe_id, current_user["organization_id"]))
         if not cursor.fetchone():
-            raise HTTPException(status_code=404, detail="Recipe not found")
+            raise HTTPException(status_code=404, detail="Recipe not found in your organization")
 
         # Build update query
         allowed_fields = [
@@ -220,7 +223,8 @@ def delete_recipe(recipe_id: int, current_user: dict = Depends(get_current_user)
     with get_db() as conn:
         cursor = conn.cursor()
 
-        cursor.execute("UPDATE recipes SET is_active = 0 WHERE id = %s", (recipe_id,))
+        cursor.execute("UPDATE recipes SET is_active = 0 WHERE id = %s AND organization_id = %s",
+                      (recipe_id, current_user["organization_id"]))
 
         if cursor.rowcount == 0:
             raise HTTPException(status_code=404, detail="Recipe not found")
@@ -252,12 +256,12 @@ def calculate_recipe_cost(recipe_id: int, current_user: dict = Depends(get_curre
             FROM recipes r
             LEFT JOIN units yu ON yu.id = r.yield_unit_id
             LEFT JOIN units su ON su.id = r.serving_unit_id
-            WHERE r.id = %s
-        """, (recipe_id,))
+            WHERE r.id = %s AND r.organization_id = %s
+        """, (recipe_id, current_user["organization_id"]))
         recipe = dict_from_row(cursor.fetchone())
 
         if not recipe:
-            raise HTTPException(status_code=404, detail="Recipe not found")
+            raise HTTPException(status_code=404, detail="Recipe not found in your organization")
 
         # Parse method JSON
         if recipe.get('method'):
@@ -528,7 +532,7 @@ def duplicate_recipe(recipe_id: int, new_name: Optional[str] = None):
 
 # Recipe Ingredients endpoints
 @router.post("/{recipe_id}/ingredients")
-def add_ingredient(recipe_id: int, ingredient: dict):
+def add_ingredient(recipe_id: int, ingredient: dict, current_user: dict = Depends(get_current_user)):
     """
     Add an ingredient to a recipe.
 
@@ -537,10 +541,11 @@ def add_ingredient(recipe_id: int, ingredient: dict):
     with get_db() as conn:
         cursor = conn.cursor()
 
-        # Verify recipe exists
-        cursor.execute("SELECT id FROM recipes WHERE id = %s", (recipe_id,))
+        # Verify recipe exists and belongs to user's organization
+        cursor.execute("SELECT id FROM recipes WHERE id = %s AND organization_id = %s",
+                      (recipe_id, current_user["organization_id"]))
         if not cursor.fetchone():
-            raise HTTPException(status_code=404, detail="Recipe not found")
+            raise HTTPException(status_code=404, detail="Recipe not found in your organization")
 
         # Validate: must have exactly one of common_product_id or sub_recipe_id
         common_product_id = ingredient.get('common_product_id')
@@ -589,12 +594,18 @@ def add_ingredient(recipe_id: int, ingredient: dict):
 
 
 @router.patch("/{recipe_id}/ingredients/{ingredient_id}")
-def update_ingredient(recipe_id: int, ingredient_id: int, updates: dict):
+def update_ingredient(recipe_id: int, ingredient_id: int, updates: dict, current_user: dict = Depends(get_current_user)):
     """
     Update an ingredient in a recipe.
     """
     with get_db() as conn:
         cursor = conn.cursor()
+
+        # Verify recipe belongs to user's organization first
+        cursor.execute("SELECT id FROM recipes WHERE id = %s AND organization_id = %s",
+                      (recipe_id, current_user["organization_id"]))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Recipe not found in your organization")
 
         # Verify ingredient exists and belongs to recipe
         cursor.execute("""
@@ -641,12 +652,18 @@ def update_ingredient(recipe_id: int, ingredient_id: int, updates: dict):
 
 
 @router.delete("/{recipe_id}/ingredients/{ingredient_id}")
-def remove_ingredient(recipe_id: int, ingredient_id: int):
+def remove_ingredient(recipe_id: int, ingredient_id: int, current_user: dict = Depends(get_current_user)):
     """
     Remove an ingredient from a recipe.
     """
     with get_db() as conn:
         cursor = conn.cursor()
+
+        # Verify recipe belongs to user's organization first
+        cursor.execute("SELECT id FROM recipes WHERE id = %s AND organization_id = %s",
+                      (recipe_id, current_user["organization_id"]))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Recipe not found in your organization")
 
         cursor.execute("""
             DELETE FROM recipe_ingredients
