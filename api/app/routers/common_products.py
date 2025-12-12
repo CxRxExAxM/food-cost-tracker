@@ -80,8 +80,14 @@ def create_common_product(common_product: CommonProductCreate, current_user: dic
             )
 
         cursor.execute("""
-            INSERT INTO common_products (common_name, category, subcategory, preferred_unit_id, notes, organization_id)
-            VALUES (%s, %s, %s, %s, %s, %s)
+            INSERT INTO common_products (
+                common_name, category, subcategory, preferred_unit_id, notes, organization_id,
+                allergen_vegan, allergen_vegetarian, allergen_gluten, allergen_crustation,
+                allergen_egg, allergen_mollusk, allergen_fish, allergen_lupin, allergen_dairy,
+                allergen_tree_nuts, allergen_peanuts, allergen_sesame, allergen_soy,
+                allergen_sulphur_dioxide, allergen_mustard, allergen_celery
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING *
         """, (
             common_product.common_name,
@@ -89,7 +95,23 @@ def create_common_product(common_product: CommonProductCreate, current_user: dic
             common_product.subcategory,
             common_product.preferred_unit_id,
             common_product.notes,
-            organization_id
+            organization_id,
+            int(common_product.allergen_vegan),
+            int(common_product.allergen_vegetarian),
+            int(common_product.allergen_gluten),
+            int(common_product.allergen_crustation),
+            int(common_product.allergen_egg),
+            int(common_product.allergen_mollusk),
+            int(common_product.allergen_fish),
+            int(common_product.allergen_lupin),
+            int(common_product.allergen_dairy),
+            int(common_product.allergen_tree_nuts),
+            int(common_product.allergen_peanuts),
+            int(common_product.allergen_sesame),
+            int(common_product.allergen_soy),
+            int(common_product.allergen_sulphur_dioxide),
+            int(common_product.allergen_mustard),
+            int(common_product.allergen_celery)
         ))
 
         result = dict_from_row(cursor.fetchone())
