@@ -217,12 +217,12 @@ def map_product_to_common(product_id: int, common_product_id: int, current_user:
         cursor = conn.cursor()
 
         # Check if product exists and belongs to user's organization
-        cursor.execute("SELECT id FROM products WHERE id = %s", (product_id))
+        cursor.execute("SELECT id FROM products WHERE id = %s", (product_id,))
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Product not found")
 
         # Check if common product exists and belongs to user's organization
-        cursor.execute("SELECT id FROM common_products WHERE id = %s", (common_product_id))
+        cursor.execute("SELECT id FROM common_products WHERE id = %s", (common_product_id,))
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Common product not found")
 
@@ -244,7 +244,7 @@ def unmap_product(product_id: int, current_user: dict = Depends(get_current_user
 
         cursor.execute(
             "UPDATE products SET common_product_id = NULL WHERE id = %s",
-            (product_id)
+            (product_id,)
         )
 
         if cursor.rowcount == 0:

@@ -161,7 +161,7 @@ def update_recipe(recipe_id: int, updates: dict, current_user: dict = Depends(ge
         cursor = conn.cursor()
 
         # Check if recipe exists and belongs to user's organization
-        cursor.execute("SELECT id FROM recipes WHERE id = %s", (recipe_id))
+        cursor.execute("SELECT id FROM recipes WHERE id = %s", (recipe_id,))
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Recipe not found")
 
@@ -212,7 +212,7 @@ def delete_recipe(recipe_id: int, current_user: dict = Depends(get_current_user)
     with get_db() as conn:
         cursor = conn.cursor()
 
-        cursor.execute("UPDATE recipes SET is_active = 0 WHERE id = %s", (recipe_id))
+        cursor.execute("UPDATE recipes SET is_active = 0 WHERE id = %s", (recipe_id,))
 
         if cursor.rowcount == 0:
             raise HTTPException(status_code=404, detail="Recipe not found")

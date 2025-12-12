@@ -51,7 +51,7 @@ def get_common_product(common_product_id: int, current_user: dict = Depends(get_
     """Get a single common product by ID ."""
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM common_products WHERE id = %s", (common_product_id))
+        cursor.execute("SELECT * FROM common_products WHERE id = %s", (common_product_id,))
         common_product = dict_from_row(cursor.fetchone())
 
         if not common_product:
@@ -69,7 +69,7 @@ def create_common_product(common_product: CommonProductCreate, current_user: dic
         # Check if common_name already exists in this organization
         cursor.execute(
             "SELECT id FROM common_products WHERE common_name = %s",
-            (common_product.common_name)
+            (common_product.common_name,)
         )
         if cursor.fetchone():
             raise HTTPException(
@@ -102,7 +102,7 @@ def update_common_product(common_product_id: int, update: CommonProductUpdate, c
         cursor = conn.cursor()
 
         # Check if exists and belongs to user's organization
-        cursor.execute("SELECT id FROM common_products WHERE id = %s", (common_product_id))
+        cursor.execute("SELECT id FROM common_products WHERE id = %s", (common_product_id,))
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Common product not found")
 
@@ -136,7 +136,7 @@ def delete_common_product(common_product_id: int, current_user: dict = Depends(g
 
         cursor.execute(
             "UPDATE common_products SET is_active = 0 WHERE id = %s",
-            (common_product_id)
+            (common_product_id,)
         )
 
         if cursor.rowcount == 0:
@@ -154,7 +154,7 @@ def get_common_product_products(common_product_id: int, current_user: dict = Dep
         cursor = conn.cursor()
 
         # Check if common product exists and belongs to user's organization
-        cursor.execute("SELECT id FROM common_products WHERE id = %s", (common_product_id))
+        cursor.execute("SELECT id FROM common_products WHERE id = %s", (common_product_id,))
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Common product not found")
 
