@@ -104,6 +104,7 @@ def create_recipe(recipe: RecipeCreate, current_user: dict = Depends(get_current
                 yield_amount, yield_unit_id, prep_time_minutes, cook_time_minutes,
                 method
             ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
         """, (
             recipe.name,
             recipe.description,
@@ -116,7 +117,7 @@ def create_recipe(recipe: RecipeCreate, current_user: dict = Depends(get_current
             method_json
         ))
 
-        recipe_id = cursor.lastrowid
+        recipe_id = cursor.fetchone()["id"]
 
         # Insert ingredients (TODO: implement in Phase 2)
         for ingredient in recipe.ingredients:
@@ -549,6 +550,7 @@ def add_ingredient(recipe_id: int, ingredient: dict):
                 recipe_id, common_product_id, sub_recipe_id,
                 quantity, unit_id, yield_percentage, notes
             ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
         """, (
             recipe_id,
             common_product_id,
@@ -559,7 +561,7 @@ def add_ingredient(recipe_id: int, ingredient: dict):
             ingredient.get('notes')
         ))
 
-        ingredient_id = cursor.lastrowid
+        ingredient_id = cursor.fetchone()["id"]
         conn.commit()
 
         # Return the created ingredient with details

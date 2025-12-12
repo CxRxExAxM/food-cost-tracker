@@ -30,19 +30,21 @@ def create_product(product: ProductCreate, current_user: dict = Depends(get_curr
         cursor.execute("""
             INSERT INTO products (name, brand, pack, size, unit_id, is_catch_weight)
             VALUES (%s, %s, %s, %s, %s, %s)
+            RETURNING id
         """, (product.name, product.brand, product.pack, product.size,
               product.unit_id, product.is_catch_weight))
 
-        product_id = cursor.lastrowid
+        product_id = cursor.fetchone()["id"]
 
         # If distributor specified, create distributor_product link
         if product.distributor_id:
             cursor.execute("""
                 INSERT INTO distributor_products (distributor_id, product_id, distributor_name)
                 VALUES (%s, %s, %s)
+                RETURNING id
             """, (product.distributor_id, product_id, product.name))
 
-            distributor_product_id = cursor.lastrowid
+            distributor_product_id = cursor.fetchone()["id"]
 
             # If price specified, add to price_history
             if product.case_price is not None:
@@ -52,7 +54,7 @@ def create_product(product: ProductCreate, current_user: dict = Depends(get_curr
 
                 cursor.execute("""
                     INSERT INTO price_history (distributor_product_id, case_price, unit_price, effective_date)
-                    VALUES (%s, %s, %s, date('now'))
+                    VALUES (%s, %s, %s, CURRENT_DATE)
                 """, (distributor_product_id, product.case_price, unit_price))
 
         conn.commit()

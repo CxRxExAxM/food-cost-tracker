@@ -80,6 +80,7 @@ def create_common_product(common_product: CommonProductCreate, current_user: dic
         cursor.execute("""
             INSERT INTO common_products (common_name, category, subcategory, preferred_unit_id, notes)
             VALUES (%s, %s, %s, %s, %s)
+            RETURNING *
         """, (
             common_product.common_name,
             common_product.category,
@@ -87,13 +88,11 @@ def create_common_product(common_product: CommonProductCreate, current_user: dic
             common_product.preferred_unit_id,
             common_product.notes
         ))
+
+        result = dict_from_row(cursor.fetchone())
         conn.commit()
 
-        # Fetch the created common product
-        common_product_id = cursor.lastrowid
-        cursor.execute("SELECT * FROM common_products WHERE id = %s", (common_product_id,))
-
-        return dict_from_row(cursor.fetchone())
+        return result
 
 
 @router.patch("/{common_product_id}", response_model=CommonProduct)

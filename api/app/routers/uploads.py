@@ -480,22 +480,25 @@ async def upload_csv(
                             cursor.execute("""
                                 INSERT INTO distributor_products (distributor_id, product_id, distributor_sku, distributor_name)
                                 VALUES (%s, %s, %s, %s)
+                                RETURNING id
                             """, (distributor_id, product_id, sku, product_name))
-                            distributor_product_id = cursor.lastrowid
+                            distributor_product_id = cursor.fetchone()["id"]
                     else:
                         # Create new product
                         cursor.execute("""
                             INSERT INTO products (name, brand, pack, size, unit_id, is_catch_weight)
                             VALUES (%s, %s, %s, %s, %s, %s)
+                            RETURNING id
                         """, (product_name, brand, pack, size, unit_id, int(is_catch_weight)))
-                        product_id = cursor.lastrowid
+                        product_id = cursor.fetchone()["id"]
                         new_products += 1
 
                         cursor.execute("""
                             INSERT INTO distributor_products (distributor_id, product_id, distributor_sku, distributor_name)
                             VALUES (%s, %s, %s, %s)
+                            RETURNING id
                         """, (distributor_id, product_id, sku, product_name))
-                        distributor_product_id = cursor.lastrowid
+                        distributor_product_id = cursor.fetchone()["id"]
 
                     # Insert/update price
                     if case_price is not None:
