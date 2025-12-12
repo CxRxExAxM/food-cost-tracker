@@ -52,39 +52,47 @@ def get_recipe(recipe_id: int, current_user: dict = Depends(get_current_user)):
     """
     Get a single recipe with ingredients .
     """
-    with get_db() as conn:
-        cursor = conn.cursor()
+    try:
+        with get_db() as conn:
+            cursor = conn.cursor()
 
-        # Get recipe - verify it belongs to user's organization
-        cursor.execute(
-            "SELECT * FROM recipes WHERE id = %s",
-            (recipe_id)
-        )
-        recipe = dict_from_row(cursor.fetchone())
+            # Get recipe - verify it belongs to user's organization
+            cursor.execute(
+                "SELECT * FROM recipes WHERE id = %s",
+                (recipe_id,)
+            )
+            recipe = dict_from_row(cursor.fetchone())
 
-        if not recipe:
-            raise HTTPException(status_code=404, detail="Recipe not found")
+            if not recipe:
+                raise HTTPException(status_code=404, detail="Recipe not found")
 
-        # Parse method JSON
-        if recipe.get('method'):
-            recipe['method'] = json.loads(recipe['method'])
+            # Parse method JSON
+            if recipe.get('method'):
+                recipe['method'] = json.loads(recipe['method'])
 
-        # Get ingredients (TODO: expand with product/sub-recipe details)
-        cursor.execute("""
-            SELECT ri.*,
-                   cp.common_name,
-                   u.abbreviation as unit_abbreviation,
-                   r.name as sub_recipe_name
-            FROM recipe_ingredients ri
-            LEFT JOIN common_products cp ON cp.id = ri.common_product_id
-            LEFT JOIN units u ON u.id = ri.unit_id
-            LEFT JOIN recipes r ON r.id = ri.sub_recipe_id
-            WHERE ri.recipe_id = %s
-        """, (recipe_id,))
+            # Get ingredients (TODO: expand with product/sub-recipe details)
+            cursor.execute("""
+                SELECT ri.*,
+                       cp.common_name,
+                       u.abbreviation as unit_abbreviation,
+                       r.name as sub_recipe_name
+                FROM recipe_ingredients ri
+                LEFT JOIN common_products cp ON cp.id = ri.common_product_id
+                LEFT JOIN units u ON u.id = ri.unit_id
+                LEFT JOIN recipes r ON r.id = ri.sub_recipe_id
+                WHERE ri.recipe_id = %s
+            """, (recipe_id,))
 
-        recipe['ingredients'] = dicts_from_rows(cursor.fetchall())
+            recipe['ingredients'] = dicts_from_rows(cursor.fetchall())
 
-        return recipe
+            return recipe
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        print(f"[ERROR] Get recipe {recipe_id} failed: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to get recipe: {str(e)}")
 
 
 @router.post("", response_model=Recipe, status_code=201)
