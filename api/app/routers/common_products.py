@@ -177,9 +177,9 @@ def get_common_product_products(common_product_id: int, current_user: dict = Dep
                        ROW_NUMBER() OVER (PARTITION BY distributor_product_id ORDER BY effective_date DESC) as rn
                 FROM price_history
             ) ph ON ph.distributor_product_id = dp.id AND ph.rn = 1
-            WHERE p.common_product_id = %s AND p.organization_id = %s
+            WHERE p.common_product_id = %s
             ORDER BY ph.unit_price ASC
-        """, (common_product_id))
+        """, (common_product_id,))
 
         products = dicts_from_rows(cursor.fetchall())
 
