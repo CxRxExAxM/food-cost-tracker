@@ -426,10 +426,15 @@ async def upload_csv(
 
             # Process each row
             for idx, row in df.iterrows():
+                # Create savepoint for this row to isolate errors
+                savepoint_name = f"row_{idx}"
+                cursor.execute(f"SAVEPOINT {savepoint_name}")
+
                 try:
                     # Extract data
                     product_name = str(row.get('Desc', '')).strip() if pd.notna(row.get('Desc')) else ''
                     if not product_name:
+                        cursor.execute(f"RELEASE SAVEPOINT {savepoint_name}")
                         continue  # Skip rows without product name
 
                     sku = str(row.get('SUPC', '')) if pd.notna(row.get('SUPC')) else ''
@@ -513,8 +518,13 @@ async def upload_csv(
                             """, (distributor_product_id, case_price, unit_price, eff_date, batch_id))
 
                     rows_imported += 1
+                    # Release savepoint on success
+                    cursor.execute(f"RELEASE SAVEPOINT {savepoint_name}")
 
                 except Exception as e:
+                    # Rollback to savepoint to clear the error and continue processing
+                    cursor.execute(f"ROLLBACK TO SAVEPOINT {savepoint_name}")
+                    cursor.execute(f"RELEASE SAVEPOINT {savepoint_name}")
                     rows_failed += 1
                     if len(errors) < 10:  # Limit error messages
                         errors.append(f"Row {idx + 1}: {str(e)}")
