@@ -113,7 +113,11 @@ def update_common_product(common_product_id: int, update: CommonProductUpdate, c
 
             for field, value in update.model_dump(exclude_unset=True).items():
                 update_fields.append(f"{field} = %s")
-                params.append(value)
+                # Convert boolean to integer for allergen fields (PostgreSQL uses integer for boolean)
+                if field.startswith('allergen_') and isinstance(value, bool):
+                    params.append(int(value))
+                else:
+                    params.append(value)
 
             if not update_fields:
                 raise HTTPException(status_code=400, detail="No fields to update")
