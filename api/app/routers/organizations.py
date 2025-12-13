@@ -15,18 +15,43 @@ router = APIRouter(prefix="/organizations", tags=["organizations"])
 @router.get("/me", response_model=OrganizationResponse)
 def get_my_organization(current_user: dict = Depends(get_current_user)):
     """Get current user's organization."""
-    with get_db() as conn:
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM organizations WHERE id = %s", (current_user["organization_id"],))
-        org = dict_from_row(cursor.fetchone())
+    try:
+        print(f"[DEBUG] Current user: {current_user}")
+        org_id = current_user.get("organization_id")
+        print(f"[DEBUG] Organization ID: {org_id}")
 
-        if not org:
+        if not org_id:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Organization not found"
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User does not have an organization_id"
             )
 
-        return org
+        with get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM organizations WHERE id = %s", (org_id,))
+            result = cursor.fetchone()
+            print(f"[DEBUG] Query result: {result}")
+
+            org = dict_from_row(result)
+            print(f"[DEBUG] Parsed org: {org}")
+
+            if not org:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Organization not found"
+                )
+
+            return org
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[ERROR] Failed to get organization: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch organization: {str(e)}"
+        )
 
 
 @router.get("/me/stats")
