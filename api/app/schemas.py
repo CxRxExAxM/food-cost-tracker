@@ -279,6 +279,35 @@ class OrganizationResponse(OrganizationBase):
         from_attributes = True
 
 
+# Outlets
+class OutletBase(BaseModel):
+    name: str
+    location: Optional[str] = None
+    description: Optional[str] = None
+
+
+class OutletCreate(OutletBase):
+    pass
+
+
+class OutletUpdate(BaseModel):
+    name: Optional[str] = None
+    location: Optional[str] = None
+    description: Optional[str] = None
+    is_active: Optional[int] = None
+
+
+class OutletResponse(OutletBase):
+    id: int
+    organization_id: int
+    is_active: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 # Users
 class UserBase(BaseModel):
     email: str
