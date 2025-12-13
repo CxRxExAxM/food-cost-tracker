@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import { outletsAPI } from '../services/api/outlets';
-import { useAuth } from './AuthContext';
+import { useAuth } from '../context/AuthContext';
 
 const OutletContext = createContext();
 
