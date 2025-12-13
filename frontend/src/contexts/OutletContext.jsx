@@ -35,7 +35,7 @@ export function OutletProvider({ children }) {
     try {
       setLoading(true);
       const response = await outletsAPI.list();
-      const fetchedOutlets = response.data.outlets || [];
+      const fetchedOutlets = response.data || [];
       setOutlets(fetchedOutlets);
 
       // Restore previously selected outlet from localStorage
