@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from typing import Optional
 from ..database import get_db, dicts_from_rows, dict_from_row
 from ..schemas import Product, ProductWithPrice
-from ..auth import get_current_user
+from ..auth import get_current_user, build_outlet_filter, check_outlet_access
 
 router = APIRouter(prefix="/products", tags=["products"])
 
@@ -18,32 +18,59 @@ class ProductCreate(BaseModel):
     is_catch_weight: bool = False
     distributor_id: Optional[int] = None
     case_price: Optional[float] = None
+    outlet_id: Optional[int] = None  # Added for multi-outlet support
 
 
 @router.post("")
 def create_product(product: ProductCreate, current_user: dict = Depends(get_current_user)):
-    """Create a new product with optional distributor link and price ."""
+    """Create a new product with optional distributor link and price."""
     with get_db() as conn:
         cursor = conn.cursor()
-
-        # Insert the product with organization_id
         organization_id = current_user["organization_id"]
+
+        # Determine outlet_id
+        outlet_id = product.outlet_id
+        if not outlet_id:
+            # No outlet specified - get first available outlet for user
+            from ..auth import get_user_outlet_ids
+            user_outlet_ids = get_user_outlet_ids(current_user["id"])
+
+            if not user_outlet_ids:
+                # Org-wide admin - use first outlet in organization
+                cursor.execute("""
+                    SELECT id FROM outlets
+                    WHERE organization_id = %s AND is_active = 1
+                    ORDER BY id LIMIT 1
+                """, (organization_id,))
+                outlet_row = cursor.fetchone()
+                if not outlet_row:
+                    raise HTTPException(status_code=400, detail="No active outlets found in organization")
+                outlet_id = outlet_row["id"]
+            else:
+                # Use user's first assigned outlet
+                outlet_id = user_outlet_ids[0]
+        else:
+            # Outlet specified - verify user has access
+            if not check_outlet_access(current_user, outlet_id):
+                raise HTTPException(status_code=403, detail="You don't have access to this outlet")
+
+        # Insert the product with organization_id and outlet_id
         cursor.execute("""
-            INSERT INTO products (name, brand, pack, size, unit_id, is_catch_weight, organization_id)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO products (name, brand, pack, size, unit_id, is_catch_weight, organization_id, outlet_id)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
         """, (product.name, product.brand, product.pack, product.size,
-              product.unit_id, product.is_catch_weight, organization_id))
+              product.unit_id, product.is_catch_weight, organization_id, outlet_id))
 
         product_id = cursor.fetchone()["id"]
 
         # If distributor specified, create distributor_product link
         if product.distributor_id:
             cursor.execute("""
-                INSERT INTO distributor_products (distributor_id, product_id, distributor_name, organization_id)
-                VALUES (%s, %s, %s, %s)
+                INSERT INTO distributor_products (distributor_id, product_id, distributor_name, organization_id, outlet_id)
+                VALUES (%s, %s, %s, %s, %s)
                 RETURNING id
-            """, (product.distributor_id, product_id, product.name, organization_id))
+            """, (product.distributor_id, product_id, product.name, organization_id, outlet_id))
 
             distributor_product_id = cursor.fetchone()["id"]
 
@@ -60,7 +87,7 @@ def create_product(product: ProductCreate, current_user: dict = Depends(get_curr
 
         conn.commit()
 
-        return {"message": "Product created successfully", "product_id": product_id}
+        return {"message": "Product created successfully", "product_id": product_id, "outlet_id": outlet_id}
 
 
 class ProductListResponse(BaseModel):
@@ -96,9 +123,10 @@ def list_products(
     with get_db() as conn:
         cursor = conn.cursor()
 
-        # Base WHERE clause with organization filter
-        where_clause = "WHERE p.is_active = 1 AND p.organization_id = %s"
-        params = [current_user["organization_id"]]
+        # Base WHERE clause with outlet filtering
+        outlet_filter, outlet_params = build_outlet_filter(current_user, "p")
+        where_clause = f"WHERE p.is_active = 1 AND {outlet_filter}"
+        params = outlet_params
 
         if search:
             where_clause += " AND (p.name LIKE %s OR p.brand LIKE %s)"
@@ -176,11 +204,14 @@ def list_products(
 
 @router.get("/{product_id}", response_model=ProductWithPrice)
 def get_product(product_id: int, current_user: dict = Depends(get_current_user)):
-    """Get a single product by ID with latest price ."""
+    """Get a single product by ID with latest price."""
     with get_db() as conn:
         cursor = conn.cursor()
 
-        cursor.execute("""
+        # Build outlet filter
+        outlet_filter, outlet_params = build_outlet_filter(current_user, "p")
+
+        query = f"""
             SELECT
                 p.*,
                 d.name as distributor_name,
@@ -200,28 +231,35 @@ def get_product(product_id: int, current_user: dict = Depends(get_current_user))
                        ROW_NUMBER() OVER (PARTITION BY distributor_product_id ORDER BY effective_date DESC) as rn
                 FROM price_history
             ) ph ON ph.distributor_product_id = dp.id AND ph.rn = 1
-            WHERE p.id = %s AND p.organization_id = %s
-        """, (product_id, current_user["organization_id"]))
+            WHERE p.id = %s AND {outlet_filter}
+        """
+
+        params = [product_id] + outlet_params
+        cursor.execute(query, params)
 
         product = dict_from_row(cursor.fetchone())
 
         if not product:
-            raise HTTPException(status_code=404, detail="Product not found in your organization")
+            raise HTTPException(status_code=404, detail="Product not found or you don't have access to it")
 
         return product
 
 
 @router.patch("/{product_id}/map")
 def map_product_to_common(product_id: int, common_product_id: int, current_user: dict = Depends(get_current_user)):
-    """Map a product to a common product ."""
+    """Map a product to a common product."""
     with get_db() as conn:
         cursor = conn.cursor()
 
-        # Check if product exists and belongs to user's organization
-        cursor.execute("SELECT id FROM products WHERE id = %s AND organization_id = %s",
-                      (product_id, current_user["organization_id"]))
-        if not cursor.fetchone():
-            raise HTTPException(status_code=404, detail="Product not found in your organization")
+        # Check if product exists and user has access to it
+        outlet_filter, outlet_params = build_outlet_filter(current_user, "")
+        query = f"SELECT id, outlet_id FROM products WHERE id = %s AND {outlet_filter}"
+        params = [product_id] + outlet_params
+        cursor.execute(query, params)
+
+        product = dict_from_row(cursor.fetchone())
+        if not product:
+            raise HTTPException(status_code=404, detail="Product not found or you don't have access to it")
 
         # Check if common product exists and belongs to user's organization
         cursor.execute("SELECT id FROM common_products WHERE id = %s AND organization_id = %s",
@@ -241,17 +279,19 @@ def map_product_to_common(product_id: int, common_product_id: int, current_user:
 
 @router.patch("/{product_id}/unmap")
 def unmap_product(product_id: int, current_user: dict = Depends(get_current_user)):
-    """Remove common product mapping from a product ."""
+    """Remove common product mapping from a product."""
     with get_db() as conn:
         cursor = conn.cursor()
 
-        cursor.execute(
-            "UPDATE products SET common_product_id = NULL WHERE id = %s AND organization_id = %s",
-            (product_id, current_user["organization_id"])
-        )
+        # Build outlet filter
+        outlet_filter, outlet_params = build_outlet_filter(current_user, "")
+        query = f"UPDATE products SET common_product_id = NULL WHERE id = %s AND {outlet_filter}"
+        params = [product_id] + outlet_params
+
+        cursor.execute(query, params)
 
         if cursor.rowcount == 0:
-            raise HTTPException(status_code=404, detail="Product not found in your organization")
+            raise HTTPException(status_code=404, detail="Product not found or you don't have access to it")
 
         conn.commit()
 
@@ -260,16 +300,19 @@ def unmap_product(product_id: int, current_user: dict = Depends(get_current_user
 
 @router.patch("/{product_id}")
 def update_product(product_id: int, updates: dict, current_user: dict = Depends(get_current_user)):
-    """Update product fields ."""
+    """Update product fields."""
     with get_db() as conn:
         cursor = conn.cursor()
 
-        # Check if product exists and get current values
-        cursor.execute("SELECT id, pack, size FROM products WHERE id = %s AND organization_id = %s",
-                      (product_id, current_user["organization_id"]))
-        product = cursor.fetchone()
+        # Check if product exists and user has access, get current values
+        outlet_filter, outlet_params = build_outlet_filter(current_user, "")
+        check_query = f"SELECT id, pack, size, outlet_id FROM products WHERE id = %s AND {outlet_filter}"
+        check_params = [product_id] + outlet_params
+        cursor.execute(check_query, check_params)
+
+        product = dict_from_row(cursor.fetchone())
         if not product:
-            raise HTTPException(status_code=404, detail="Product not found in your organization")
+            raise HTTPException(status_code=404, detail="Product not found or you don't have access to it")
 
         current_pack = product["pack"]
         current_size = product["size"]
@@ -287,8 +330,9 @@ def update_product(product_id: int, updates: dict, current_user: dict = Depends(
         if not update_fields:
             raise HTTPException(status_code=400, detail="No valid fields to update")
 
-        params.extend([product_id])
-        query = f"UPDATE products SET {', '.join(update_fields)} WHERE id = %s"
+        params.append(product_id)
+        params.extend(outlet_params)
+        query = f"UPDATE products SET {', '.join(update_fields)} WHERE id = %s AND {outlet_filter}"
 
         cursor.execute(query, params)
 
