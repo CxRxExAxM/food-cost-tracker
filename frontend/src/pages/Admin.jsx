@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Building2, Users, Save, BarChart3, AlertCircle, CheckCircle } from 'lucide-react';
 import Navigation from '../components/Navigation';
+import axios from '../lib/axios';
 import './Admin.css';
 
 function Admin() {
@@ -58,20 +59,8 @@ function Admin() {
   };
 
   const fetchOrganization = async () => {
-    const token = localStorage.getItem('token');
-    const response = await fetch('/api/organizations/me', {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-      },
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Failed to fetch organization:', response.status, errorText);
-      throw new Error('Failed to fetch organization');
-    }
-
-    const data = await response.json();
+    const response = await axios.get('/organizations/me');
+    const data = response.data;
     console.log('Organization response:', data);
     setOrganization(data);
     setFormData({
@@ -82,35 +71,15 @@ function Admin() {
   };
 
   const fetchStats = async () => {
-    const token = localStorage.getItem('token');
-    const response = await fetch('/api/organizations/me/stats', {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to fetch stats');
-    }
-
-    const data = await response.json();
+    const response = await axios.get('/organizations/me/stats');
+    const data = response.data;
     console.log('Stats response:', data);
     setStats(data);
   };
 
   const fetchUsers = async () => {
-    const token = localStorage.getItem('token');
-    const response = await fetch('/api/auth/users', {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to fetch users');
-    }
-
-    const data = await response.json();
+    const response = await axios.get('/auth/users');
+    const data = response.data;
     console.log('Users response:', data);
     setUsers(data);
   };
@@ -122,29 +91,15 @@ function Admin() {
     setSuccessMessage('');
 
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('/api/organizations/me', {
-        method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Failed to update organization');
-      }
-
-      const updatedOrg = await response.json();
+      const response = await axios.patch('/organizations/me', formData);
+      const updatedOrg = response.data;
       setOrganization(updatedOrg);
       setSuccessMessage('Organization settings updated successfully!');
 
       // Clear success message after 3 seconds
       setTimeout(() => setSuccessMessage(''), 3000);
     } catch (err) {
-      setError(err.message);
+      setError(err.response?.data?.detail || err.message || 'Failed to update organization');
     } finally {
       setSaving(false);
     }
