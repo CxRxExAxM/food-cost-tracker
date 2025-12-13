@@ -84,6 +84,8 @@ class ProductBase(BaseModel):
 
 class Product(ProductBase):
     id: int
+    organization_id: int
+    outlet_id: int
     is_active: bool
     created_at: datetime
     updated_at: datetime
@@ -172,6 +174,8 @@ class RecipeCreate(RecipeBase):
 
 class Recipe(RecipeBase):
     id: int
+    organization_id: int
+    outlet_id: int
     is_active: bool
     created_at: datetime
     updated_at: datetime
