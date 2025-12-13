@@ -12,19 +12,165 @@ from ..auth import get_current_user, require_admin
 router = APIRouter(prefix="/organizations", tags=["organizations"])
 
 
+@router.get("/me", response_model=OrganizationResponse)
+def get_my_organization(current_user: dict = Depends(get_current_user)):
+    """Get current user's organization."""
+    try:
+        print(f"[DEBUG] Current user: {current_user}")
+        org_id = current_user.get("organization_id")
+        print(f"[DEBUG] Organization ID: {org_id}")
+
+        if not org_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User does not have an organization_id"
+            )
+
+        with get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM organizations WHERE id = %s", (org_id,))
+            result = cursor.fetchone()
+            print(f"[DEBUG] Query result: {result}")
+
+            org = dict_from_row(result)
+            print(f"[DEBUG] Parsed org: {org}")
+
+            if not org:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Organization not found"
+                )
+
+            return org
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[ERROR] Failed to get organization: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch organization: {str(e)}"
+        )
+
+
+@router.get("/me/stats")
+def get_my_organization_stats(current_user: dict = Depends(get_current_user)):
+    """Get current user's organization usage statistics."""
+    org_id = current_user["organization_id"]
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Get organization
+        cursor.execute("SELECT * FROM organizations WHERE id = %s", (org_id,))
+        org = dict_from_row(cursor.fetchone())
+
+        if not org:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Organization not found"
+            )
+
+        # Get counts
+        cursor.execute("SELECT COUNT(*) as count FROM users WHERE organization_id = %s", (org_id,))
+        user_count = cursor.fetchone()["count"]
+
+        cursor.execute("SELECT COUNT(*) as count FROM recipes WHERE organization_id = %s AND is_active = 1", (org_id,))
+        recipe_count = cursor.fetchone()["count"]
+
+        cursor.execute("SELECT COUNT(*) as count FROM products WHERE organization_id = %s AND is_active = 1", (org_id,))
+        product_count = cursor.fetchone()["count"]
+
+        return {
+            "organization_id": org_id,
+            "organization_name": org['name'],
+            "subscription_tier": org['subscription_tier'],
+            "subscription_status": org['subscription_status'],
+            "users": {
+                "current": user_count,
+                "max": org['max_users'],
+                "available": org['max_users'] - user_count if org['max_users'] > 0 else -1
+            },
+            "recipes": {
+                "current": recipe_count,
+                "max": org['max_recipes'],
+                "available": org['max_recipes'] - recipe_count if org['max_recipes'] > 0 else -1
+            },
+            "products": {
+                "current": product_count
+            }
+        }
+
+
+@router.patch("/me", response_model=OrganizationResponse)
+def update_my_organization(
+    org_data: OrganizationUpdate,
+    current_user: dict = Depends(require_admin)
+):
+    """Update current user's organization (admin only)."""
+    org_id = current_user["organization_id"]
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Check organization exists
+        cursor.execute("SELECT * FROM organizations WHERE id = %s", (org_id,))
+        org = dict_from_row(cursor.fetchone())
+
+        if not org:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Organization not found"
+            )
+
+        # Build update query
+        update_fields = []
+        params = []
+
+        if org_data.name is not None:
+            update_fields.append("name = %s")
+            params.append(org_data.name)
+
+        if org_data.contact_email is not None:
+            update_fields.append("contact_email = %s")
+            params.append(org_data.contact_email)
+
+        if org_data.contact_phone is not None:
+            update_fields.append("contact_phone = %s")
+            params.append(org_data.contact_phone)
+
+        if not update_fields:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No valid fields to update"
+            )
+
+        # Add updated_at timestamp
+        update_fields.append("updated_at = CURRENT_TIMESTAMP")
+        params.append(org_id)
+
+        query = f"UPDATE organizations SET {', '.join(update_fields)} WHERE id = %s"
+        cursor.execute(query, params)
+        conn.commit()
+
+        # Return updated organization
+        cursor.execute("SELECT * FROM organizations WHERE id = %s", (org_id,))
+        updated_org = dict_from_row(cursor.fetchone())
+        return updated_org
+
+
 @router.get("", response_model=List[OrganizationResponse])
 def list_organizations(
     skip: int = 0,
     limit: int = 100,
     current_user: dict = Depends(require_admin)
 ):
-    """List all organizations (admin only)."""
+    """List all organizations (super admin only)."""
     with get_db() as conn:
         cursor = conn.cursor()
         cursor.execute("""
             SELECT * FROM organizations
             ORDER BY name
-            LIMIT ? OFFSET ?
+            LIMIT %s OFFSET %s
         """, (limit, skip))
         orgs = dicts_from_rows(cursor.fetchall())
         return orgs
@@ -35,10 +181,10 @@ def get_organization(
     org_id: int,
     current_user: dict = Depends(require_admin)
 ):
-    """Get organization by ID (admin only)."""
+    """Get organization by ID (super admin only)."""
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM organizations WHERE id = ?", (org_id,))
+        cursor.execute("SELECT * FROM organizations WHERE id = %s", (org_id,))
         org = dict_from_row(cursor.fetchone())
 
         if not org:
@@ -60,7 +206,7 @@ def create_organization(
         cursor = conn.cursor()
 
         # Check if slug already exists
-        cursor.execute("SELECT id FROM organizations WHERE slug = ?", (org_data.slug,))
+        cursor.execute("SELECT id FROM organizations WHERE slug = %s", (org_data.slug,))
         if cursor.fetchone():
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -84,7 +230,7 @@ def create_organization(
                 max_users, max_recipes, max_distributors, max_ai_parses_per_month,
                 contact_email, contact_phone, ai_parses_reset_date,
                 ai_parses_used_this_month, is_active
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """, (
             org_data.name,
             org_data.slug,
@@ -105,7 +251,7 @@ def create_organization(
         org_id = cursor.lastrowid
 
         # Fetch and return the created organization
-        cursor.execute("SELECT * FROM organizations WHERE id = ?", (org_id,))
+        cursor.execute("SELECT * FROM organizations WHERE id = %s", (org_id,))
         org = dict_from_row(cursor.fetchone())
         return org
 
@@ -121,7 +267,7 @@ def update_organization(
         cursor = conn.cursor()
 
         # Check organization exists
-        cursor.execute("SELECT * FROM organizations WHERE id = ?", (org_id,))
+        cursor.execute("SELECT * FROM organizations WHERE id = %s", (org_id,))
         org = dict_from_row(cursor.fetchone())
 
         if not org:
@@ -135,23 +281,23 @@ def update_organization(
         params = []
 
         if org_data.name is not None:
-            update_fields.append("name = ?")
+            update_fields.append("name = %s")
             params.append(org_data.name)
 
         if org_data.subscription_status is not None:
-            update_fields.append("subscription_status = ?")
+            update_fields.append("subscription_status = %s")
             params.append(org_data.subscription_status)
 
         if org_data.contact_email is not None:
-            update_fields.append("contact_email = ?")
+            update_fields.append("contact_email = %s")
             params.append(org_data.contact_email)
 
         if org_data.contact_phone is not None:
-            update_fields.append("contact_phone = ?")
+            update_fields.append("contact_phone = %s")
             params.append(org_data.contact_phone)
 
         if org_data.is_active is not None:
-            update_fields.append("is_active = ?")
+            update_fields.append("is_active = %s")
             params.append(1 if org_data.is_active else 0)
 
         # Update tier limits if tier is changing
@@ -164,15 +310,15 @@ def update_organization(
             }
             limits = tier_limits.get(org_data.subscription_tier, tier_limits['free'])
 
-            update_fields.append("subscription_tier = ?")
+            update_fields.append("subscription_tier = %s")
             params.append(org_data.subscription_tier)
-            update_fields.append("max_users = ?")
+            update_fields.append("max_users = %s")
             params.append(limits['max_users'])
-            update_fields.append("max_recipes = ?")
+            update_fields.append("max_recipes = %s")
             params.append(limits['max_recipes'])
-            update_fields.append("max_distributors = ?")
+            update_fields.append("max_distributors = %s")
             params.append(limits['max_distributors'])
-            update_fields.append("max_ai_parses_per_month = ?")
+            update_fields.append("max_ai_parses_per_month = %s")
             params.append(limits['max_ai_parses_per_month'])
 
         if not update_fields:
@@ -185,12 +331,12 @@ def update_organization(
         update_fields.append("updated_at = CURRENT_TIMESTAMP")
         params.append(org_id)
 
-        query = f"UPDATE organizations SET {', '.join(update_fields)} WHERE id = ?"
+        query = f"UPDATE organizations SET {', '.join(update_fields)} WHERE id = %s"
         cursor.execute(query, params)
         conn.commit()
 
         # Return updated organization
-        cursor.execute("SELECT * FROM organizations WHERE id = ?", (org_id,))
+        cursor.execute("SELECT * FROM organizations WHERE id = %s", (org_id,))
         updated_org = dict_from_row(cursor.fetchone())
         return updated_org
 
@@ -205,7 +351,7 @@ def delete_organization(
         cursor = conn.cursor()
 
         # Check organization exists
-        cursor.execute("SELECT id FROM organizations WHERE id = ?", (org_id,))
+        cursor.execute("SELECT id FROM organizations WHERE id = %s", (org_id,))
         if not cursor.fetchone():
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -213,7 +359,7 @@ def delete_organization(
             )
 
         # Check if org has users
-        cursor.execute("SELECT COUNT(*) FROM users WHERE organization_id = ?", (org_id,))
+        cursor.execute("SELECT COUNT(*) FROM users WHERE organization_id = %s", (org_id,))
         user_count = cursor.fetchone()[0]
 
         if user_count > 0:
@@ -222,7 +368,7 @@ def delete_organization(
                 detail=f"Cannot delete organization with {user_count} users. Remove users first."
             )
 
-        cursor.execute("DELETE FROM organizations WHERE id = ?", (org_id,))
+        cursor.execute("DELETE FROM organizations WHERE id = %s", (org_id,))
         conn.commit()
         return None
 
@@ -237,7 +383,7 @@ def get_organization_stats(
         cursor = conn.cursor()
 
         # Get organization
-        cursor.execute("SELECT * FROM organizations WHERE id = ?", (org_id,))
+        cursor.execute("SELECT * FROM organizations WHERE id = %s", (org_id,))
         org = dict_from_row(cursor.fetchone())
 
         if not org:
@@ -247,13 +393,13 @@ def get_organization_stats(
             )
 
         # Get counts
-        cursor.execute("SELECT COUNT(*) FROM users WHERE organization_id = ?", (org_id,))
+        cursor.execute("SELECT COUNT(*) FROM users WHERE organization_id = %s", (org_id,))
         user_count = cursor.fetchone()[0]
 
-        cursor.execute("SELECT COUNT(*) FROM recipes WHERE organization_id = ?", (org_id,))
+        cursor.execute("SELECT COUNT(*) FROM recipes WHERE organization_id = %s", (org_id,))
         recipe_count = cursor.fetchone()[0]
 
-        cursor.execute("SELECT COUNT(*) FROM distributors WHERE organization_id = ?", (org_id,))
+        cursor.execute("SELECT COUNT(*) FROM distributors WHERE organization_id = %s", (org_id,))
         distributor_count = cursor.fetchone()[0]
 
         return {
