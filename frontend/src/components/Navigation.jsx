@@ -69,6 +69,11 @@ function Navigation() {
               </Link>
             )}
             {isAdmin() && (
+              <Link to="/outlets" className={`nav-link ${isActivePath('/outlets') ? 'active' : ''}`}>
+                Outlets
+              </Link>
+            )}
+            {isAdmin() && (
               <Link to="/admin" className={`nav-link ${isActivePath('/admin') ? 'active' : ''}`}>
                 Admin
               </Link>

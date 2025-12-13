@@ -1,0 +1,230 @@
+/* Outlet Card */
+
+.outlet-card {
+  background: var(--bg-secondary, #242424);
+  border: 1px solid var(--border-default, #3d3d3d);
+  border-radius: 8px;
+  padding: 1.5rem;
+  transition: all 0.15s ease;
+}
+
+.outlet-card:hover {
+  border-color: var(--border-strong, #4d4d4d);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+/* Header */
+.outlet-card-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.outlet-card-icon {
+  font-size: 2rem;
+  flex-shrink: 0;
+}
+
+.outlet-card-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.outlet-card-name {
+  font-family: var(--font-primary, 'Inter', sans-serif);
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text-primary, #e6e6e6);
+  margin: 0 0 0.25rem 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.outlet-card-location {
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 0.875rem;
+  color: var(--text-secondary, #a3a3a3);
+  margin: 0;
+}
+
+.outlet-card-description {
+  font-family: var(--font-primary, 'Inter', sans-serif);
+  font-size: 0.875rem;
+  color: var(--text-secondary, #a3a3a3);
+  margin: 0 0 1.25rem 0;
+  line-height: 1.5;
+}
+
+/* Statistics */
+.outlet-card-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  padding: 1rem 0;
+  border-top: 1px solid var(--border-subtle, #2d2d2d);
+  border-bottom: 1px solid var(--border-subtle, #2d2d2d);
+  margin-bottom: 1.25rem;
+}
+
+.stats-loading {
+  grid-column: 1 / -1;
+  text-align: center;
+  font-size: 0.875rem;
+  color: var(--text-tertiary, #6b6b6b);
+  padding: 0.5rem 0;
+}
+
+.stat-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.stat-icon {
+  font-size: 1.5rem;
+}
+
+.stat-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.stat-value {
+  font-family: var(--font-primary, 'Inter', sans-serif);
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-primary, #e6e6e6);
+  line-height: 1;
+}
+
+.stat-label {
+  font-family: var(--font-primary, 'Inter', sans-serif);
+  font-size: 0.75rem;
+  color: var(--text-tertiary, #6b6b6b);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Actions */
+.outlet-card-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.btn-card {
+  flex: 1;
+  padding: 0.625rem 1rem;
+  font-family: var(--font-primary, 'Inter', sans-serif);
+  font-size: 0.875rem;
+  font-weight: 600;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-card-secondary {
+  background: var(--bg-tertiary, #2d2d2d);
+  color: var(--text-primary, #e6e6e6);
+  border: 1px solid var(--border-default, #3d3d3d);
+}
+
+.btn-card-secondary:hover {
+  background: var(--bg-elevated, #323232);
+  border-color: var(--border-strong, #4d4d4d);
+}
+
+.btn-card-danger {
+  background: rgba(212, 52, 56, 0.15);
+  color: var(--color-red-bright, #ff4d4f);
+  border: 1px solid rgba(212, 52, 56, 0.3);
+}
+
+.btn-card-danger:hover:not(:disabled) {
+  background: rgba(212, 52, 56, 0.25);
+  border-color: rgba(212, 52, 56, 0.5);
+}
+
+.btn-card-danger.confirm {
+  background: var(--color-red, #d43438);
+  color: white;
+  border-color: var(--color-red, #d43438);
+  animation: pulse 0.5s ease-in-out;
+}
+
+.btn-card-danger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+/* List View Variant */
+.outlet-card-list {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+  padding: 1.25rem 1.5rem;
+}
+
+.outlet-card-list .outlet-card-header {
+  flex: 0 0 300px;
+  margin-bottom: 0;
+}
+
+.outlet-card-list .outlet-card-description {
+  flex: 1;
+  margin: 0;
+}
+
+.outlet-card-list .outlet-card-stats {
+  flex: 0 0 auto;
+  border: none;
+  margin: 0;
+  padding: 0;
+  gap: 2rem;
+}
+
+.outlet-card-list .outlet-card-actions {
+  flex: 0 0 auto;
+  gap: 0.5rem;
+}
+
+.outlet-card-list .btn-card {
+  flex: 0 0 auto;
+  min-width: 80px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .outlet-card-stats {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+
+  .outlet-card-list {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1rem;
+  }
+
+  .outlet-card-list .outlet-card-header,
+  .outlet-card-list .outlet-card-stats {
+    flex: 1;
+  }
+
+  .outlet-card-list .outlet-card-stats {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}

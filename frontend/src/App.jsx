@@ -6,6 +6,7 @@ import Products from './pages/Products';
 import Recipes from './pages/Recipes';
 import Users from './pages/Users';
 import Admin from './pages/Admin';
+import Outlets from './pages/Outlets';
 import Login from './pages/Login';
 import './App.css';
 
@@ -98,6 +99,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <Users />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/outlets"
+        element={
+          <ProtectedRoute>
+            <Outlets />
           </ProtectedRoute>
         }
       />
