@@ -60,7 +60,7 @@ def create_product(product: ProductCreate, current_user: dict = Depends(get_curr
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
         """, (product.name, product.brand, product.pack, product.size,
-              product.unit_id, product.is_catch_weight, organization_id, outlet_id))
+              product.unit_id, int(product.is_catch_weight), organization_id, outlet_id))
 
         product_id = cursor.fetchone()["id"]
 
