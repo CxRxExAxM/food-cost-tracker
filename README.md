@@ -29,6 +29,14 @@ A comprehensive platform for F&B operations to manage food costs, track distribu
 - **Price History Tracking** - Time-series price data for trend analysis
 
 ### Recently Completed ✅
+- **Organization Admin UI** (Dec 12, 2025)
+  - Complete organization settings management interface
+  - Organization info editing (name, contact details)
+  - Tier badge display and limits visualization
+  - Usage statistics with color-coded progress bars
+  - Team members overview with role badges
+  - Responsive design matching site aesthetics
+
 - **Multi-Tenancy Support** (Dec 12, 2025)
   - Complete organization-based data isolation
   - Tier-based system (Free, Basic, Pro, Enterprise)
@@ -44,18 +52,35 @@ A comprehensive platform for F&B operations to manage food costs, track distribu
   - See POSTGRESQL_MIGRATION_DEC11.md for details
 
 ### Upcoming Features 📋
-- **Organization Admin UI** - Frontend interface for organization management
-  - Organization settings page
-  - User invitation system
-  - Tier limits display and enforcement
-- **AI Recipe Parser**
-  - Upload Word/PDF recipe documents
-  - Claude API extracts ingredients automatically
-  - Smart matching to common products
-  - Review/confirmation workflow
-- **Historical Price Charts** - Visualize price trends over time
-- **Recipe Scaling** - Scale recipes up/down
-- **PDF Export** - Print recipe cards
+
+**🔥 PRIORITY: Multi-Outlet Support** (In Planning)
+- **Killer competitive differentiator for enterprise/hotel groups**
+- Outlet-specific products and recipes (isolation)
+- Org-wide shared common product library (consistency)
+- Hierarchical user access (corporate + outlet levels)
+- Users can belong to multiple outlets
+- Cross-outlet recipe copying with automatic pricing adjustment
+- Consolidated reporting across outlets
+- See OUTLETS_IMPLEMENTATION_PLAN.md for full details
+
+**Super Admin Panel**
+- Platform owner dashboard for managing all organizations
+- View/manage all organizations and outlets
+- Subscription tier management
+- System-wide analytics and monitoring
+- User impersonation for support
+
+**AI Recipe Parser**
+- Upload Word/PDF recipe documents
+- Claude API extracts ingredients automatically
+- Smart matching to common products
+- Review/confirmation workflow
+
+**Historical Price Charts** - Visualize price trends over time
+
+**Recipe Scaling** - Scale recipes up/down
+
+**PDF Export** - Print recipe cards
 
 ## Tech Stack
 
