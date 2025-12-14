@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import axios from '../lib/axios';
 import Navigation from '../components/Navigation';
+import { useOutlet } from '../contexts/OutletContext';
+import OutletBadge from '../components/outlets/OutletBadge';
 import './Products.css';
 
 const API_URL = import.meta.env.VITE_API_URL ?? '';
@@ -26,6 +28,7 @@ const ALLERGENS = [
 ];
 
 function Products() {
+  const { currentOutlet, outlets } = useOutlet();
   const [products, setProducts] = useState([]);
   const [commonProducts, setCommonProducts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -64,7 +67,8 @@ function Products() {
     size: '',
     unit_id: '',
     is_catch_weight: false,
-    case_price: ''
+    case_price: '',
+    outlet_id: currentOutlet?.id && currentOutlet.id !== 'all' ? currentOutlet.id : ''
   });
 
   useEffect(() => {
@@ -72,7 +76,7 @@ function Products() {
     fetchCommonProducts();
     fetchDistributors();
     fetchUnits();
-  }, [search, unmappedOnly, sortColumn, sortDirection]);
+  }, [search, unmappedOnly, sortColumn, sortDirection, currentOutlet]);
 
   const fetchProducts = async () => {
     try {
@@ -82,7 +86,9 @@ function Products() {
         sort_by: sortColumn,
         sort_dir: sortDirection,
         ...(search && { search }),
-        ...(unmappedOnly && { unmapped_only: true })
+        ...(unmappedOnly && { unmapped_only: true }),
+        // Filter by outlet if specific outlet selected (not "All Outlets")
+        ...(currentOutlet && currentOutlet.id !== 'all' && { outlet_id: currentOutlet.id })
       };
       const response = await axios.get(`${API_URL}/products`, { params });
       setProducts(response.data.products);
@@ -377,7 +383,8 @@ function Products() {
         unit_id: newProduct.unit_id ? parseInt(newProduct.unit_id) : null,
         is_catch_weight: newProduct.is_catch_weight,
         distributor_id: newProduct.distributor_id ? parseInt(newProduct.distributor_id) : null,
-        case_price: newProduct.case_price ? parseFloat(newProduct.case_price) : null
+        case_price: newProduct.case_price ? parseFloat(newProduct.case_price) : null,
+        outlet_id: newProduct.outlet_id ? parseInt(newProduct.outlet_id) : null
       };
 
       await axios.post(`${API_URL}/products`, productData);
@@ -729,6 +736,7 @@ function Products() {
                 {renderSortableHeader('name', 'Product Name')}
                 {renderSortableHeader('brand', 'Brand')}
                 {renderSortableHeader('distributor_name', 'Distributor')}
+                <th className="text-center">Outlet</th>
                 {renderSortableHeader('pack', 'Pack', 'text-center')}
                 {renderSortableHeader('size', 'Size', 'text-center')}
                 {renderSortableHeader('unit', 'Unit', 'text-center')}
@@ -770,6 +778,18 @@ function Products() {
                       <option value="">Distributor</option>
                       {distributors.map(d => (
                         <option key={d.id} value={d.id}>{d.name}</option>
+                      ))}
+                    </select>
+                  </td>
+                  <td>
+                    <select
+                      value={newProduct.outlet_id}
+                      onChange={(e) => setNewProduct({ ...newProduct, outlet_id: e.target.value })}
+                      className="inline-edit-select"
+                    >
+                      <option value="">Outlet *</option>
+                      {outlets.filter(o => o.id !== 'all').map(outlet => (
+                        <option key={outlet.id} value={outlet.id}>{outlet.name}</option>
                       ))}
                     </select>
                   </td>
@@ -836,6 +856,9 @@ function Products() {
                   <td className="product-name">{renderEditableCell(product, 'name', product.name)}</td>
                   <td className="brand-cell">{renderEditableCell(product, 'brand', product.brand)}</td>
                   <td className="distributor-cell">{product.distributor_name}</td>
+                  <td className="text-center">
+                    <OutletBadge outletId={product.outlet_id} />
+                  </td>
                   <td className="text-center">{renderEditableCell(product, 'pack', product.pack)}</td>
                   <td className="text-center">{renderEditableCell(product, 'size', product.size)}</td>
                   <td className="text-center">{renderEditableCell(product, 'unit_id', product.unit_abbreviation)}</td>
