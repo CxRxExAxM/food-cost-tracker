@@ -435,11 +435,18 @@ async def upload_csv(
         else:
             # .xls file (older Excel format)
             df = pd.read_excel(io.BytesIO(content), header=config["header_row"], engine='xlrd')
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Error reading file: {str(e)}")
 
-    # Apply cleaning
-    df = clean_dataframe(df, distributor_code)
+        print(f"[CSV Upload] File read successfully, {len(df)} rows")
+
+        # Apply cleaning
+        df = clean_dataframe(df, distributor_code)
+        print(f"[CSV Upload] Data cleaned successfully")
+
+    except Exception as e:
+        import traceback
+        print(f"[ERROR] File processing failed: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=400, detail=f"Error processing file: {str(e)}")
 
     # Import to database
     errors = []
@@ -448,6 +455,8 @@ async def upload_csv(
     new_products = 0
     updated_prices = 0
     batch_id = str(uuid.uuid4())
+
+    print(f"[CSV Upload] Starting database import, batch_id: {batch_id}")
 
     with get_db() as conn:
         cursor = conn.cursor()
