@@ -507,15 +507,26 @@ async def upload_csv(
 
                     unit_id = get_unit_id(cursor, unit_abbr) if unit_abbr else None
 
-                    # Check if product exists in this outlet
+                    # Check if product exists in this organization (products are shared across outlets)
+                    # Also check for existing distributor_product link by SKU to avoid unique constraint violation
                     cursor.execute("""
                         SELECT p.id as product_id, dp.id as distributor_product_id
                         FROM products p
                         LEFT JOIN distributor_products dp ON dp.product_id = p.id
                             AND dp.distributor_id = %s
                         WHERE p.name = %s AND (p.brand = %s OR (p.brand IS NULL AND %s IS NULL))
-                              AND p.pack = %s AND p.size = %s AND p.organization_id = %s AND p.outlet_id = %s
-                    """, (distributor_id, product_name, brand, brand, pack, size, organization_id, outlet_id))
+                              AND p.pack = %s AND p.size = %s AND p.organization_id = %s
+
+                        UNION
+
+                        SELECT p.id as product_id, dp.id as distributor_product_id
+                        FROM distributor_products dp
+                        JOIN products p ON p.id = dp.product_id
+                        WHERE dp.organization_id = %s AND dp.distributor_id = %s AND dp.distributor_sku = %s
+
+                        LIMIT 1
+                    """, (distributor_id, product_name, brand, brand, pack, size, organization_id,
+                          organization_id, distributor_id, sku))
 
                     existing = cursor.fetchone()
 
