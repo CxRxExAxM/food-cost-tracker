@@ -12,7 +12,7 @@ import uuid
 import re
 
 from ..database import get_db
-from ..auth import get_current_user, check_outlet_access
+from ..auth import get_current_user, check_outlet_access, get_user_outlet_ids
 
 router = APIRouter(prefix="/uploads", tags=["uploads"])
 
@@ -395,9 +395,6 @@ async def upload_csv(
 
     if not outlet_id:
         # No outlet specified - get first available outlet for user
-        from ..auth import get_user_outlet_ids
-        from ..database import get_db
-
         with get_db() as conn:
             cursor = conn.cursor()
             user_outlet_ids = get_user_outlet_ids(current_user["id"])
