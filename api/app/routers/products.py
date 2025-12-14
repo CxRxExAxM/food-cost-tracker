@@ -130,9 +130,13 @@ def list_products(
         where_clause = f"WHERE p.is_active = 1 AND {outlet_filter}"
         params = outlet_params
 
-        # If specific outlet requested, add additional filter
+        # If specific outlet requested, show products imported by this outlet
+        # Use EXISTS to check if product has any distributor_products entry for this outlet
         if outlet_id is not None:
-            where_clause += " AND p.outlet_id = %s"
+            where_clause += """ AND EXISTS (
+                SELECT 1 FROM distributor_products dp_filter
+                WHERE dp_filter.product_id = p.id AND dp_filter.outlet_id = %s
+            )"""
             params.append(outlet_id)
 
         if search:
