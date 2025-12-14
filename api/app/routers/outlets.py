@@ -281,10 +281,10 @@ def get_outlet_stats(
             "outlet_id": outlet_id,
             "outlet_name": outlet["name"],
             "organization_id": org_id,
-            "products": product_count,
-            "recipes": recipe_count,
-            "users": user_count,
-            "imports": import_count
+            "products_count": product_count,
+            "recipes_count": recipe_count,
+            "users_count": user_count,
+            "imports_count": import_count
         }
 
 
