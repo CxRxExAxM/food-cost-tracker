@@ -750,7 +750,6 @@ function Products() {
                 {renderSortableHeader('name', 'Product Name')}
                 {renderSortableHeader('brand', 'Brand')}
                 {renderSortableHeader('distributor_name', 'Distributor')}
-                <th className="text-center">Outlet</th>
                 {renderSortableHeader('pack', 'Pack', 'text-center')}
                 {renderSortableHeader('size', 'Size', 'text-center')}
                 {renderSortableHeader('unit', 'Unit', 'text-center')}
@@ -792,18 +791,6 @@ function Products() {
                       <option value="">Distributor</option>
                       {distributors.map(d => (
                         <option key={d.id} value={d.id}>{d.name}</option>
-                      ))}
-                    </select>
-                  </td>
-                  <td>
-                    <select
-                      value={newProduct.outlet_id}
-                      onChange={(e) => setNewProduct({ ...newProduct, outlet_id: e.target.value })}
-                      className="inline-edit-select"
-                    >
-                      <option value="">Outlet *</option>
-                      {outlets.filter(o => o.id !== 'all').map(outlet => (
-                        <option key={outlet.id} value={outlet.id}>{outlet.name}</option>
                       ))}
                     </select>
                   </td>
@@ -870,9 +857,6 @@ function Products() {
                   <td className="product-name">{renderEditableCell(product, 'name', product.name)}</td>
                   <td className="brand-cell">{renderEditableCell(product, 'brand', product.brand)}</td>
                   <td className="distributor-cell">{product.distributor_name}</td>
-                  <td className="text-center">
-                    <OutletBadge outletId={product.outlet_id} />
-                  </td>
                   <td className="text-center">{renderEditableCell(product, 'pack', product.pack)}</td>
                   <td className="text-center">{renderEditableCell(product, 'size', product.size)}</td>
                   <td className="text-center">{renderEditableCell(product, 'unit_id', product.unit_abbreviation)}</td>
