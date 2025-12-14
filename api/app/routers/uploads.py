@@ -460,16 +460,19 @@ async def upload_csv(
 
     with get_db() as conn:
         cursor = conn.cursor()
+        print(f"[CSV Upload] Database connection established")
 
         try:
             # Get distributor ID
             distributor_id = get_distributor_id(cursor, distributor_code)
+            print(f"[CSV Upload] Distributor ID: {distributor_id}")
 
             # Create import batch with organization_id and outlet_id
             cursor.execute("""
                 INSERT INTO import_batches (id, distributor_id, filename, import_date, organization_id, outlet_id)
                 VALUES (%s, %s, %s, %s, %s, %s)
             """, (batch_id, distributor_id, file.filename, datetime.now(), organization_id, outlet_id))
+            print(f"[CSV Upload] Import batch created")
 
             # Process each row
             for idx, row in df.iterrows():
