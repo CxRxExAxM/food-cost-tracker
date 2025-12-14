@@ -458,11 +458,11 @@ async def upload_csv(
 
     print(f"[CSV Upload] Starting database import, batch_id: {batch_id}")
 
-    with get_db() as conn:
-        cursor = conn.cursor()
-        print(f"[CSV Upload] Database connection established")
+    try:
+        with get_db() as conn:
+            cursor = conn.cursor()
+            print(f"[CSV Upload] Database connection established")
 
-        try:
             # Get distributor ID
             distributor_id = get_distributor_id(cursor, distributor_code)
             print(f"[CSV Upload] Distributor ID: {distributor_id}")
@@ -602,13 +602,12 @@ async def upload_csv(
                 errors=errors
             )
 
-        except Exception as e:
-            conn.rollback()
-            # Log the full error for debugging
-            import traceback
-            print(f"[ERROR] Upload failed: {str(e)}")
-            traceback.print_exc()
-            raise HTTPException(status_code=500, detail=f"Import failed: {str(e)}")
+    except Exception as e:
+        # Log the full error for debugging
+        import traceback
+        print(f"[ERROR] Upload failed: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Import failed: {str(e)}")
 
 
 @router.get("/history")
