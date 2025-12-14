@@ -220,6 +220,75 @@ def delete_outlet(
         return None
 
 
+@router.get("/organization/stats")
+def get_organization_stats(
+    current_user: dict = Depends(get_current_user)
+):
+    """Get aggregate statistics for the entire organization."""
+    org_id = current_user["organization_id"]
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Get organization name
+        cursor.execute("""
+            SELECT name FROM organizations WHERE id = %s
+        """, (org_id,))
+        org = dict_from_row(cursor.fetchone())
+
+        if not org:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Organization not found"
+            )
+
+        # Count all products in organization
+        cursor.execute("""
+            SELECT COUNT(*) as count FROM products
+            WHERE organization_id = %s AND is_active = 1
+        """, (org_id,))
+        product_count = cursor.fetchone()["count"]
+
+        # Count all recipes in organization
+        cursor.execute("""
+            SELECT COUNT(*) as count FROM recipes
+            WHERE organization_id = %s AND is_active = 1
+        """, (org_id,))
+        recipe_count = cursor.fetchone()["count"]
+
+        # Count all users in organization
+        cursor.execute("""
+            SELECT COUNT(*) as count FROM users
+            WHERE organization_id = %s AND is_active = 1
+        """, (org_id,))
+        user_count = cursor.fetchone()["count"]
+
+        # Count all outlets in organization
+        cursor.execute("""
+            SELECT COUNT(*) as count FROM outlets
+            WHERE organization_id = %s AND is_active = 1
+        """, (org_id,))
+        outlet_count = cursor.fetchone()["count"]
+
+        # Count all imports in organization
+        cursor.execute("""
+            SELECT COUNT(*) as count FROM import_batches ib
+            JOIN outlets o ON o.id = ib.outlet_id
+            WHERE o.organization_id = %s
+        """, (org_id,))
+        import_count = cursor.fetchone()["count"]
+
+        return {
+            "organization_id": org_id,
+            "organization_name": org["name"],
+            "products_count": product_count,
+            "recipes_count": recipe_count,
+            "users_count": user_count,
+            "outlets_count": outlet_count,
+            "imports_count": import_count
+        }
+
+
 @router.get("/{outlet_id}/stats")
 def get_outlet_stats(
     outlet_id: int,

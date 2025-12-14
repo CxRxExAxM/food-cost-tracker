@@ -19,6 +19,12 @@ export const outletsAPI = {
   get: (outletId) => api.get(`/outlets/${outletId}`),
 
   /**
+   * Get organization statistics (products, recipes, users, outlets, imports)
+   * @returns {Promise} Statistics object
+   */
+  getOrganizationStats: () => api.get('/outlets/organization/stats'),
+
+  /**
    * Get outlet statistics (products count, recipes count, users count)
    * @param {number} outletId - Outlet ID
    * @returns {Promise} Statistics object

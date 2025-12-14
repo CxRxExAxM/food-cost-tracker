@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useOutlet } from '../contexts/OutletContext';
 import Navigation from '../components/Navigation';
+import OrgCard from '../components/outlets/OrgCard';
 import OutletCard from '../components/outlets/OutletCard';
 import CreateOutletModal from '../components/outlets/CreateOutletModal';
 import './Outlets.css';
@@ -56,6 +57,9 @@ export default function Outlets() {
             </button>
           )}
         </div>
+
+        {/* Organization Overview Card */}
+        <OrgCard />
 
         {/* Search and View Controls */}
         <div className="outlets-controls">
