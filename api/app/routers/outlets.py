@@ -246,15 +246,15 @@ def get_outlet_stats(
             )
 
         # Get counts (based on which outlet has imported/used the products)
+        # Uses price_history.outlet_id which was added in migration 002
         cursor.execute("""
             SELECT COUNT(DISTINCT p.id) as count
             FROM products p
             WHERE p.is_active = 1
             AND EXISTS (
                 SELECT 1 FROM price_history ph
-                JOIN import_batches ib ON ib.id = ph.import_batch_id
                 JOIN distributor_products dp ON dp.id = ph.distributor_product_id
-                WHERE dp.product_id = p.id AND ib.outlet_id = %s
+                WHERE dp.product_id = p.id AND ph.outlet_id = %s
             )
         """, (outlet_id,))
         product_count = cursor.fetchone()["count"]
