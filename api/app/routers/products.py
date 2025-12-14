@@ -131,11 +131,13 @@ def list_products(
         params = outlet_params
 
         # If specific outlet requested, show products imported by this outlet
-        # Use EXISTS to check if product has any distributor_products entry for this outlet
+        # Check import_batches to see which outlets have uploaded this product
         if outlet_id is not None:
             where_clause += """ AND EXISTS (
-                SELECT 1 FROM distributor_products dp_filter
-                WHERE dp_filter.product_id = p.id AND dp_filter.outlet_id = %s
+                SELECT 1 FROM price_history ph_filter
+                JOIN import_batches ib ON ib.id = ph_filter.import_batch_id
+                JOIN distributor_products dp_filter ON dp_filter.id = ph_filter.distributor_product_id
+                WHERE dp_filter.product_id = p.id AND ib.outlet_id = %s
             )"""
             params.append(outlet_id)
 
