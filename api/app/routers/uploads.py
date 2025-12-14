@@ -558,25 +558,25 @@ async def upload_csv(
                         """, (distributor_id, product_id, sku, product_name, organization_id, outlet_id))
                         distributor_product_id = cursor.fetchone()["id"]
 
-                    # Insert/update price
+                    # Insert/update price (per outlet - allows different outlets to have different prices)
                     if case_price is not None:
                         cursor.execute("""
                             SELECT id FROM price_history
-                            WHERE distributor_product_id = %s AND effective_date = %s
-                        """, (distributor_product_id, eff_date))
+                            WHERE distributor_product_id = %s AND outlet_id = %s AND effective_date = %s
+                        """, (distributor_product_id, outlet_id, eff_date))
 
                         if cursor.fetchone():
                             cursor.execute("""
                                 UPDATE price_history
                                 SET case_price = %s, unit_price = %s, import_batch_id = %s
-                                WHERE distributor_product_id = %s AND effective_date = %s
-                            """, (case_price, unit_price, batch_id, distributor_product_id, eff_date))
+                                WHERE distributor_product_id = %s AND outlet_id = %s AND effective_date = %s
+                            """, (case_price, unit_price, batch_id, distributor_product_id, outlet_id, eff_date))
                             updated_prices += 1
                         else:
                             cursor.execute("""
-                                INSERT INTO price_history (distributor_product_id, case_price, unit_price, effective_date, import_batch_id)
-                                VALUES (%s, %s, %s, %s, %s)
-                            """, (distributor_product_id, case_price, unit_price, eff_date, batch_id))
+                                INSERT INTO price_history (distributor_product_id, outlet_id, case_price, unit_price, effective_date, import_batch_id)
+                                VALUES (%s, %s, %s, %s, %s, %s)
+                            """, (distributor_product_id, outlet_id, case_price, unit_price, eff_date, batch_id))
 
                     rows_imported += 1
                     # Release savepoint on success
