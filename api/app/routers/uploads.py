@@ -366,6 +366,9 @@ async def upload_csv(
     - All products are assigned to the specified outlet
     - Returns import statistics
     """
+    import traceback
+    print(f"[CSV Upload] Received upload request - distributor: {distributor_code}, outlet_id: {outlet_id}, user: {current_user.get('email')}")
+
     # Validate file type
     filename_lower = file.filename.lower()
     if not (filename_lower.endswith('.csv') or filename_lower.endswith('.xlsx') or filename_lower.endswith('.xls')):
@@ -417,6 +420,8 @@ async def upload_csv(
         # Outlet specified - verify user has access
         if not check_outlet_access(current_user, outlet_id):
             raise HTTPException(status_code=403, detail="You don't have access to this outlet")
+
+    print(f"[CSV Upload] Using outlet_id: {outlet_id}, organization_id: {organization_id}")
 
     # Read file content
     try:

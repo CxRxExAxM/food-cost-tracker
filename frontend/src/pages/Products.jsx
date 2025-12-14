@@ -146,7 +146,7 @@ function Products() {
     formData.append('file', uploadFile);
     formData.append('distributor_code', selectedDistributor);
     formData.append('effective_date', effectiveDate);
-    formData.append('outlet_id', currentOutlet.id);
+    formData.append('outlet_id', String(currentOutlet.id));
 
     try {
       const response = await axios.post(`${API_URL}/uploads/csv`, formData, {
