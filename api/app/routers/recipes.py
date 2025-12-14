@@ -14,10 +14,13 @@ def list_recipes(
     limit: int = Query(1000, ge=1, le=10000),
     search: Optional[str] = None,
     category_path: Optional[str] = None,
+    outlet_id: Optional[int] = None,
     current_user: dict = Depends(get_current_user)
 ):
     """
-    List recipes with optional filtering .
+    List recipes with optional filtering.
+
+    - **outlet_id**: Filter by specific outlet (must be one user has access to)
     """
     with get_db() as conn:
         cursor = conn.cursor()
@@ -26,6 +29,11 @@ def list_recipes(
         outlet_filter, outlet_params = build_outlet_filter(current_user, "")
         query = f"SELECT * FROM recipes WHERE is_active = 1 AND {outlet_filter}"
         params = outlet_params
+
+        # If specific outlet requested, add additional filter
+        if outlet_id is not None:
+            query += " AND outlet_id = %s"
+            params.append(outlet_id)
 
         if search:
             query += " AND name LIKE %s"

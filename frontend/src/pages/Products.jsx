@@ -133,6 +133,12 @@ function Products() {
       return;
     }
 
+    // Validate outlet selection
+    if (!currentOutlet || currentOutlet.id === 'all') {
+      alert('Please select a specific outlet before uploading. Products cannot be uploaded to "All Outlets".');
+      return;
+    }
+
     setUploading(true);
     setUploadResult(null);
 
@@ -140,6 +146,7 @@ function Products() {
     formData.append('file', uploadFile);
     formData.append('distributor_code', selectedDistributor);
     formData.append('effective_date', effectiveDate);
+    formData.append('outlet_id', currentOutlet.id);
 
     try {
       const response = await axios.post(`${API_URL}/uploads/csv`, formData, {
@@ -605,6 +612,13 @@ function Products() {
                     onChange={(e) => setEffectiveDate(e.target.value)}
                     className="upload-date"
                   />
+                </div>
+
+                <div className="upload-field">
+                  <label>Upload to:</label>
+                  <div style={{ padding: '0.5rem 0' }}>
+                    <OutletBadge outletId={currentOutlet?.id !== 'all' ? currentOutlet?.id : null} outletName={currentOutlet?.id !== 'all' ? currentOutlet?.name : 'Please select an outlet'} />
+                  </div>
                 </div>
               </div>
 

@@ -104,6 +104,7 @@ def list_products(
     distributor_id: Optional[int] = None,
     common_product_id: Optional[int] = None,
     unmapped_only: bool = False,
+    outlet_id: Optional[int] = None,
     sort_by: str = Query("name", description="Column to sort by"),
     sort_dir: str = Query("asc", description="Sort direction: asc or desc"),
     current_user: dict = Depends(get_current_user)
@@ -117,6 +118,7 @@ def list_products(
     - **distributor_id**: Filter by distributor
     - **common_product_id**: Filter by common product mapping
     - **unmapped_only**: Show only products not mapped to common_products
+    - **outlet_id**: Filter by specific outlet (must be one user has access to)
     - **sort_by**: Column to sort by (name, brand, distributor_name, pack, size, case_price, unit_price)
     - **sort_dir**: Sort direction (asc or desc)
     """
@@ -127,6 +129,11 @@ def list_products(
         outlet_filter, outlet_params = build_outlet_filter(current_user, "p")
         where_clause = f"WHERE p.is_active = 1 AND {outlet_filter}"
         params = outlet_params
+
+        # If specific outlet requested, add additional filter
+        if outlet_id is not None:
+            where_clause += " AND p.outlet_id = %s"
+            params.append(outlet_id)
 
         if search:
             where_clause += " AND (p.name LIKE %s OR p.brand LIKE %s)"
