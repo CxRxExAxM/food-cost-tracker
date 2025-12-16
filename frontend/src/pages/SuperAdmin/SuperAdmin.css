@@ -14,6 +14,13 @@
   gap: 0.5rem;
   margin-bottom: 2rem;
   border-bottom: 2px solid var(--border-default, #3d3d3d);
+  align-items: center;
+  justify-content: space-between;
+}
+
+.super-admin-tabs {
+  display: flex;
+  gap: 0.5rem;
 }
 
 .super-admin-tab {
@@ -35,6 +42,28 @@
 .super-admin-tab.active {
   color: var(--color-red-bright, #ff4d4f);
   border-bottom-color: var(--color-red-bright, #ff4d4f);
+}
+
+.return-to-main-btn {
+  padding: 0.5rem 1rem;
+  background: var(--bg-tertiary, #2d2d2d);
+  border: 1px solid var(--border-default, #3d3d3d);
+  color: var(--text-primary, #e6e6e6);
+  text-decoration: none;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.return-to-main-btn:hover {
+  background: var(--bg-elevated, #323232);
+  border-color: var(--color-yellow, #d4a72c);
+  color: var(--color-yellow-bright, #fadb14);
+  transform: translateY(-1px);
 }
 
 .super-admin-dashboard h1,

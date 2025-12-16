@@ -60,6 +60,8 @@ class UserResponse(BaseModel):
     is_active: bool
     organization_id: int
     is_super_admin: bool = False
+    organization_name: Optional[str] = None
+    organization_tier: Optional[str] = None
 
 
 class UserUpdate(BaseModel):
