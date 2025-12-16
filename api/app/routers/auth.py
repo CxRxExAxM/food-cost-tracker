@@ -192,7 +192,9 @@ def get_current_user_info(current_user: dict = Depends(get_current_user)):
         "organization_id": current_user["organization_id"],
         "is_super_admin": bool(current_user.get("is_super_admin", 0)),
         "organization_name": org_name,
-        "organization_tier": org_tier
+        "organization_tier": org_tier,
+        "impersonating": bool(current_user.get("impersonating", False)),
+        "original_super_admin_email": current_user.get("original_super_admin_email")
     }
 
 

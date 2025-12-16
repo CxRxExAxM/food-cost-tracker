@@ -62,6 +62,8 @@ class UserResponse(BaseModel):
     is_super_admin: bool = False
     organization_name: Optional[str] = None
     organization_tier: Optional[str] = None
+    impersonating: bool = False
+    original_super_admin_email: Optional[str] = None
 
 
 class UserUpdate(BaseModel):

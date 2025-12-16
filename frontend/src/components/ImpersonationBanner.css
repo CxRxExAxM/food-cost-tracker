@@ -1,0 +1,71 @@
+/* Impersonation Banner */
+.impersonation-banner {
+  background: linear-gradient(90deg, rgba(212, 167, 44, 0.2), rgba(250, 219, 20, 0.15));
+  border-bottom: 2px solid var(--color-yellow, #d4a72c);
+  padding: 0.75rem 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 999;
+  backdrop-filter: blur(8px);
+}
+
+.impersonation-content {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.impersonation-icon {
+  font-size: 1.25rem;
+}
+
+.impersonation-text {
+  color: var(--text-primary, #e6e6e6);
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.impersonation-text strong {
+  color: var(--color-yellow-bright, #fadb14);
+  font-weight: 700;
+}
+
+.original-user {
+  color: var(--text-secondary, #a3a3a3);
+  font-size: 0.8125rem;
+  margin-left: 0.5rem;
+}
+
+.exit-impersonation-btn {
+  background: var(--color-red, #d43438);
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.exit-impersonation-btn:hover {
+  background: var(--color-red-bright, #ff4d4f);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(212, 52, 56, 0.3);
+}
+
+@media (max-width: 768px) {
+  .impersonation-banner {
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 1rem;
+  }
+
+  .exit-impersonation-btn {
+    width: 100%;
+  }
+}

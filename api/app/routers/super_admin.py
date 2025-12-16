@@ -4,9 +4,9 @@ Super Admin router - Platform owner dashboard for managing all organizations.
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timedelta
 
-from ..auth import get_current_super_admin
+from ..auth import get_current_super_admin, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES, Token
 from ..database import get_db, dict_from_row
 
 
@@ -401,3 +401,122 @@ def list_all_users(
 
         users = [dict_from_row(row) for row in cursor.fetchall()]
         return users
+
+
+@router.post("/impersonate/{organization_id}", response_model=Token)
+def impersonate_organization(
+    organization_id: int,
+    current_user: dict = Depends(get_current_super_admin)
+):
+    """
+    Impersonate an organization as an admin user.
+    Super admin only. Creates a temporary admin session for the specified organization.
+    """
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Verify organization exists
+        cursor.execute("""
+            SELECT id, name, slug, subscription_status
+            FROM organizations
+            WHERE id = %s
+        """, (organization_id,))
+
+        org = dict_from_row(cursor.fetchone())
+        if not org:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Organization not found"
+            )
+
+        # Find an admin user in this organization (or create impersonation record)
+        cursor.execute("""
+            SELECT id, email, username, full_name, role
+            FROM users
+            WHERE organization_id = %s AND role = 'admin' AND is_active = 1
+            ORDER BY id
+            LIMIT 1
+        """, (organization_id,))
+
+        admin_user = dict_from_row(cursor.fetchone())
+
+        if not admin_user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No active admin user found in this organization"
+            )
+
+        # Create impersonation token
+        # Include both impersonated user info and original super admin ID
+        access_token = create_access_token(
+            data={
+                "sub": str(admin_user["id"]),
+                "email": admin_user["email"],
+                "role": admin_user["role"],
+                "organization_id": organization_id,
+                "impersonating": True,
+                "original_super_admin_id": current_user["id"],
+                "original_super_admin_email": current_user["email"]
+            },
+            expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        )
+
+        return {
+            "access_token": access_token,
+            "token_type": "bearer"
+        }
+
+
+@router.post("/exit-impersonation", response_model=Token)
+def exit_impersonation(current_user: dict = Depends(get_current_super_admin)):
+    """
+    Exit impersonation mode and return to original super admin session.
+    Extracts original super admin info from the impersonation token.
+    """
+    if not current_user.get("impersonating"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Not currently impersonating"
+        )
+
+    original_super_admin_id = current_user.get("original_super_admin_id")
+    original_super_admin_email = current_user.get("original_super_admin_email")
+
+    if not original_super_admin_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Original super admin info not found in token"
+        )
+
+    # Fetch original super admin user details
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT id, email, username, full_name, role, organization_id, is_super_admin
+            FROM users
+            WHERE id = %s AND is_super_admin = 1
+        """, (original_super_admin_id,))
+
+        super_admin = dict_from_row(cursor.fetchone())
+
+        if not super_admin:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Original super admin user not found"
+            )
+
+    # Create new token for original super admin
+    access_token = create_access_token(
+        data={
+            "sub": str(super_admin["id"]),
+            "email": super_admin["email"],
+            "role": super_admin["role"],
+            "organization_id": super_admin["organization_id"]
+        },
+        expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    )
+
+    return {
+        "access_token": access_token,
+        "token_type": "bearer"
+    }
