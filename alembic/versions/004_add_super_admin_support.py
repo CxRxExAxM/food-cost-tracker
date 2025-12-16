@@ -1,7 +1,7 @@
 """Add super admin support
 
-Revision ID: 004_add_super_admin
-Revises: 003_add_outlets_support
+Revision ID: 004
+Revises: 003
 Create Date: 2024-12-16
 
 """
@@ -10,8 +10,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '004_add_super_admin'
-down_revision = '003_add_outlets_support'
+revision = '004'
+down_revision = '003'
 branch_labels = None
 depends_on = None
 
