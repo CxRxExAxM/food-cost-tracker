@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import axios from '../../lib/axios';
 import './SuperAdmin.css';
 
 export default function SuperAdminDashboard() {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
+  const location = useLocation();
 
   useEffect(() => {
     fetchStats();
@@ -38,6 +40,21 @@ export default function SuperAdminDashboard() {
 
   return (
     <div className="super-admin-dashboard">
+      <div className="super-admin-nav">
+        <Link
+          to="/super-admin"
+          className={`super-admin-tab ${location.pathname === '/super-admin' ? 'active' : ''}`}
+        >
+          Dashboard
+        </Link>
+        <Link
+          to="/super-admin/organizations"
+          className={`super-admin-tab ${location.pathname === '/super-admin/organizations' ? 'active' : ''}`}
+        >
+          Organizations
+        </Link>
+      </div>
+
       <h1>Platform Overview</h1>
       <p className="subtitle">RestauranTek Platform Statistics</p>
 

@@ -8,6 +8,35 @@
   min-height: calc(100vh - 60px);
 }
 
+/* Super Admin Navigation Tabs */
+.super-admin-nav {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 2rem;
+  border-bottom: 2px solid var(--border-default, #3d3d3d);
+}
+
+.super-admin-tab {
+  padding: 0.75rem 1.5rem;
+  color: var(--text-secondary, #a3a3a3);
+  text-decoration: none;
+  font-weight: 500;
+  font-size: 0.875rem;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: all 0.15s ease;
+}
+
+.super-admin-tab:hover {
+  color: var(--text-primary, #e6e6e6);
+  background: var(--bg-tertiary, #2d2d2d);
+}
+
+.super-admin-tab.active {
+  color: var(--color-red-bright, #ff4d4f);
+  border-bottom-color: var(--color-red-bright, #ff4d4f);
+}
+
 .super-admin-dashboard h1,
 .super-admin-organizations h1 {
   font-size: 2rem;

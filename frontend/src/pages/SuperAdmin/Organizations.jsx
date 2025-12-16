@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import axios from '../../lib/axios';
 import './SuperAdmin.css';
 
@@ -7,6 +8,7 @@ export default function SuperAdminOrganizations() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [tierFilter, setTierFilter] = useState('');
+  const location = useLocation();
 
   // Modal states
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -120,6 +122,21 @@ export default function SuperAdminOrganizations() {
 
   return (
     <div className="super-admin-organizations">
+      <div className="super-admin-nav">
+        <Link
+          to="/super-admin"
+          className={`super-admin-tab ${location.pathname === '/super-admin' ? 'active' : ''}`}
+        >
+          Dashboard
+        </Link>
+        <Link
+          to="/super-admin/organizations"
+          className={`super-admin-tab ${location.pathname === '/super-admin/organizations' ? 'active' : ''}`}
+        >
+          Organizations
+        </Link>
+      </div>
+
       <div className="organizations-header">
         <div>
           <h1>Organizations</h1>
