@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import axios from '../lib/axios';
 import Navigation from '../components/Navigation';
+import { useOutlet } from '../contexts/OutletContext';
+import OutletBadge from '../components/outlets/OutletBadge';
 import './Products.css';
 
 const API_URL = import.meta.env.VITE_API_URL ?? '';
@@ -26,6 +28,7 @@ const ALLERGENS = [
 ];
 
 function Products() {
+  const { currentOutlet, outlets } = useOutlet();
   const [products, setProducts] = useState([]);
   const [commonProducts, setCommonProducts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -64,7 +67,8 @@ function Products() {
     size: '',
     unit_id: '',
     is_catch_weight: false,
-    case_price: ''
+    case_price: '',
+    outlet_id: currentOutlet?.id && currentOutlet.id !== 'all' ? currentOutlet.id : ''
   });
 
   useEffect(() => {
@@ -72,7 +76,7 @@ function Products() {
     fetchCommonProducts();
     fetchDistributors();
     fetchUnits();
-  }, [search, unmappedOnly, sortColumn, sortDirection]);
+  }, [search, unmappedOnly, sortColumn, sortDirection, currentOutlet]);
 
   const fetchProducts = async () => {
     try {
@@ -82,7 +86,9 @@ function Products() {
         sort_by: sortColumn,
         sort_dir: sortDirection,
         ...(search && { search }),
-        ...(unmappedOnly && { unmapped_only: true })
+        ...(unmappedOnly && { unmapped_only: true }),
+        // Filter by outlet if specific outlet selected (not "All Outlets")
+        ...(currentOutlet && currentOutlet.id !== 'all' && { outlet_id: currentOutlet.id })
       };
       const response = await axios.get(`${API_URL}/products`, { params });
       setProducts(response.data.products);
@@ -127,6 +133,12 @@ function Products() {
       return;
     }
 
+    // Validate outlet selection
+    if (!currentOutlet || currentOutlet.id === 'all') {
+      alert('Please select a specific outlet before uploading. Products cannot be uploaded to "All Outlets".');
+      return;
+    }
+
     setUploading(true);
     setUploadResult(null);
 
@@ -134,6 +146,7 @@ function Products() {
     formData.append('file', uploadFile);
     formData.append('distributor_code', selectedDistributor);
     formData.append('effective_date', effectiveDate);
+    formData.append('outlet_id', String(currentOutlet.id));
 
     try {
       const response = await axios.post(`${API_URL}/uploads/csv`, formData, {
@@ -377,7 +390,8 @@ function Products() {
         unit_id: newProduct.unit_id ? parseInt(newProduct.unit_id) : null,
         is_catch_weight: newProduct.is_catch_weight,
         distributor_id: newProduct.distributor_id ? parseInt(newProduct.distributor_id) : null,
-        case_price: newProduct.case_price ? parseFloat(newProduct.case_price) : null
+        case_price: newProduct.case_price ? parseFloat(newProduct.case_price) : null,
+        outlet_id: newProduct.outlet_id ? parseInt(newProduct.outlet_id) : null
       };
 
       await axios.post(`${API_URL}/products`, productData);
@@ -598,6 +612,13 @@ function Products() {
                     onChange={(e) => setEffectiveDate(e.target.value)}
                     className="upload-date"
                   />
+                </div>
+
+                <div className="upload-field">
+                  <label>Upload to:</label>
+                  <div style={{ padding: '0.5rem 0' }}>
+                    <OutletBadge outletId={currentOutlet?.id !== 'all' ? currentOutlet?.id : null} outletName={currentOutlet?.id !== 'all' ? currentOutlet?.name : 'Please select an outlet'} />
+                  </div>
                 </div>
               </div>
 

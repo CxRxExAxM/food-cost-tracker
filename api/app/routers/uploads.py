@@ -12,7 +12,7 @@ import uuid
 import re
 
 from ..database import get_db
-from ..auth import get_current_user
+from ..auth import get_current_user, check_outlet_access, get_user_outlet_ids
 
 router = APIRouter(prefix="/uploads", tags=["uploads"])
 
@@ -354,6 +354,7 @@ async def upload_csv(
     file: UploadFile = File(...),
     distributor_code: str = Form(...),
     effective_date: Optional[str] = Form(None),
+    outlet_id: Optional[int] = Form(None),
     current_user: dict = Depends(get_current_user)
 ):
     """
@@ -362,8 +363,12 @@ async def upload_csv(
     - Supports .csv, .xlsx, and .xls files
     - Applies vendor-specific cleaning rules
     - Imports products and prices into the database
+    - All products are assigned to the specified outlet
     - Returns import statistics
     """
+    import traceback
+    print(f"[CSV Upload] Received upload request - distributor: {distributor_code}, outlet_id: {outlet_id}, user: {current_user.get('email')}")
+
     # Validate file type
     filename_lower = file.filename.lower()
     if not (filename_lower.endswith('.csv') or filename_lower.endswith('.xlsx') or filename_lower.endswith('.xls')):
@@ -385,6 +390,36 @@ async def upload_csv(
     else:
         eff_date = date.today()
 
+    # Determine outlet_id for import
+    organization_id = current_user["organization_id"]
+
+    if not outlet_id:
+        # No outlet specified - get first available outlet for user
+        with get_db() as conn:
+            cursor = conn.cursor()
+            user_outlet_ids = get_user_outlet_ids(current_user["id"])
+
+            if not user_outlet_ids:
+                # Org-wide admin - use first outlet in organization
+                cursor.execute("""
+                    SELECT id FROM outlets
+                    WHERE organization_id = %s AND is_active = 1
+                    ORDER BY id LIMIT 1
+                """, (organization_id,))
+                outlet_row = cursor.fetchone()
+                if not outlet_row:
+                    raise HTTPException(status_code=400, detail="No active outlets found in organization")
+                outlet_id = outlet_row["id"]
+            else:
+                # Use user's first assigned outlet
+                outlet_id = user_outlet_ids[0]
+    else:
+        # Outlet specified - verify user has access
+        if not check_outlet_access(current_user, outlet_id):
+            raise HTTPException(status_code=403, detail="You don't have access to this outlet")
+
+    print(f"[CSV Upload] Using outlet_id: {outlet_id}, organization_id: {organization_id}")
+
     # Read file content
     try:
         content = await file.read()
@@ -397,11 +432,18 @@ async def upload_csv(
         else:
             # .xls file (older Excel format)
             df = pd.read_excel(io.BytesIO(content), header=config["header_row"], engine='xlrd')
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Error reading file: {str(e)}")
 
-    # Apply cleaning
-    df = clean_dataframe(df, distributor_code)
+        print(f"[CSV Upload] File read successfully, {len(df)} rows")
+
+        # Apply cleaning
+        df = clean_dataframe(df, distributor_code)
+        print(f"[CSV Upload] Data cleaned successfully")
+
+    except Exception as e:
+        import traceback
+        print(f"[ERROR] File processing failed: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=400, detail=f"Error processing file: {str(e)}")
 
     # Import to database
     errors = []
@@ -411,19 +453,23 @@ async def upload_csv(
     updated_prices = 0
     batch_id = str(uuid.uuid4())
 
-    with get_db() as conn:
-        cursor = conn.cursor()
+    print(f"[CSV Upload] Starting database import, batch_id: {batch_id}")
 
-        try:
+    try:
+        with get_db() as conn:
+            cursor = conn.cursor()
+            print(f"[CSV Upload] Database connection established")
+
             # Get distributor ID
             distributor_id = get_distributor_id(cursor, distributor_code)
+            print(f"[CSV Upload] Distributor ID: {distributor_id}")
 
-            # Create import batch with organization_id
-            organization_id = current_user["organization_id"]
+            # Create import batch with organization_id and outlet_id
             cursor.execute("""
-                INSERT INTO import_batches (id, distributor_id, filename, import_date, organization_id)
-                VALUES (%s, %s, %s, %s, %s)
-            """, (batch_id, distributor_id, file.filename, datetime.now(), organization_id))
+                INSERT INTO import_batches (id, distributor_id, filename, import_date, organization_id, outlet_id)
+                VALUES (%s, %s, %s, %s, %s, %s)
+            """, (batch_id, distributor_id, file.filename, datetime.now(), organization_id, outlet_id))
+            print(f"[CSV Upload] Import batch created")
 
             # Process each row
             for idx, row in df.iterrows():
@@ -461,7 +507,8 @@ async def upload_csv(
 
                     unit_id = get_unit_id(cursor, unit_abbr) if unit_abbr else None
 
-                    # Check if product exists in this organization
+                    # Check if product exists in this organization (products are shared across outlets)
+                    # Also check for existing distributor_product link by SKU to avoid unique constraint violation
                     cursor.execute("""
                         SELECT p.id as product_id, dp.id as distributor_product_id
                         FROM products p
@@ -469,7 +516,17 @@ async def upload_csv(
                             AND dp.distributor_id = %s
                         WHERE p.name = %s AND (p.brand = %s OR (p.brand IS NULL AND %s IS NULL))
                               AND p.pack = %s AND p.size = %s AND p.organization_id = %s
-                    """, (distributor_id, product_name, brand, brand, pack, size, organization_id))
+
+                        UNION
+
+                        SELECT p.id as product_id, dp.id as distributor_product_id
+                        FROM distributor_products dp
+                        JOIN products p ON p.id = dp.product_id
+                        WHERE dp.organization_id = %s AND dp.distributor_id = %s AND dp.distributor_sku = %s
+
+                        LIMIT 1
+                    """, (distributor_id, product_name, brand, brand, pack, size, organization_id,
+                          organization_id, distributor_id, sku))
 
                     existing = cursor.fetchone()
 
@@ -479,47 +536,47 @@ async def upload_csv(
 
                         if not distributor_product_id:
                             cursor.execute("""
-                                INSERT INTO distributor_products (distributor_id, product_id, distributor_sku, distributor_name, organization_id)
-                                VALUES (%s, %s, %s, %s, %s)
+                                INSERT INTO distributor_products (distributor_id, product_id, distributor_sku, distributor_name, organization_id, outlet_id)
+                                VALUES (%s, %s, %s, %s, %s, %s)
                                 RETURNING id
-                            """, (distributor_id, product_id, sku, product_name, organization_id))
+                            """, (distributor_id, product_id, sku, product_name, organization_id, outlet_id))
                             distributor_product_id = cursor.fetchone()["id"]
                     else:
-                        # Create new product with organization_id
+                        # Create new product with organization_id and outlet_id
                         cursor.execute("""
-                            INSERT INTO products (name, brand, pack, size, unit_id, is_catch_weight, organization_id)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s)
+                            INSERT INTO products (name, brand, pack, size, unit_id, is_catch_weight, organization_id, outlet_id)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                             RETURNING id
-                        """, (product_name, brand, pack, size, unit_id, int(is_catch_weight), organization_id))
+                        """, (product_name, brand, pack, size, unit_id, int(is_catch_weight), organization_id, outlet_id))
                         product_id = cursor.fetchone()["id"]
                         new_products += 1
 
                         cursor.execute("""
-                            INSERT INTO distributor_products (distributor_id, product_id, distributor_sku, distributor_name, organization_id)
-                            VALUES (%s, %s, %s, %s, %s)
+                            INSERT INTO distributor_products (distributor_id, product_id, distributor_sku, distributor_name, organization_id, outlet_id)
+                            VALUES (%s, %s, %s, %s, %s, %s)
                             RETURNING id
-                        """, (distributor_id, product_id, sku, product_name, organization_id))
+                        """, (distributor_id, product_id, sku, product_name, organization_id, outlet_id))
                         distributor_product_id = cursor.fetchone()["id"]
 
-                    # Insert/update price
+                    # Insert/update price (per outlet - allows different outlets to have different prices)
                     if case_price is not None:
                         cursor.execute("""
                             SELECT id FROM price_history
-                            WHERE distributor_product_id = %s AND effective_date = %s
-                        """, (distributor_product_id, eff_date))
+                            WHERE distributor_product_id = %s AND outlet_id = %s AND effective_date = %s
+                        """, (distributor_product_id, outlet_id, eff_date))
 
                         if cursor.fetchone():
                             cursor.execute("""
                                 UPDATE price_history
                                 SET case_price = %s, unit_price = %s, import_batch_id = %s
-                                WHERE distributor_product_id = %s AND effective_date = %s
-                            """, (case_price, unit_price, batch_id, distributor_product_id, eff_date))
+                                WHERE distributor_product_id = %s AND outlet_id = %s AND effective_date = %s
+                            """, (case_price, unit_price, batch_id, distributor_product_id, outlet_id, eff_date))
                             updated_prices += 1
                         else:
                             cursor.execute("""
-                                INSERT INTO price_history (distributor_product_id, case_price, unit_price, effective_date, import_batch_id)
-                                VALUES (%s, %s, %s, %s, %s)
-                            """, (distributor_product_id, case_price, unit_price, eff_date, batch_id))
+                                INSERT INTO price_history (distributor_product_id, outlet_id, case_price, unit_price, effective_date, import_batch_id)
+                                VALUES (%s, %s, %s, %s, %s, %s)
+                            """, (distributor_product_id, outlet_id, case_price, unit_price, eff_date, batch_id))
 
                     rows_imported += 1
                     # Release savepoint on success
@@ -553,13 +610,12 @@ async def upload_csv(
                 errors=errors
             )
 
-        except Exception as e:
-            conn.rollback()
-            # Log the full error for debugging
-            import traceback
-            print(f"[ERROR] Upload failed: {str(e)}")
-            traceback.print_exc()
-            raise HTTPException(status_code=500, detail=f"Import failed: {str(e)}")
+    except Exception as e:
+        # Log the full error for debugging
+        import traceback
+        print(f"[ERROR] Upload failed: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Import failed: {str(e)}")
 
 
 @router.get("/history")

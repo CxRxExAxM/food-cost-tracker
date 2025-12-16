@@ -1,10 +1,12 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { OutletProvider } from './contexts/OutletContext';
 import Home from './pages/Home';
 import Products from './pages/Products';
 import Recipes from './pages/Recipes';
 import Users from './pages/Users';
 import Admin from './pages/Admin';
+import Outlets from './pages/Outlets';
 import Login from './pages/Login';
 import './App.css';
 
@@ -101,6 +103,14 @@ function AppRoutes() {
         }
       />
       <Route
+        path="/outlets"
+        element={
+          <ProtectedRoute>
+            <Outlets />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/admin"
         element={
           <ProtectedRoute>
@@ -116,9 +126,11 @@ function App() {
   return (
     <Router>
       <AuthProvider>
-        <div className="app">
-          <AppRoutes />
-        </div>
+        <OutletProvider>
+          <div className="app">
+            <AppRoutes />
+          </div>
+        </OutletProvider>
       </AuthProvider>
     </Router>
   );

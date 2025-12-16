@@ -5,7 +5,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from .routers import products, common_products, distributors, units, recipes, uploads, auth, organizations
+from .routers import products, common_products, distributors, units, recipes, uploads, auth, organizations, outlets
 from .db_startup import initialize_database
 
 app = FastAPI(
@@ -26,15 +26,16 @@ app.add_middleware(
 # Initialize database on startup (PostgreSQL with Alembic migrations)
 initialize_database()
 
-# Include routers
-app.include_router(auth.router)
-app.include_router(organizations.router)
-app.include_router(products.router)
-app.include_router(common_products.router)
-app.include_router(distributors.router)
-app.include_router(units.router)
-app.include_router(recipes.router)
-app.include_router(uploads.router)
+# Include routers with /api prefix
+app.include_router(auth.router, prefix="/api")
+app.include_router(organizations.router, prefix="/api")
+app.include_router(outlets.router, prefix="/api")
+app.include_router(products.router, prefix="/api")
+app.include_router(common_products.router, prefix="/api")
+app.include_router(distributors.router, prefix="/api")
+app.include_router(units.router, prefix="/api")
+app.include_router(recipes.router, prefix="/api")
+app.include_router(uploads.router, prefix="/api")
 
 
 # Note: Root endpoint is defined conditionally below based on whether frontend is built
@@ -65,10 +66,11 @@ if STATIC_DIR.exists() and (STATIC_DIR / "index.html").exists():
     @app.get("/{full_path:path}")
     async def serve_spa(request: Request, full_path: str):
         """Serve the React SPA for any non-API routes."""
-        # Don't serve index.html for API routes
+        # Don't serve index.html for API routes or special endpoints
         if full_path.startswith(("api/", "docs", "openapi.json", "health")):
             return {"detail": "Not found"}
 
+        # Serve index.html for all other routes (React Router will handle routing)
         index_file = STATIC_DIR / "index.html"
         return FileResponse(index_file)
 else:

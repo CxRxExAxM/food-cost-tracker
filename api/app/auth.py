@@ -180,3 +180,120 @@ def require_role(allowed_roles: list):
 require_admin = require_role(["admin"])
 require_chef_or_admin = require_role(["admin", "chef"])
 require_any_auth = require_role(["admin", "chef", "viewer"])
+
+
+# ============================================
+# Outlet Filtering Utilities
+# ============================================
+
+def get_user_outlet_ids(user_id: int) -> list:
+    """
+    Get list of outlet IDs that a user has access to.
+    Returns empty list if user has access to ALL outlets (org-wide admin).
+    """
+    from .database import get_db
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT outlet_id FROM user_outlets
+            WHERE user_id = %s
+        """, (user_id,))
+
+        rows = cursor.fetchall()
+
+        if not rows:
+            # No outlet assignments = org-wide admin
+            return []
+
+        return [row["outlet_id"] for row in rows]
+
+
+def build_outlet_filter(current_user: dict, table_alias: str = "") -> tuple:
+    """
+    Build SQL WHERE clause for outlet filtering.
+
+    Args:
+        current_user: User dict from get_current_user
+        table_alias: Optional table alias (e.g., "p" for products)
+
+    Returns:
+        Tuple of (where_clause, params)
+
+    Example:
+        where_clause, params = build_outlet_filter(current_user, "p")
+        query = f"SELECT * FROM products p WHERE {where_clause}"
+        cursor.execute(query, params)
+    """
+    outlet_ids = get_user_outlet_ids(current_user["id"])
+    prefix = f"{table_alias}." if table_alias else ""
+
+    if not outlet_ids:
+        # Org-wide admin - sees all outlets in organization
+        where_clause = f"{prefix}organization_id = %s"
+        params = [current_user["organization_id"]]
+    else:
+        # Outlet-scoped user - sees only assigned outlets
+        placeholders = ', '.join(['%s'] * len(outlet_ids))
+        where_clause = f"{prefix}organization_id = %s AND {prefix}outlet_id IN ({placeholders})"
+        params = [current_user["organization_id"]] + outlet_ids
+
+    return where_clause, params
+
+
+def check_outlet_access(current_user: dict, outlet_id: int) -> bool:
+    """
+    Check if user has access to a specific outlet.
+
+    Args:
+        current_user: User dict from get_current_user
+        outlet_id: Outlet ID to check
+
+    Returns:
+        True if user has access, False otherwise
+    """
+    # Check if outlet belongs to user's organization
+    from .database import get_db
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT id FROM outlets
+            WHERE id = %s AND organization_id = %s
+        """, (outlet_id, current_user["organization_id"]))
+
+        if not cursor.fetchone():
+            return False
+
+    # Get user's outlet access
+    outlet_ids = get_user_outlet_ids(current_user["id"])
+
+    if not outlet_ids:
+        # Org-wide admin - has access to all outlets
+        return True
+
+    # Check if outlet_id is in user's list
+    return outlet_id in outlet_ids
+
+
+def require_outlet_access(outlet_id: int):
+    """
+    Dependency to check outlet access.
+    Raises 403 if user doesn't have access to the outlet.
+
+    Usage:
+        @router.get("/products")
+        def list_products(
+            outlet_id: int,
+            current_user: dict = Depends(require_outlet_access(outlet_id))
+        ):
+            ...
+    """
+    async def outlet_access_checker(current_user: dict = Depends(get_current_user)):
+        if not check_outlet_access(current_user, outlet_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You don't have access to this outlet"
+            )
+        return current_user
+    return outlet_access_checker

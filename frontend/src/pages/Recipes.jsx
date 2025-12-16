@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import axios from '../lib/axios';
 import Navigation from '../components/Navigation';
+import { useOutlet } from '../contexts/OutletContext';
+import OutletBadge from '../components/outlets/OutletBadge';
 import './Recipes.css';
 
 const API_URL = import.meta.env.VITE_API_URL ?? '';
@@ -24,6 +26,7 @@ const ALLERGEN_ICONS = {
 };
 
 function Recipes() {
+  const { currentOutlet } = useOutlet();
   const [recipes, setRecipes] = useState([]);
   const [selectedRecipe, setSelectedRecipe] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -45,12 +48,17 @@ function Recipes() {
 
   useEffect(() => {
     fetchRecipes();
-  }, []);
+  }, [currentOutlet]);
 
   const fetchRecipes = async () => {
     try {
       setLoading(true);
-      const response = await axios.get(`${API_URL}/recipes`);
+      const params = {};
+      // Filter by outlet if specific outlet selected (not "All Outlets")
+      if (currentOutlet && currentOutlet.id !== 'all') {
+        params.outlet_id = currentOutlet.id;
+      }
+      const response = await axios.get(`${API_URL}/recipes`, { params });
       setRecipes(response.data);
     } catch (error) {
       console.error('Error fetching recipes:', error);
@@ -218,7 +226,16 @@ function Recipes() {
 
   const handleCreateRecipe = async (newRecipe) => {
     try {
-      const response = await axios.post(`${API_URL}/recipes`, newRecipe);
+      // Extract outlet_id for query param
+      const { outlet_id, ...recipeData } = newRecipe;
+
+      // Build URL with outlet_id as query parameter
+      let url = `${API_URL}/recipes`;
+      if (outlet_id) {
+        url += `?outlet_id=${outlet_id}`;
+      }
+
+      const response = await axios.post(url, recipeData);
       setRecipes([...recipes, response.data]);
       setShowCreateModal(false);
       selectRecipe(response.data.id);
@@ -1387,11 +1404,13 @@ function RecipeNotes({ recipe }) {
 
 // Create Recipe Modal
 function RecipeCreateModal({ onClose, onCreate, initialCategoryPath = '' }) {
+  const { currentOutlet, outlets } = useOutlet();
   const [formData, setFormData] = useState({
     name: '',
     category_path: initialCategoryPath,
     description: '',
-    yield_amount: ''
+    yield_amount: '',
+    outlet_id: currentOutlet?.id && currentOutlet.id !== 'all' ? currentOutlet.id : ''
   });
 
   const handleSubmit = (e) => {
@@ -1437,6 +1456,20 @@ function RecipeCreateModal({ onClose, onCreate, initialCategoryPath = '' }) {
               placeholder="e.g., Dinner/Italian/Pasta"
             />
             <small>Use / to create nested folders (e.g., Breakfast/Hot Items)</small>
+          </div>
+
+          <div className="form-group">
+            <label>Outlet *</label>
+            <select
+              value={formData.outlet_id}
+              onChange={(e) => setFormData({ ...formData, outlet_id: e.target.value })}
+              required
+            >
+              <option value="">Select Outlet</option>
+              {outlets.filter(o => o.id !== 'all').map(outlet => (
+                <option key={outlet.id} value={outlet.id}>{outlet.name}</option>
+              ))}
+            </select>
           </div>
 
           <div className="form-group">
@@ -1641,6 +1674,7 @@ function TreeNode({
     >
       <span className="recipe-icon">📄</span>
       <span className="recipe-name">{node.data.name}</span>
+      <OutletBadge outletId={node.data.outlet_id} />
     </div>
   );
 }

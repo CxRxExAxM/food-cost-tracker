@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Query, Depends
 from typing import Optional
 from ..database import get_db, dicts_from_rows, dict_from_row
 from ..schemas import Recipe, RecipeCreate, RecipeWithIngredients, RecipeWithCost
-from ..auth import get_current_user
+from ..auth import get_current_user, build_outlet_filter, check_outlet_access
 import json
 
 router = APIRouter(prefix="/recipes", tags=["recipes"])
@@ -14,16 +14,26 @@ def list_recipes(
     limit: int = Query(1000, ge=1, le=10000),
     search: Optional[str] = None,
     category_path: Optional[str] = None,
+    outlet_id: Optional[int] = None,
     current_user: dict = Depends(get_current_user)
 ):
     """
-    List recipes with optional filtering .
+    List recipes with optional filtering.
+
+    - **outlet_id**: Filter by specific outlet (must be one user has access to)
     """
     with get_db() as conn:
         cursor = conn.cursor()
 
-        query = "SELECT * FROM recipes WHERE is_active = 1 AND organization_id = %s"
-        params = [current_user["organization_id"]]
+        # Build outlet filter
+        outlet_filter, outlet_params = build_outlet_filter(current_user, "")
+        query = f"SELECT * FROM recipes WHERE is_active = 1 AND {outlet_filter}"
+        params = outlet_params
+
+        # If specific outlet requested, add additional filter
+        if outlet_id is not None:
+            query += " AND outlet_id = %s"
+            params.append(outlet_id)
 
         if search:
             query += " AND name LIKE %s"
@@ -56,15 +66,16 @@ def get_recipe(recipe_id: int, current_user: dict = Depends(get_current_user)):
         with get_db() as conn:
             cursor = conn.cursor()
 
-            # Get recipe - verify it belongs to user's organization
-            cursor.execute(
-                "SELECT * FROM recipes WHERE id = %s AND organization_id = %s",
-                (recipe_id, current_user["organization_id"])
-            )
+            # Get recipe - verify user has access
+            outlet_filter, outlet_params = build_outlet_filter(current_user, "")
+            query = f"SELECT * FROM recipes WHERE id = %s AND {outlet_filter}"
+            params = [recipe_id] + outlet_params
+
+            cursor.execute(query, params)
             recipe = dict_from_row(cursor.fetchone())
 
             if not recipe:
-                raise HTTPException(status_code=404, detail="Recipe not found in your organization")
+                raise HTTPException(status_code=404, detail="Recipe not found or you don't have access to it")
 
             # Parse method JSON
             if recipe.get('method'):
@@ -96,23 +107,49 @@ def get_recipe(recipe_id: int, current_user: dict = Depends(get_current_user)):
 
 
 @router.post("", response_model=Recipe, status_code=201)
-def create_recipe(recipe: RecipeCreate, current_user: dict = Depends(get_current_user)):
+def create_recipe(recipe: RecipeCreate, outlet_id: Optional[int] = None, current_user: dict = Depends(get_current_user)):
     """
     Create a new recipe.
     """
     with get_db() as conn:
         cursor = conn.cursor()
 
+        organization_id = current_user["organization_id"]
+
+        # Determine outlet_id
+        if not outlet_id:
+            # No outlet specified - get first available outlet for user
+            from ..auth import get_user_outlet_ids
+            user_outlet_ids = get_user_outlet_ids(current_user["id"])
+
+            if not user_outlet_ids:
+                # Org-wide admin - use first outlet in organization
+                cursor.execute("""
+                    SELECT id FROM outlets
+                    WHERE organization_id = %s AND is_active = 1
+                    ORDER BY id LIMIT 1
+                """, (organization_id,))
+                outlet_row = cursor.fetchone()
+                if not outlet_row:
+                    raise HTTPException(status_code=400, detail="No active outlets found in organization")
+                outlet_id = outlet_row["id"]
+            else:
+                # Use user's first assigned outlet
+                outlet_id = user_outlet_ids[0]
+        else:
+            # Outlet specified - verify user has access
+            if not check_outlet_access(current_user, outlet_id):
+                raise HTTPException(status_code=403, detail="You don't have access to this outlet")
+
         # Serialize method to JSON
         method_json = json.dumps([step.dict() for step in recipe.method]) if recipe.method else None
 
-        organization_id = current_user["organization_id"]
         cursor.execute("""
             INSERT INTO recipes (
                 name, description, category, category_path,
                 yield_amount, yield_unit_id, prep_time_minutes, cook_time_minutes,
-                method, organization_id
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                method, organization_id, outlet_id
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
         """, (
             recipe.name,
@@ -124,7 +161,8 @@ def create_recipe(recipe: RecipeCreate, current_user: dict = Depends(get_current
             recipe.prep_time_minutes,
             recipe.cook_time_minutes,
             method_json,
-            organization_id
+            organization_id,
+            outlet_id
         ))
 
         recipe_id = cursor.fetchone()["id"]
@@ -170,11 +208,14 @@ def update_recipe(recipe_id: int, updates: dict, current_user: dict = Depends(ge
     with get_db() as conn:
         cursor = conn.cursor()
 
-        # Check if recipe exists and belongs to user's organization
-        cursor.execute("SELECT id FROM recipes WHERE id = %s AND organization_id = %s",
-                      (recipe_id, current_user["organization_id"]))
+        # Check if recipe exists and user has access
+        outlet_filter, outlet_params = build_outlet_filter(current_user, "")
+        check_query = f"SELECT id FROM recipes WHERE id = %s AND {outlet_filter}"
+        check_params = [recipe_id] + outlet_params
+        cursor.execute(check_query, check_params)
+
         if not cursor.fetchone():
-            raise HTTPException(status_code=404, detail="Recipe not found in your organization")
+            raise HTTPException(status_code=404, detail="Recipe not found or you don't have access to it")
 
         # Build update query
         allowed_fields = [
@@ -223,11 +264,15 @@ def delete_recipe(recipe_id: int, current_user: dict = Depends(get_current_user)
     with get_db() as conn:
         cursor = conn.cursor()
 
-        cursor.execute("UPDATE recipes SET is_active = 0 WHERE id = %s AND organization_id = %s",
-                      (recipe_id, current_user["organization_id"]))
+        # Build outlet filter
+        outlet_filter, outlet_params = build_outlet_filter(current_user, "")
+        query = f"UPDATE recipes SET is_active = 0 WHERE id = %s AND {outlet_filter}"
+        params = [recipe_id] + outlet_params
+
+        cursor.execute(query, params)
 
         if cursor.rowcount == 0:
-            raise HTTPException(status_code=404, detail="Recipe not found")
+            raise HTTPException(status_code=404, detail="Recipe not found or you don't have access to it")
 
         conn.commit()
 
@@ -248,28 +293,31 @@ def calculate_recipe_cost(recipe_id: int, current_user: dict = Depends(get_curre
     with get_db() as conn:
         cursor = conn.cursor()
 
-        # Get recipe with yield and serving unit info
-        cursor.execute("""
+        # Get recipe with yield and serving unit info - verify outlet access
+        outlet_filter, outlet_params = build_outlet_filter(current_user, "r")
+        query = f"""
             SELECT r.*,
                    yu.abbreviation as yield_unit_abbreviation,
                    su.abbreviation as serving_unit_abbreviation
             FROM recipes r
             LEFT JOIN units yu ON yu.id = r.yield_unit_id
             LEFT JOIN units su ON su.id = r.serving_unit_id
-            WHERE r.id = %s AND r.organization_id = %s
-        """, (recipe_id, current_user["organization_id"]))
+            WHERE r.id = %s AND {outlet_filter}
+        """
+        params = [recipe_id] + outlet_params
+        cursor.execute(query, params)
         recipe = dict_from_row(cursor.fetchone())
 
         if not recipe:
-            raise HTTPException(status_code=404, detail="Recipe not found in your organization")
+            raise HTTPException(status_code=404, detail="Recipe not found or you don't have access to it")
 
         # Parse method JSON
         if recipe.get('method'):
             recipe['method'] = json.loads(recipe['method'])
 
-        # Calculate costs recursively
+        # Calculate costs recursively - use recipe's outlet_id for product filtering
         ingredients_with_costs, total_cost = _calculate_ingredient_costs(
-            cursor, recipe_id, visited=set()
+            cursor, recipe_id, recipe['outlet_id'], visited=set()
         )
 
         # Calculate cost per serving (use servings field, fallback to yield_amount for backwards compat)
@@ -297,13 +345,14 @@ def calculate_recipe_cost(recipe_id: int, current_user: dict = Depends(get_curre
         }
 
 
-def _calculate_ingredient_costs(cursor, recipe_id: int, visited: set) -> tuple[list[dict], float]:
+def _calculate_ingredient_costs(cursor, recipe_id: int, outlet_id: int, visited: set) -> tuple[list[dict], float]:
     """
     Recursively calculate costs for all ingredients in a recipe.
 
     Args:
         cursor: Database cursor
         recipe_id: Recipe ID to calculate
+        outlet_id: Outlet ID to filter products (for outlet-specific pricing)
         visited: Set of recipe IDs already visited (prevents infinite recursion)
 
     Returns:
@@ -320,7 +369,8 @@ def _calculate_ingredient_costs(cursor, recipe_id: int, visited: set) -> tuple[l
                cp.common_name,
                u.abbreviation as unit_abbreviation,
                r.name as sub_recipe_name,
-               r.yield_amount as sub_recipe_yield
+               r.yield_amount as sub_recipe_yield,
+               r.outlet_id as sub_recipe_outlet_id
         FROM recipe_ingredients ri
         LEFT JOIN common_products cp ON cp.id = ri.common_product_id
         LEFT JOIN units u ON u.id = ri.unit_id
@@ -339,7 +389,7 @@ def _calculate_ingredient_costs(cursor, recipe_id: int, visited: set) -> tuple[l
         price_source = None
 
         if ing.get('common_product_id'):
-            # Get lowest unit price for this common product
+            # Get lowest unit price for this common product from same outlet
             cursor.execute("""
                 SELECT
                     ph.unit_price,
@@ -357,10 +407,10 @@ def _calculate_ingredient_costs(cursor, recipe_id: int, visited: set) -> tuple[l
                            ROW_NUMBER() OVER (PARTITION BY distributor_product_id ORDER BY effective_date DESC) as rn
                     FROM price_history
                 ) ph ON ph.distributor_product_id = dp.id AND ph.rn = 1
-                WHERE p.common_product_id = %s AND ph.unit_price IS NOT NULL
+                WHERE p.common_product_id = %s AND p.outlet_id = %s AND ph.unit_price IS NOT NULL
                 ORDER BY ph.unit_price ASC
                 LIMIT 1
-            """, (ing['common_product_id'],))
+            """, (ing['common_product_id'], outlet_id))
 
             price_row = dict_from_row(cursor.fetchone())
 
@@ -375,9 +425,10 @@ def _calculate_ingredient_costs(cursor, recipe_id: int, visited: set) -> tuple[l
                 total_cost += ing_cost
 
         elif ing.get('sub_recipe_id'):
-            # Recursively calculate sub-recipe cost
+            # Recursively calculate sub-recipe cost - use sub-recipe's outlet_id
+            sub_outlet_id = ing.get('sub_recipe_outlet_id', outlet_id)  # Fallback to parent if missing
             _, sub_recipe_total = _calculate_ingredient_costs(
-                cursor, ing['sub_recipe_id'], visited.copy()
+                cursor, ing['sub_recipe_id'], sub_outlet_id, visited.copy()
             )
 
             if sub_recipe_total > 0:
@@ -541,11 +592,14 @@ def add_ingredient(recipe_id: int, ingredient: dict, current_user: dict = Depend
     with get_db() as conn:
         cursor = conn.cursor()
 
-        # Verify recipe exists and belongs to user's organization
-        cursor.execute("SELECT id FROM recipes WHERE id = %s AND organization_id = %s",
-                      (recipe_id, current_user["organization_id"]))
+        # Verify recipe exists and user has access
+        outlet_filter, outlet_params = build_outlet_filter(current_user, "")
+        check_query = f"SELECT id FROM recipes WHERE id = %s AND {outlet_filter}"
+        check_params = [recipe_id] + outlet_params
+        cursor.execute(check_query, check_params)
+
         if not cursor.fetchone():
-            raise HTTPException(status_code=404, detail="Recipe not found in your organization")
+            raise HTTPException(status_code=404, detail="Recipe not found or you don't have access to it")
 
         # Validate: must have exactly one of common_product_id or sub_recipe_id
         common_product_id = ingredient.get('common_product_id')
@@ -601,11 +655,14 @@ def update_ingredient(recipe_id: int, ingredient_id: int, updates: dict, current
     with get_db() as conn:
         cursor = conn.cursor()
 
-        # Verify recipe belongs to user's organization first
-        cursor.execute("SELECT id FROM recipes WHERE id = %s AND organization_id = %s",
-                      (recipe_id, current_user["organization_id"]))
+        # Verify recipe exists and user has access
+        outlet_filter, outlet_params = build_outlet_filter(current_user, "")
+        check_query = f"SELECT id FROM recipes WHERE id = %s AND {outlet_filter}"
+        check_params = [recipe_id] + outlet_params
+        cursor.execute(check_query, check_params)
+
         if not cursor.fetchone():
-            raise HTTPException(status_code=404, detail="Recipe not found in your organization")
+            raise HTTPException(status_code=404, detail="Recipe not found or you don't have access to it")
 
         # Verify ingredient exists and belongs to recipe
         cursor.execute("""
@@ -659,11 +716,14 @@ def remove_ingredient(recipe_id: int, ingredient_id: int, current_user: dict = D
     with get_db() as conn:
         cursor = conn.cursor()
 
-        # Verify recipe belongs to user's organization first
-        cursor.execute("SELECT id FROM recipes WHERE id = %s AND organization_id = %s",
-                      (recipe_id, current_user["organization_id"]))
+        # Verify recipe exists and user has access
+        outlet_filter, outlet_params = build_outlet_filter(current_user, "")
+        check_query = f"SELECT id FROM recipes WHERE id = %s AND {outlet_filter}"
+        check_params = [recipe_id] + outlet_params
+        cursor.execute(check_query, check_params)
+
         if not cursor.fetchone():
-            raise HTTPException(status_code=404, detail="Recipe not found in your organization")
+            raise HTTPException(status_code=404, detail="Recipe not found or you don't have access to it")
 
         cursor.execute("""
             DELETE FROM recipe_ingredients

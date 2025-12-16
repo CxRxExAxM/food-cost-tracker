@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import OutletSelector from './outlets/OutletSelector';
 import './Navigation.css';
 
 function Navigation() {
@@ -68,6 +69,11 @@ function Navigation() {
               </Link>
             )}
             {isAdmin() && (
+              <Link to="/outlets" className={`nav-link ${isActivePath('/outlets') ? 'active' : ''}`}>
+                Outlets
+              </Link>
+            )}
+            {isAdmin() && (
               <Link to="/admin" className={`nav-link ${isActivePath('/admin') ? 'active' : ''}`}>
                 Admin
               </Link>
@@ -83,6 +89,8 @@ function Navigation() {
               {organizationTier}
             </span>
           </div>
+
+          <OutletSelector />
 
           <div className="user-menu" ref={menuRef}>
             <button
