@@ -163,6 +163,16 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         raise credentials_exception
 
 
+async def get_current_super_admin(current_user: dict = Depends(get_current_user)):
+    """Verify user is a super admin."""
+    if not current_user.get('is_super_admin'):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Super admin access required"
+        )
+    return current_user
+
+
 # Role-based access control dependencies
 def require_role(allowed_roles: list):
     """Factory function to create role-checking dependencies."""
