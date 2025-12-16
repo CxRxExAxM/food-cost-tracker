@@ -175,7 +175,8 @@ def get_current_user_info(current_user: dict = Depends(get_current_user)):
         "full_name": current_user["full_name"],
         "role": current_user["role"],
         "is_active": bool(current_user["is_active"]),
-        "organization_id": current_user["organization_id"]
+        "organization_id": current_user["organization_id"],
+        "is_super_admin": bool(current_user.get("is_super_admin", 0))
     }
 
 

@@ -59,6 +59,7 @@ class UserResponse(BaseModel):
     role: str
     is_active: bool
     organization_id: int
+    is_super_admin: bool = False
 
 
 class UserUpdate(BaseModel):
