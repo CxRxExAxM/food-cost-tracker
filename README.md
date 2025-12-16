@@ -2,7 +2,7 @@
 
 A comprehensive platform for F&B operations to manage food costs, track distributor prices, and calculate recipe costs with real-time pricing updates.
 
-**Live Production:** https://food-cost-tracker.onrender.com
+**Live Production:** https://www.restaurantek.io
 **Dev Environment:** https://food-cost-tracker-dev.onrender.com
 
 ## Features
