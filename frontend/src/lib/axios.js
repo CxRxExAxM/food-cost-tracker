@@ -2,9 +2,9 @@ import axios from 'axios';
 
 const API_URL = import.meta.env.VITE_API_URL ?? '';
 
-// Create axios instance
+// Create axios instance with /api prefix
 const axiosInstance = axios.create({
-  baseURL: API_URL
+  baseURL: API_URL ? `${API_URL}/api` : '/api'
 });
 
 // Add request interceptor to include auth token
