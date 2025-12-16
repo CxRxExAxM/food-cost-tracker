@@ -88,6 +88,25 @@
   border-bottom: 2px solid var(--color-yellow, #d4a72c);
 }
 
+/* Super Admin Link - Distinct red theme, matches nav sizing */
+.nav-link.super-admin-link {
+  color: var(--color-red-bright, #ff4d4f);
+  background: rgba(212, 52, 56, 0.1);
+  border-bottom: 2px solid transparent;
+  font-weight: 600;
+}
+
+.nav-link.super-admin-link:hover {
+  color: #ff7875;
+  background: rgba(212, 52, 56, 0.15);
+}
+
+.nav-link.super-admin-link.active {
+  color: var(--color-red-bright, #ff4d4f);
+  background: rgba(212, 52, 56, 0.15);
+  border-bottom: 2px solid var(--color-red-bright, #ff4d4f);
+}
+
 /* Right Side - Org + User */
 .nav-right {
   display: flex;

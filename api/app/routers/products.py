@@ -125,19 +125,18 @@ def list_products(
     with get_db() as conn:
         cursor = conn.cursor()
 
-        # Base WHERE clause with outlet filtering
-        outlet_filter, outlet_params = build_outlet_filter(current_user, "p")
-        where_clause = f"WHERE p.is_active = 1 AND {outlet_filter}"
-        params = outlet_params
+        # Base WHERE clause - filter by organization
+        org_id = current_user["organization_id"]
+        where_clause = f"WHERE p.is_active = 1 AND p.organization_id = %s"
+        params = [org_id]
 
         # If specific outlet requested, show products imported by this outlet
-        # Check import_batches to see which outlets have uploaded this product
+        # Check price_history to see which outlets have imported this product
         if outlet_id is not None:
             where_clause += """ AND EXISTS (
                 SELECT 1 FROM price_history ph_filter
-                JOIN import_batches ib ON ib.id = ph_filter.import_batch_id
                 JOIN distributor_products dp_filter ON dp_filter.id = ph_filter.distributor_product_id
-                WHERE dp_filter.product_id = p.id AND ib.outlet_id = %s
+                WHERE dp_filter.product_id = p.id AND ph_filter.outlet_id = %s
             )"""
             params.append(outlet_id)
 

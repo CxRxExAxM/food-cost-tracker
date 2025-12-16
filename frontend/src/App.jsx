@@ -8,6 +8,8 @@ import Users from './pages/Users';
 import Admin from './pages/Admin';
 import Outlets from './pages/Outlets';
 import Login from './pages/Login';
+import SuperAdminDashboard from './pages/SuperAdmin/Dashboard';
+import SuperAdminOrganizations from './pages/SuperAdmin/Organizations';
 import './App.css';
 
 // Protected route wrapper
@@ -53,6 +55,30 @@ function PublicRoute({ children }) {
   }
 
   if (user) {
+    return <Navigate to="/" replace />;
+  }
+
+  return children;
+}
+
+// Super Admin route - requires super admin access
+function SuperAdminRoute({ children }) {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="loading-screen">
+        <div className="loading-spinner"></div>
+        <p>Loading...</p>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (!user.is_super_admin) {
     return <Navigate to="/" replace />;
   }
 
@@ -116,6 +142,22 @@ function AppRoutes() {
           <ProtectedRoute>
             <Admin />
           </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/super-admin"
+        element={
+          <SuperAdminRoute>
+            <SuperAdminDashboard />
+          </SuperAdminRoute>
+        }
+      />
+      <Route
+        path="/super-admin/organizations"
+        element={
+          <SuperAdminRoute>
+            <SuperAdminOrganizations />
+          </SuperAdminRoute>
         }
       />
     </Routes>

@@ -5,7 +5,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from .routers import products, common_products, distributors, units, recipes, uploads, auth, organizations, outlets
+from .routers import products, common_products, distributors, units, recipes, uploads, auth, organizations, outlets, super_admin
 from .db_startup import initialize_database
 
 app = FastAPI(
@@ -36,6 +36,7 @@ app.include_router(distributors.router, prefix="/api")
 app.include_router(units.router, prefix="/api")
 app.include_router(recipes.router, prefix="/api")
 app.include_router(uploads.router, prefix="/api")
+app.include_router(super_admin.router, prefix="/api")
 
 
 # Note: Root endpoint is defined conditionally below based on whether frontend is built
