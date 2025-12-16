@@ -80,7 +80,7 @@ function Navigation() {
             )}
             {user?.is_super_admin && (
               <Link to="/super-admin" className={`nav-link super-admin-link ${isActivePath('/super-admin') || isActivePath('/super-admin/organizations') ? 'active' : ''}`}>
-                🔧 Super Admin
+                Super Admin
               </Link>
             )}
           </div>
