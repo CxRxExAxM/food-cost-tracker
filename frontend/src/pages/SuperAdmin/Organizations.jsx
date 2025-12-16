@@ -123,17 +123,22 @@ export default function SuperAdminOrganizations() {
   return (
     <div className="super-admin-organizations">
       <div className="super-admin-nav">
-        <Link
-          to="/super-admin"
-          className={`super-admin-tab ${location.pathname === '/super-admin' ? 'active' : ''}`}
-        >
-          Dashboard
-        </Link>
-        <Link
-          to="/super-admin/organizations"
-          className={`super-admin-tab ${location.pathname === '/super-admin/organizations' ? 'active' : ''}`}
-        >
-          Organizations
+        <div className="super-admin-tabs">
+          <Link
+            to="/super-admin"
+            className={`super-admin-tab ${location.pathname === '/super-admin' ? 'active' : ''}`}
+          >
+            Dashboard
+          </Link>
+          <Link
+            to="/super-admin/organizations"
+            className={`super-admin-tab ${location.pathname === '/super-admin/organizations' ? 'active' : ''}`}
+          >
+            Organizations
+          </Link>
+        </div>
+        <Link to="/" className="return-to-main-btn">
+          ← Return to Main Site
         </Link>
       </div>
 

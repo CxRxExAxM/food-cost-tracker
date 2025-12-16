@@ -168,6 +168,20 @@ def login(credentials: UserLogin):
 @router.get("/me", response_model=UserResponse)
 def get_current_user_info(current_user: dict = Depends(get_current_user)):
     """Get current logged-in user's information."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Fetch organization details
+        cursor.execute("""
+            SELECT name, subscription_tier
+            FROM organizations
+            WHERE id = %s
+        """, (current_user["organization_id"],))
+
+        org = cursor.fetchone()
+        org_name = org["name"] if org else None
+        org_tier = org["subscription_tier"] if org else None
+
     return {
         "id": current_user["id"],
         "email": current_user["email"],
@@ -176,7 +190,9 @@ def get_current_user_info(current_user: dict = Depends(get_current_user)):
         "role": current_user["role"],
         "is_active": bool(current_user["is_active"]),
         "organization_id": current_user["organization_id"],
-        "is_super_admin": bool(current_user.get("is_super_admin", 0))
+        "is_super_admin": bool(current_user.get("is_super_admin", 0)),
+        "organization_name": org_name,
+        "organization_tier": org_tier
     }
 
 
