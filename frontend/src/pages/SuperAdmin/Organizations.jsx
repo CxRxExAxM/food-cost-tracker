@@ -17,6 +17,7 @@ export default function SuperAdminOrganizations() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditTierModal, setShowEditTierModal] = useState(false);
   const [showSuspendModal, setShowSuspendModal] = useState(false);
+  const [showCreateUserModal, setShowCreateUserModal] = useState(false);
   const [selectedOrg, setSelectedOrg] = useState(null);
 
   // Form states
@@ -26,6 +27,13 @@ export default function SuperAdminOrganizations() {
     subscription_tier: 'free'
   });
   const [editTier, setEditTier] = useState('');
+  const [createUserForm, setCreateUserForm] = useState({
+    email: '',
+    username: '',
+    password: '',
+    full_name: '',
+    role: 'admin'
+  });
 
   useEffect(() => {
     fetchOrganizations();
@@ -107,6 +115,32 @@ export default function SuperAdminOrganizations() {
   const openSuspendModal = (org) => {
     setSelectedOrg(org);
     setShowSuspendModal(true);
+  };
+
+  const openCreateUserModal = (org) => {
+    setSelectedOrg(org);
+    setCreateUserForm({
+      email: '',
+      username: '',
+      password: '',
+      full_name: '',
+      role: 'admin'
+    });
+    setShowCreateUserModal(true);
+  };
+
+  const handleCreateUser = async (e) => {
+    e.preventDefault();
+    try {
+      await axios.post(`/super-admin/organizations/${selectedOrg.id}/users`, createUserForm);
+      alert(`User created successfully!\n\nEmail: ${createUserForm.email}\nPassword: ${createUserForm.password}\n\nPlease save these credentials.`);
+      setShowCreateUserModal(false);
+      setSelectedOrg(null);
+      fetchOrganizations();
+    } catch (error) {
+      console.error('Error creating user:', error);
+      alert(error.response?.data?.detail || 'Error creating user');
+    }
   };
 
   const handleImpersonate = async (org) => {
@@ -245,6 +279,12 @@ export default function SuperAdminOrganizations() {
               >
                 Login as Admin
               </button>
+              <button
+                onClick={() => openCreateUserModal(org)}
+                style={{ color: '#52c41a', fontWeight: 600 }}
+              >
+                + Create User
+              </button>
               <button onClick={() => openEditTierModal(org)}>Edit Tier</button>
               <button
                 onClick={() => openSuspendModal(org)}
@@ -378,6 +418,75 @@ export default function SuperAdminOrganizations() {
                 {selectedOrg.subscription_status === 'active' ? 'Suspend Organization' : 'Activate Organization'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create User Modal */}
+      {showCreateUserModal && selectedOrg && (
+        <div className="modal-overlay" onClick={() => setShowCreateUserModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h2>Create User for {selectedOrg.name}</h2>
+            <form onSubmit={handleCreateUser}>
+              <div className="form-group">
+                <label>Email *</label>
+                <input
+                  type="email"
+                  value={createUserForm.email}
+                  onChange={(e) => setCreateUserForm({...createUserForm, email: e.target.value})}
+                  required
+                  placeholder="user@example.com"
+                />
+              </div>
+              <div className="form-group">
+                <label>Username *</label>
+                <input
+                  type="text"
+                  value={createUserForm.username}
+                  onChange={(e) => setCreateUserForm({...createUserForm, username: e.target.value})}
+                  required
+                  placeholder="username"
+                />
+              </div>
+              <div className="form-group">
+                <label>Password *</label>
+                <input
+                  type="text"
+                  value={createUserForm.password}
+                  onChange={(e) => setCreateUserForm({...createUserForm, password: e.target.value})}
+                  required
+                  placeholder="Enter password (will be shown to super admin)"
+                />
+              </div>
+              <div className="form-group">
+                <label>Full Name</label>
+                <input
+                  type="text"
+                  value={createUserForm.full_name}
+                  onChange={(e) => setCreateUserForm({...createUserForm, full_name: e.target.value})}
+                  placeholder="John Doe"
+                />
+              </div>
+              <div className="form-group">
+                <label>Role</label>
+                <select
+                  value={createUserForm.role}
+                  onChange={(e) => setCreateUserForm({...createUserForm, role: e.target.value})}
+                >
+                  <option value="admin">Admin</option>
+                  <option value="chef">Chef</option>
+                  <option value="viewer">Viewer</option>
+                </select>
+              </div>
+              <div className="modal-actions">
+                <button type="button" onClick={() => setShowCreateUserModal(false)} className="btn-secondary">
+                  Cancel
+                </button>
+                <button type="submit" className="btn-primary">
+                  Create User
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime, timedelta
 
-from ..auth import get_current_super_admin, get_current_user, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES, Token
+from ..auth import get_current_super_admin, get_current_user, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES, Token, get_password_hash
 from ..database import get_db, dict_from_row
 
 
@@ -54,6 +54,24 @@ class PlatformStatsResponse(BaseModel):
     orgs_by_tier: dict
     active_organizations: int
     inactive_organizations: int
+
+
+class UserCreateForOrg(BaseModel):
+    email: str
+    username: str
+    password: str
+    full_name: Optional[str] = None
+    role: str = "admin"
+
+
+class UserResponse(BaseModel):
+    id: int
+    email: str
+    username: str
+    full_name: Optional[str]
+    role: str
+    is_active: bool
+    organization_id: int
 
 
 # Organizations endpoints
@@ -300,6 +318,56 @@ def delete_organization(
 
         conn.commit()
         return {"message": "Organization deactivated successfully"}
+
+
+@router.post("/organizations/{org_id}/users", response_model=UserResponse)
+def create_user_for_organization(
+    org_id: int,
+    user: UserCreateForOrg,
+    current_user: dict = Depends(get_current_super_admin)
+):
+    """Create a new user for a specific organization (super admin only)."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Verify organization exists
+        cursor.execute("SELECT id FROM organizations WHERE id = %s", (org_id,))
+        if not cursor.fetchone():
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Organization not found"
+            )
+
+        # Check if email already exists
+        cursor.execute("SELECT id FROM users WHERE email = %s", (user.email,))
+        if cursor.fetchone():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User with this email already exists"
+            )
+
+        # Check if username already exists
+        cursor.execute("SELECT id FROM users WHERE username = %s", (user.username,))
+        if cursor.fetchone():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User with this username already exists"
+            )
+
+        # Hash password
+        hashed_password = get_password_hash(user.password)
+
+        # Create user
+        cursor.execute("""
+            INSERT INTO users (email, username, hashed_password, full_name, role, organization_id, is_active)
+            VALUES (%s, %s, %s, %s, %s, %s, 1)
+            RETURNING id, email, username, full_name, role, is_active, organization_id
+        """, (user.email, user.username, hashed_password, user.full_name, user.role, org_id))
+
+        new_user = dict_from_row(cursor.fetchone())
+        conn.commit()
+
+        return new_user
 
 
 # Platform statistics endpoint
