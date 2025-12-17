@@ -18,6 +18,131 @@ This document outlines the technical strategy for scaling RestauranTek from a si
 
 ---
 
+## Food Cost Tracker - Post-MVP Enhancements
+
+Before starting new modules, complete these high-priority enhancements to the Food Cost Tracking module.
+
+### AI Recipe Parser (High Priority)
+
+**Goal:** Automate recipe ingredient entry by parsing Word/PDF documents using Claude API.
+
+**MVP Scope - Ingredients Only:**
+- Parse Word/PDF recipe files
+- Extract: ingredient name, quantity, unit
+- Match to common products in DB (show top 3 matches)
+- Set yield % to 100% (user adjusts manually)
+- User reviews/confirms before import
+- Method steps parsing = future enhancement
+
+**Technical Approach:**
+
+1. **Backend Endpoint:** `POST /api/recipes/parse-file`
+2. **File Processing:**
+   - Use `python-docx` for Word files
+   - Use `pypdf` for PDF text extraction
+3. **AI Processing:**
+   - Send extracted text to Claude API (Anthropic)
+   - Claude returns structured JSON with ingredients
+4. **Product Matching:**
+   - Backend queries DB for matching common products
+   - If uncertain, suggest top 3 product matches
+5. **User Review:**
+   - Frontend shows confirmation dialog
+   - User selects correct matches or creates new products
+
+**File Upload Flow:**
+```
+Upload Word/PDF → Extract text → Claude API parses →
+Backend suggests matches → User reviews → Import ingredients
+```
+
+**Claude API Prompt Structure:**
+```json
+{
+  "name": "recipe name",
+  "yield": {"quantity": 2, "unit": "quart"},
+  "servings": {"quantity": 8, "unit": "portions"},
+  "ingredients": [
+    {
+      "name": "cucumber",
+      "quantity": 10,
+      "unit": "LB",
+      "prep_note": "sliced"
+    }
+  ]
+}
+```
+
+**AI Matching Logic:**
+- If AI is uncertain, show top 3 product matches
+- User selects correct match from dropdown
+- If no match, user can search all products or create new
+- Fuzzy matching algorithm for common product suggestions
+
+**Cost Estimate:**
+- ~$0.005-$0.02 per recipe parse (Claude API)
+- Free tier: 10 parses/month (~$0.20/month max)
+- Paid tier: Unlimited (even 100/month = ~$2)
+- Very affordable for the value provided
+
+**Dependencies:**
+- Anthropic API key (console.anthropic.com)
+- `python-docx` package
+- `pypdf` package
+
+**Testing Strategy:**
+- Test with various recipe formats (formal recipes, notes, scanned PDFs)
+- Verify product matching accuracy
+- Handle edge cases (missing quantities, unusual units)
+- User acceptance testing with real recipes
+
+---
+
+### Advanced Features (Phase 6)
+
+**Recipe Features:**
+- [ ] Recipe search (name, ingredients, allergens)
+- [ ] Bulk operations (tag recipes, batch move)
+- [ ] Recipe templates for common prep items
+- [ ] Print/export recipe cards (PDF)
+- [ ] Recipe history/versioning (track changes over time)
+- [ ] Yield scaling (adjust quantities up/down)
+- [ ] Shopping list generation from recipes
+- [ ] Price trend charts per recipe (show cost over time)
+- [ ] Batch cost comparison (compare multiple recipes)
+- [ ] Unit conversions (automatic weight/volume conversion)
+
+**Product Features:**
+- [ ] Manual product entry form (instead of CSV only)
+- [ ] Price history view per product (chart over time)
+- [ ] Product merge/deduplication tool
+- [ ] Bulk product editing (batch operations)
+- [ ] Product categories and tagging
+- [ ] Favorite/frequently used products
+
+**Tech Debt & Improvements:**
+- [ ] **Virtual Folders:** Move from localStorage to database table for multi-device sync
+  - Currently: Virtual folders stored in browser localStorage (client-side only)
+  - Future: Create `folders` table with columns: id, path, created_at
+  - Benefits: Syncs across devices, survives cache clear, proper data persistence
+- [ ] Add loading states for all async operations
+- [ ] Implement proper error handling with user feedback
+- [ ] Add data validation (client + server)
+- [ ] Optimize tree rendering for large datasets
+- [ ] Add keyboard shortcuts (save, cancel, etc.)
+- [ ] Implement undo/redo for recipe editing
+- [ ] Add autosave with drafts
+- [ ] Improve mobile responsiveness
+- [ ] Add comprehensive test coverage
+
+**Prioritization:**
+1. **Immediate (Week 1-2):** AI Recipe Parser
+2. **High Priority:** Recipe scaling, shopping lists, price trend charts
+3. **Medium Priority:** Recipe search, versioning, PDF export
+4. **Polish:** Bulk operations, templates, unit conversions
+
+---
+
 ## Branching Strategy Evolution
 
 ### Current State (Food Cost MVP)

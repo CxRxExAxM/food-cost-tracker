@@ -1,575 +1,358 @@
-# Food Cost Tracker
+# Food Cost Tracker - RestauranTek Platform
 
-A comprehensive platform for F&B operations to manage food costs, track distributor prices, and calculate recipe costs with real-time pricing updates.
+A comprehensive multi-tenant SaaS platform for F&B operations to manage food costs, track distributor prices, and calculate recipe costs with real-time pricing updates.
 
 **Live Production:** https://food-cost-tracker.onrender.com
 **Dev Environment:** https://food-cost-tracker-dev.onrender.com
 
-## Features
+---
 
-### Core Functionality (v1.0) ✅
-- **User Authentication** - Role-based access control (Admin, Chef, Viewer)
-- **Multi-Distributor Support** - Import and track prices from multiple distributors
-  - Sysco, Vesta, SM Seafood, Shamrock, Noble Bread, Sterling
-  - Automated CSV cleaning with vendor-specific rules
-- **Product Management**
-  - Inline editing for quick corrections
-  - Product-to-common-product mapping with autocomplete
-  - Catch weight support for variable-weight items
-- **Recipe Builder**
-  - Folder/category organization with nested categories
-  - Live cost calculation with automatic price updates
-  - Yield percentage support for prep waste
-  - Sub-recipe support (recipes within recipes)
-  - Cost breakdown per ingredient with percentages
-  - "Refresh Costs" button to update when prices change
-- **Allergen & Dietary Tracking**
-  - 16 allergen flags per ingredient (Vegan, Vegetarian, Gluten, Dairy, etc.)
-  - Auto-aggregation from recipe ingredients
-- **Price History Tracking** - Time-series price data for trend analysis
+## Current Status (December 2024)
 
-### Recently Completed ✅
+**Food Cost Tracking MVP:** ✅ **COMPLETE**
 
-- **🔥 Super Admin Platform** (Dec 16, 2024) - **PHASE 2 COMPLETE**
-  - Complete super admin dashboard for platform management
-  - Organization management with stats cards (users, outlets, products, recipes)
-  - Advanced user management:
-    - Edit user details (full name, role, password reset)
-    - Activate/deactivate users across organizations
-    - Create users for any organization
-  - Organization detail view with full user and outlet visibility
-  - User impersonation for support and debugging
-  - Subscription tier management (Free, Basic, Pro, Enterprise)
-  - Organization suspend/activate functionality
-  - Clean, intuitive UI with modal-based workflows
+All core features implemented and production-ready:
+- ✅ Multi-tenancy & organization management
+- ✅ Multi-outlet support with data isolation
+- ✅ Outlet-level user access control
+- ✅ Super admin management suite
+- ✅ Audit logging and compliance tracking
+- ✅ Recipe costing with real-time price updates
+- ✅ Multi-distributor price tracking
 
-- **Multi-Outlet Support Frontend** (Dec 13-16, 2024) - **PHASE 2 COMPLETE**
-  - Outlet selector component with context-based filtering
-  - Complete outlet management UI (create, edit, activate/deactivate)
-  - Outlet statistics cards showing product and recipe counts
-  - Visual outlet indicators throughout the application
-  - CSV import with outlet assignment
-  - All data properly scoped to selected outlet
+**Next Steps:** See [FUTURE_PLANS.md](FUTURE_PLANS.md) for post-MVP roadmap (HACCP module, AI recipe parser, advanced features).
 
-- **🔥 Multi-Outlet Support Backend** (Dec 13, 2024) - **PHASE 1 COMPLETE**
-  - **Killer competitive differentiator for enterprise/hotel groups**
-  - Outlet-specific products and recipes with data isolation
-  - Org-wide shared common product library (consistency)
-  - Flexible user access (org-wide admins + outlet-scoped users)
-  - **Outlet-specific recipe pricing** - recipes cost differently per outlet
-  - Complete CRUD API for outlet management
-  - 100% data migration (357 products, 2 recipes migrated)
+---
 
-- **Organization Admin UI** (Dec 12, 2024)
-  - Complete organization settings management interface
-  - Organization info editing (name, contact details)
-  - Tier badge display and limits visualization
-  - Usage statistics with color-coded progress bars
-  - Team members overview with role badges
+## Quick Links
 
-- **Multi-Tenancy Support** (Dec 12, 2024)
-  - Complete organization-based data isolation
-  - Tier-based system (Free, Basic, Pro, Enterprise)
-  - Organizations table with subscription management
-  - All data scoped to organizations (products, recipes, users, imports)
-  - Tested and verified data isolation between organizations
+- **📖 Future Roadmap:** [FUTURE_PLANS.md](FUTURE_PLANS.md) - Multi-module platform architecture, HACCP plans
+- **🎨 Design Guidelines:** [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md) - UI/UX patterns and styling
+- **💻 Developer Guide:** [DEVELOPMENT.md](DEVELOPMENT.md) - Local setup, git workflow, deployment
+- **🤖 Claude Instructions:** [CLAUDE_INSTRUCTIONS.md](CLAUDE_INSTRUCTIONS.md) - Guidelines for AI-assisted development
+- **📋 Completed Phases:** [docs/completed/](docs/completed/) - Historical phase documentation
+- **📚 API Documentation:** https://food-cost-tracker-dev.onrender.com/docs
 
-- **PostgreSQL Migration** (Dec 11, 2024)
-  - Clean PostgreSQL-only architecture
-  - Removed dual SQLite/PostgreSQL complexity
-  - Production-ready on Render
+---
 
-### Upcoming Features 📋
+## Core Features
 
-**Outlet-Level User Access Control** (Phase 3 - Next)
-- User assignment to specific outlets within organizations
-- Admins get full org access, Chefs/Viewers restricted to assigned outlets
-- Outlet selector filtered by user permissions
-- Multi-select outlet assignment UI in user management
-- See OUTLET_ASSIGNMENT_PLAN.md for detailed implementation plan
+### Multi-Tenant SaaS Platform ✅
 
-**AI Recipe Parser**
-- Upload Word/PDF recipe documents
-- Claude API extracts ingredients automatically
-- Smart matching to common products
-- Review/confirmation workflow
+**Organizations & Subscriptions**
+- Multi-tenant architecture with complete data isolation
+- Subscription tiers: Free, Basic, Pro, Enterprise
+- Organization-specific settings and branding
+- Tier-based limits (users, recipes, outlets)
 
-**Historical Price Charts** - Visualize price trends over time
+**User Management**
+- Role-based access control (Admin, Chef, Viewer)
+- JWT authentication with secure password hashing
+- User activation/deactivation
+- Password reset functionality
 
-**Recipe Scaling** - Scale recipes up/down
+**Multi-Outlet Support** 🔥
+- Multiple locations per organization (restaurants, hotels, franchises)
+- Outlet-specific products, recipes, and pricing
+- Same recipe costs differently at each outlet
+- Outlet-level user access control (admins see all, others see assigned outlets only)
+- Perfect for hotel groups, multi-location operators, franchises
 
-**PDF Export** - Print recipe cards
+### Food Cost Tracking ✅
+
+**Product & Price Management**
+- Multi-distributor support (Sysco, Vesta, SM Seafood, Shamrock, Noble Bread, Sterling)
+- Automated CSV/Excel import with vendor-specific cleaning
+- Historical price tracking with trend analysis
+- Product-to-common-product mapping for consistency
+- Catch weight support for variable-weight items
+
+**Recipe Management**
+- Folder/category organization with nested structure
+- Live cost calculation with automatic price updates
+- Yield percentage support for prep waste calculation
+- Sub-recipe support (recipes within recipes)
+- Cost breakdown per ingredient with percentages
+- "Refresh Costs" button for instant price updates
+
+**Allergen & Dietary Tracking**
+- 16 allergen flags per ingredient (Vegan, Vegetarian, Gluten, Dairy, etc.)
+- Auto-aggregation from recipe ingredients
+- Compliance-ready allergen reporting
+
+### Super Admin Platform ✅
+
+**Organization Management**
+- Platform-wide dashboard with statistics
+- Create and manage organizations
+- Subscription tier management
+- Organization suspend/activate
+- Full visibility into all organizations
+
+**User Administration**
+- Cross-organization user management
+- Edit user details, roles, passwords
+- Activate/deactivate users
+- Create users for any organization
+- Outlet assignment management
+
+**Audit & Compliance**
+- Comprehensive audit logging system
+- Track subscription changes
+- Monitor impersonation sessions
+- IP address tracking
+- Before/after change tracking
+
+**Organization Impersonation**
+- Super admin can impersonate any organization
+- Test features as customer
+- Debug issues in customer accounts
+- Provide hands-on support
+- All actions tagged as impersonation in audit logs
+
+---
 
 ## Tech Stack
 
 ### Backend
-- **Framework:** FastAPI 0.104+
+- **Framework:** FastAPI 0.104+ (Python 3.12+)
 - **Database:** PostgreSQL 16+ (Render PostgreSQL)
-- **ORM:** SQLAlchemy 2.0+ with Alembic migrations
-- **Authentication:** JWT tokens with passlib/bcrypt
-- **File Processing:** pandas, openpyxl, xlrd for CSV/Excel imports
+- **Authentication:** JWT tokens with bcrypt
+- **Migrations:** Alembic
+- **File Processing:** pandas, openpyxl for CSV/Excel imports
 
 ### Frontend
 - **Framework:** React 18 + Vite
 - **Routing:** React Router v6
 - **HTTP Client:** Axios with JWT interceptors
 - **State Management:** React Context API
-- **UI:** Custom CSS with responsive design
+- **Styling:** Custom CSS with responsive design
 
 ### Deployment
 - **Platform:** Render.com
-- **Environments:**
-  - Production (main branch) - https://food-cost-tracker.onrender.com
-  - Development (dev branch) - https://food-cost-tracker-dev.onrender.com
-- **Docker:** Multi-stage build (frontend + backend)
-- **Database:** Render PostgreSQL (production-grade)
+- **Environments:** Production (main), Development (dev)
+- **Build:** Multi-stage Docker (frontend + backend combined)
+- **Migrations:** Auto-run on deploy
+
+---
+
+## Getting Started
+
+### Quick Start (Local Development)
+
+**Prerequisites:**
+- Python 3.12+
+- Node.js 20+
+- PostgreSQL 16+ (local or Render)
+
+**Setup:**
+
+```bash
+# 1. Clone repository
+git clone https://github.com/CxRxExAxM/food-cost-tracker.git
+cd food-cost-tracker
+
+# 2. Set up PostgreSQL
+createdb food_cost_tracker_local
+export DATABASE_URL="postgresql://localhost/food_cost_tracker_local"
+
+# 3. Set up Python backend
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+venv/bin/alembic upgrade head
+
+# 4. Start backend (port 8000)
+cd api
+../venv/bin/uvicorn app.main:app --reload
+
+# 5. Set up frontend (new terminal)
+cd frontend
+npm install
+npm run dev
+
+# 6. Open browser
+# Navigate to http://localhost:5173
+# Click "Initial Setup" to create admin account
+```
+
+**See [DEVELOPMENT.md](DEVELOPMENT.md) for detailed setup instructions, git workflow, and deployment guide.**
+
+---
 
 ## Project Structure
 
 ```
 Clean_Invoices/
-├── api/                      # FastAPI backend
+├── api/                           # FastAPI backend
 │   ├── app/
-│   │   ├── routers/         # API route handlers
-│   │   │   ├── auth.py      # User authentication & JWT
-│   │   │   ├── products.py  # Product CRUD & mapping
-│   │   │   ├── common_products.py  # Common product library
-│   │   │   ├── recipes.py   # Recipe CRUD & costing
-│   │   │   ├── uploads.py   # CSV import handling
-│   │   │   ├── distributors.py  # Distributor management
-│   │   │   └── units.py     # Units of measure
-│   │   ├── main.py          # FastAPI app setup
-│   │   ├── database.py      # PostgreSQL connection (39 lines!)
-│   │   ├── db_startup.py    # Alembic migration runner
-│   │   ├── models.py        # SQLAlchemy ORM models
-│   │   ├── schemas.py       # Pydantic request/response models
-│   │   └── auth.py          # JWT auth utilities
-│   └── run.py               # Development server
-├── frontend/                 # React + Vite frontend
+│   │   ├── routers/              # API endpoints
+│   │   │   ├── auth.py           # Authentication & users
+│   │   │   ├── products.py       # Product management
+│   │   │   ├── recipes.py        # Recipe management
+│   │   │   ├── outlets.py        # Outlet management
+│   │   │   ├── super_admin.py    # Super admin features
+│   │   │   └── uploads.py        # CSV import
+│   │   ├── database.py           # PostgreSQL connection
+│   │   ├── audit.py              # Audit logging utilities
+│   │   └── main.py               # FastAPI app
+│   └── ...
+├── frontend/                      # React + Vite frontend
 │   ├── src/
-│   │   ├── pages/           # Page components
-│   │   │   ├── Home.jsx
-│   │   │   ├── Login.jsx
+│   │   ├── pages/                # Page components
 │   │   │   ├── Products.jsx
 │   │   │   ├── Recipes.jsx
-│   │   │   └── Users.jsx
-│   │   ├── components/      # Reusable components
-│   │   ├── context/         # React Context providers
-│   │   ├── services/        # API client
+│   │   │   ├── Outlets.jsx
+│   │   │   └── SuperAdmin/       # Super admin pages
+│   │   ├── components/           # Reusable components
+│   │   ├── contexts/             # React contexts
+│   │   │   ├── AuthContext.jsx
+│   │   │   └── OutletContext.jsx
 │   │   └── App.jsx
-│   ├── package.json
-│   └── vite.config.js
-├── alembic/                  # Database migrations
-│   ├── versions/
-│   │   └── 001_initial_schema.py  # Single clean migration
-│   ├── env.py
-│   └── alembic.ini
-├── clean_*.py               # CSV cleaning scripts by distributor
-├── Dockerfile.render        # Production Docker build
-├── render-dev.yaml          # Dev environment config
-├── requirements.txt
-└── POSTGRESQL_MIGRATION_DEC11.md  # Migration documentation
-
+│   └── ...
+├── alembic/                       # Database migrations
+├── docs/                          # Documentation
+│   ├── archive/                  # Historical planning docs
+│   ├── completed/                # Completed phase docs
+│   └── recipes/                  # Recipe module docs
+├── README.md                      # This file
+├── FUTURE_PLANS.md               # Post-MVP roadmap
+├── DESIGN_SYSTEM.md              # UI/UX guidelines
+├── DEVELOPMENT.md                # Developer guide
+└── CLAUDE_INSTRUCTIONS.md        # AI development guidelines
 ```
 
-## Database Schema
+---
 
-### Core Tables
+## Database Schema Overview
 
-**organizations** 🆕
-- Multi-tenant organization management
-- Subscription tiers: free, basic, pro, enterprise
-- Tier-based limits (max_users, max_recipes)
-- All user data scoped to organizations
-
-**outlets** 🆕
-- Multiple locations per organization (restaurants, hotels, franchises)
-- Outlet-specific products, recipes, and pricing
-- Active/inactive status for temporary closures
-- Data isolation between outlets
-
-**users**
-- User accounts with role-based permissions (admin, chef, viewer)
-- JWT authentication with bcrypt password hashing
-- Scoped to organization (organization_id foreign key)
-- Admins have full org access, others restricted by outlet assignment
-
-**distributors** (seeded, shared)
-- 6 food distributors (Sysco, Vesta, etc.)
-- Shared across all organizations
-
-**units** (seeded, shared)
-- 23 units of measure (LB, OZ, GAL, QT, EA, etc.)
-- Organized by type: weight, volume, count
-
-**common_products**
-- Normalized ingredient library (e.g., "Red Onion", "Chicken Breast 6oz")
-- Master products with allergen flags
-- Used for consistent recipe ingredients
-- Scoped to organization (organization_id foreign key)
-
-**products**
-- Distributor-specific products with pack size, pricing
-- Maps to common_products for normalization
-- Tracks brand, catch weight status
-- Scoped to outlet (outlet_id foreign key)
-
-**distributor_products**
-- Junction table linking products to distributors
-- Stores distributor SKU numbers
-- Scoped to organization (organization_id foreign key)
-
-**price_history**
-- Time-series pricing data with outlet-specific prices
-- effective_date tracks price changes over time
-- Enables outlet-by-outlet price comparison
-- Powers outlet-specific recipe costing
-
-**recipes**
-- Recipe definitions with category hierarchy
-- Yield amount and unit
-- Method stored as JSON
-- Scoped to outlet (outlet_id foreign key)
-- Same recipe costs differently at different outlets
-
-**recipe_ingredients**
-- Recipe components referencing common_products
-- Supports sub-recipes for complex builds
-- Yield percentage for waste calculation
-
-**import_batches**
-- CSV import audit trail
-- Scoped to organization (organization_id foreign key)
-
-### Data Model Flow
+### Multi-Tenancy Structure
 
 ```
-Distributors → Products → Common Products → Recipes
-                  ↓              ↓
-         Distributor Products    Recipe Ingredients
-                  ↓
-            Price History
+organizations (tier, subscription_status, limits)
+    ├── users (role, assigned outlets)
+    ├── outlets (location, active status)
+    │   ├── products (distributor items, prices)
+    │   └── recipes (costs vary per outlet)
+    └── common_products (shared ingredient library)
 ```
 
-**Why this works:**
-- Compare prices across multiple distributors
-- Recipes stay consistent when switching suppliers
-- Historical price tracking per distributor
-- Users control their ingredient library
+**Key Relationships:**
+- **Organizations** contain users, outlets, and common products
+- **Outlets** have specific products and recipes
+- **Users** can be org-wide (admin) or outlet-specific (chef/viewer)
+- **Common Products** are shared across organization but products/recipes are outlet-specific
+- **Price History** is outlet-specific, enabling per-location recipe costing
 
-## Quick Start
+**Multi-Outlet Benefits:**
+- Same recipe costs differently at each location
+- Price comparison across outlets
+- Data isolation between locations
+- Perfect for hotel groups and franchises
 
-### Prerequisites
-- Python 3.12+
-- Node.js 20+
-- PostgreSQL 16+ (local or Render)
-
-### Local Development Setup
-
-1. **Clone the repository**
-```bash
-git clone https://github.com/CxRxExAxM/food-cost-tracker.git
-cd food-cost-tracker
-```
-
-2. **Set up PostgreSQL database**
-```bash
-# Create database
-createdb food_cost_tracker_local
-
-# Set environment variable
-export DATABASE_URL="postgresql://localhost/food_cost_tracker_local"
-```
-
-3. **Set up Python virtual environment**
-```bash
-python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install -r requirements.txt
-```
-
-4. **Run database migrations**
-```bash
-venv/bin/alembic upgrade head
-```
-This creates all tables and seeds distributors/units.
-
-5. **Start the backend**
-```bash
-cd api
-../venv/bin/uvicorn app.main:app --reload --port 8000
-```
-- API available at http://localhost:8000
-- API docs at http://localhost:8000/docs
-
-6. **Start the frontend**
-```bash
-# New terminal, from project root
-cd frontend
-npm install
-npm run dev
-```
-Frontend available at http://localhost:5173
-
-7. **Initial Setup**
-- Navigate to http://localhost:5173
-- Click "Initial Setup"
-- Create admin user account
-- Login and start using the app
-
-## CSV Import Workflow
-
-### 1. Clean distributor CSV
-```bash
-# Activate virtual environment
-source venv/bin/activate
-
-# Clean based on distributor
-python clean_sysco.py sysco_export.csv
-python clean_vesta.py vesta_export.csv
-python clean_smseafood.py smseafood_export.csv
-# etc.
-```
-
-### 2. Import via UI
-- Navigate to Products page
-- Click "Import Products"
-- Select distributor from dropdown
-- Upload cleaned CSV/Excel file
-- View import summary
-
-### 3. Map products
-- Products import unmapped initially
-- Use autocomplete to map to common products
-- Create new common products as needed
-- Mapped products auto-populate in recipes
-
-## API Endpoints
-
-### Authentication
-- `POST /auth/setup` - Initial admin user creation
-- `POST /auth/login` - Login and get JWT token
-- `GET /auth/me` - Get current user info
-- `PUT /auth/me` - Update current user
-- `GET /auth/users` - List all users (admin only)
-- `POST /auth/users` - Create new user (admin only)
-
-### Products
-- `GET /products` - List products (pagination, filters, search)
-- `GET /products/{id}` - Get product details with pricing
-- `PATCH /products/{id}` - Update product
-- `PATCH /products/{id}/map` - Map to common product
-- `PATCH /products/{id}/unmap` - Remove common product mapping
-
-### Common Products
-- `GET /common-products` - List common products
-- `POST /common-products` - Create common product
-- `GET /common-products/{id}` - Get details
-- `PATCH /common-products/{id}` - Update (including allergens)
-- `DELETE /common-products/{id}` - Soft delete
-- `GET /common-products/{id}/products` - Get all distributor products mapped to this
-
-### Recipes
-- `GET /recipes` - List all recipes with folder structure
-- `POST /recipes` - Create recipe
-- `GET /recipes/{id}` - Get recipe details with ingredients
-- `GET /recipes/{id}/cost` - Calculate recipe cost with breakdown
-- `PATCH /recipes/{id}` - Update recipe
-- `DELETE /recipes/{id}` - Soft delete recipe
-- `GET /recipes/categories` - Get category tree
-
-### Uploads
-- `POST /uploads/csv` - Upload and import distributor CSV
-- `GET /uploads/distributors` - List available distributors
-- `GET /uploads/batches` - Get import history
-
-Full API documentation: http://localhost:8000/docs
+---
 
 ## Git Workflow
 
-### Branch Structure
-- `main` - Production (auto-deploys to Render)
-- `dev` - Staging/testing (auto-deploys to dev environment)
-- `feature/*` - Individual features
+**Current Branch Strategy:**
+```
+main (production)
+  └── dev (development)
+      ├── feature/* (short-lived)
+      └── fix/* (short-lived)
+```
 
-### Feature Development
+**Development Process:**
 ```bash
-# Start new feature
+# Create feature branch from dev
 git checkout dev
 git pull origin dev
-git checkout -b feature/feature-name
+git checkout -b feature/your-feature
 
 # Work and commit
 git add .
 git commit -m "feat: description"
 
-# Push and create PR
-git push origin feature/feature-name
-# Create PR: feature → dev
-# Test in dev environment
-# Merge dev → main when ready
+# Push and test in dev environment
+git push origin feature/your-feature
+git checkout dev
+git merge feature/your-feature
+git push origin dev  # Auto-deploys to dev.onrender.com
+
+# Deploy to production when ready
+git checkout main
+git merge dev
+git push origin main  # Auto-deploys to production
 ```
 
-## Deployment
+**See [DEVELOPMENT.md](DEVELOPMENT.md) for detailed git workflow and deployment guide.**
 
-### Automatic Deploys (Render.com)
-
-**Production:**
-- Push to `main` → Production deployment
-- URL: https://food-cost-tracker.onrender.com
-
-**Development:**
-- Push to `dev` → Dev deployment
-- URL: https://food-cost-tracker-dev.onrender.com
-
-### Environment Variables (Render Dashboard)
-```bash
-DATABASE_URL=postgresql://user:pass@host/database  # Auto-provided by Render
-JWT_SECRET_KEY=<auto-generated-secret>
-PORT=8000  # Set by Render
-```
-
-### Startup Process
-1. Docker builds frontend (Vite) and backend (Python)
-2. `db_startup.py` runs Alembic migrations
-3. Uvicorn starts FastAPI server on PORT
-4. Static frontend served by FastAPI
-
-### Manual Deploy
-```bash
-# Trigger redeploy without code changes
-git commit --allow-empty -m "Trigger deploy"
-git push origin main
-```
-
-## Database Management
-
-### Alembic Migrations
-
-```bash
-# Create new migration (after model changes)
-venv/bin/alembic revision --autogenerate -m "Description of changes"
-
-# Run migrations
-venv/bin/alembic upgrade head
-
-# Rollback migration
-venv/bin/alembic downgrade -1
-
-# View migration history
-venv/bin/alembic history
-
-# Check current version
-venv/bin/alembic current
-```
-
-### Database Backup
-```bash
-# Dump database
-pg_dump -h <host> -U <user> -d <database> > backup_$(date +%Y%m%d).sql
-
-# Restore database
-psql -h <host> -U <user> -d <database> < backup_20251211.sql
-```
-
-## Development Tips
-
-### Debugging
-- Backend logs: Render dashboard or local terminal
-- Frontend errors: Browser console (F12)
-- Database queries: Use `/docs` to test API endpoints interactively
-- PostgreSQL client: Use pgAdmin, TablePlus, or psql CLI
-
-### Common Issues
-
-**"DATABASE_URL environment variable is required"**
-- Set DATABASE_URL pointing to your PostgreSQL instance
-- Local: `export DATABASE_URL="postgresql://localhost/food_cost_tracker_local"`
-
-**CORS errors in frontend**
-- Backend must be running on port 8000
-- Check CORS middleware in `api/app/main.py`
-
-**Migration errors**
-- Ensure DATABASE_URL is set correctly
-- Check Alembic is using correct database: `alembic current`
-
-**Products not showing prices**
-- Verify product is mapped to common_product
-- Check price_history has recent entries
-- Use "Refresh Costs" button in recipe view
+---
 
 ## Roadmap
 
-### Completed ✅
-- Multi-distributor import system with CSV cleaning
-- Product-to-common-product mapping
-- Recipe builder with folder organization
-- Live cost calculation with yield percentages
-- Allergen auto-aggregation from ingredients
-- User authentication with role-based permissions
-- PostgreSQL-only architecture (simplified, production-ready)
-- Dev/staging environment
-- Multi-tenancy architecture (organization-based data isolation)
-- Organization admin interface
-- Tier system (Free, Basic, Pro, Enterprise)
-- Multi-outlet support (backend + frontend)
-- Super admin platform with impersonation
+### ✅ MVP Complete (December 2024)
 
-### In Progress 🚧
+**Food Cost Tracking:**
+- Multi-distributor price import and tracking
+- Recipe builder with live cost calculation
+- Allergen and dietary tracking
+- Historical price tracking
+
+**Multi-Tenant Platform:**
+- Organization management with subscription tiers
+- Multi-outlet support with data isolation
 - Outlet-level user access control
+- Super admin management suite
+- Audit logging and compliance tracking
 
-### Planned 📋
+### 📋 Next Phase (Post-MVP)
+
+**See [FUTURE_PLANS.md](FUTURE_PLANS.md) for comprehensive roadmap:**
+
+**High Priority:**
 - AI Recipe Parser (Claude API integration)
-  - Upload Word/PDF documents
-  - Auto-extract ingredients
-  - Smart common product matching
-- Historical price charts with trend analysis
-- Recipe scaling calculator
-- PDF export for recipe cards
-- Mobile-responsive improvements
+- Advanced features (recipe scaling, shopping lists, price trend charts)
 
-### Future Modules 🔮
-- Labor scheduling & cost tracking
-- Daily P&L tracking (revenue vs food cost)
-- HACCP compliance & allergen labeling
-- Menu engineering & profitability analysis
-- Inventory management integration
+**Future Modules:**
+- HACCP & Temperature Monitoring
+- Inventory Management
+- Labor Scheduling & Cost Tracking
+- Menu Engineering & Profitability
 
-## Performance
+**Platform Evolution:**
+- Three-branch workflow (main/staging/dev)
+- Feature flag system for module access
+- Modular architecture for multi-module platform
 
-### Current Metrics (Dev Environment)
-- Average API response time: <200ms
-- CSV import: ~1000 products in ~5 seconds
-- Recipe cost calculation: Real-time (<100ms)
-- Database: Render PostgreSQL (free tier)
+---
 
-### Code Quality
-- **39 lines** for database.py (down from 549)
-- **~700 lines removed** in PostgreSQL migration
-- Clean, maintainable codebase
-- Comprehensive error logging
+## Key Competitive Advantages
 
-## Contributing
+1. **🔥 Multi-Outlet Support** - True per-location pricing and costing (most competitors fake it)
+2. **💰 Real-Time Cost Calculation** - Instant recipe cost updates when prices change
+3. **🏢 Multi-Tenant SaaS** - Complete data isolation, tier-based access
+4. **📊 Super Admin Platform** - Full platform oversight and customer support tools
+5. **🔍 Audit Logging** - Complete compliance trail for all critical actions
+6. **👥 Outlet-Level Access Control** - Flexible permissions for multi-location operations
 
-This is a personal project, but suggestions and bug reports are welcome!
+---
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Submit a pull request
+## Documentation
+
+- **[FUTURE_PLANS.md](FUTURE_PLANS.md)** - Post-MVP roadmap, multi-module architecture, HACCP plans
+- **[DEVELOPMENT.md](DEVELOPMENT.md)** - Local setup, git workflow, deployment, testing
+- **[DESIGN_SYSTEM.md](DESIGN_SYSTEM.md)** - UI/UX guidelines, color palette, component patterns
+- **[CLAUDE_INSTRUCTIONS.md](CLAUDE_INSTRUCTIONS.md)** - Guidelines for AI-assisted development
+- **[docs/completed/](docs/completed/)** - Completed phase documentation
+- **[docs/recipes/](docs/recipes/)** - Recipe module implementation details
+
+---
 
 ## License
 
 Proprietary - All Rights Reserved
 
-## Support
-
-For issues or questions:
-- Open a GitHub issue
-- Check docs: POSTGRESQL_MIGRATION_DEC11.md
-- API docs: https://food-cost-tracker-dev.onrender.com/docs
-
 ---
 
-**Built with ❤️ by an operator, for operators**
+**Built by an operator, for operators** 🍽️
