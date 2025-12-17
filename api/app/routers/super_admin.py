@@ -1,13 +1,14 @@
 """
 Super Admin router - Platform owner dashboard for managing all organizations.
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime, timedelta
 
 from ..auth import get_current_super_admin, get_current_user, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES, Token, get_password_hash
 from ..database import get_db, dict_from_row
+from ..audit import log_audit, AuditAction, EntityType
 
 
 router = APIRouter(prefix="/super-admin", tags=["super-admin"])
@@ -294,19 +295,24 @@ def create_organization(
 def update_organization(
     org_id: int,
     org_update: OrganizationUpdate,
-    current_user: dict = Depends(get_current_super_admin)
+    current_user: dict = Depends(get_current_super_admin),
+    request: Request = None
 ):
     """Update organization details (super admin only)."""
     with get_db() as conn:
         cursor = conn.cursor()
 
-        # Check organization exists
+        # Check organization exists and get current values
         cursor.execute("SELECT * FROM organizations WHERE id = %s", (org_id,))
-        if not cursor.fetchone():
+        old_org = dict_from_row(cursor.fetchone())
+        if not old_org:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Organization not found"
             )
+
+        # Track changes for audit log
+        changes = {}
 
         # Build update query
         update_fields = []
@@ -315,22 +321,27 @@ def update_organization(
         if org_update.name is not None:
             update_fields.append("name = %s")
             params.append(org_update.name)
+            changes["name"] = {"from": old_org["name"], "to": org_update.name}
 
         if org_update.subscription_tier is not None:
             update_fields.append("subscription_tier = %s")
             params.append(org_update.subscription_tier)
+            changes["subscription_tier"] = {"from": old_org["subscription_tier"], "to": org_update.subscription_tier}
 
         if org_update.subscription_status is not None:
             update_fields.append("subscription_status = %s")
             params.append(org_update.subscription_status)
+            changes["subscription_status"] = {"from": old_org["subscription_status"], "to": org_update.subscription_status}
 
         if org_update.max_users is not None:
             update_fields.append("max_users = %s")
             params.append(org_update.max_users)
+            changes["max_users"] = {"from": old_org["max_users"], "to": org_update.max_users}
 
         if org_update.max_recipes is not None:
             update_fields.append("max_recipes = %s")
             params.append(org_update.max_recipes)
+            changes["max_recipes"] = {"from": old_org["max_recipes"], "to": org_update.max_recipes}
 
         if not update_fields:
             raise HTTPException(
@@ -351,6 +362,20 @@ def update_organization(
         cursor.execute(query, params)
         updated_org = dict_from_row(cursor.fetchone())
         conn.commit()
+
+        # Log audit event
+        action = AuditAction.SUBSCRIPTION_UPDATED if "subscription_tier" in changes or "subscription_status" in changes else AuditAction.ORG_UPDATED
+        log_audit(
+            action=action,
+            user_id=current_user["id"],
+            organization_id=org_id,
+            entity_type=EntityType.ORGANIZATION,
+            entity_id=org_id,
+            changes=changes,
+            ip_address=request.client.host if request else None,
+            impersonating=current_user.get("impersonating", False),
+            original_super_admin_id=current_user.get("original_super_admin_id")
+        )
 
         # Add counts
         cursor.execute("""
@@ -692,7 +717,8 @@ def list_all_users(
 @router.post("/impersonate/{organization_id}", response_model=Token)
 def impersonate_organization(
     organization_id: int,
-    current_user: dict = Depends(get_current_super_admin)
+    current_user: dict = Depends(get_current_super_admin),
+    request: Request = None
 ):
     """
     Impersonate an organization as an admin user.
@@ -732,6 +758,21 @@ def impersonate_organization(
                 detail="No active admin user found in this organization"
             )
 
+        # Log audit event
+        log_audit(
+            action=AuditAction.IMPERSONATION_STARTED,
+            user_id=current_user["id"],
+            organization_id=organization_id,
+            entity_type=EntityType.ORGANIZATION,
+            entity_id=organization_id,
+            changes={
+                "super_admin": current_user["email"],
+                "organization": org["name"],
+                "impersonated_user": admin_user["email"]
+            },
+            ip_address=request.client.host if request else None
+        )
+
         # Create impersonation token
         # Include both impersonated user info and original super admin ID
         access_token = create_access_token(
@@ -754,7 +795,7 @@ def impersonate_organization(
 
 
 @router.post("/exit-impersonation", response_model=Token)
-def exit_impersonation(current_user: dict = Depends(get_current_user)):
+def exit_impersonation(current_user: dict = Depends(get_current_user), request: Request = None):
     """
     Exit impersonation mode and return to original super admin session.
     Extracts original super admin info from the impersonation token.
@@ -773,6 +814,20 @@ def exit_impersonation(current_user: dict = Depends(get_current_user)):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Original super admin info not found in token"
         )
+
+    # Log audit event
+    log_audit(
+        action=AuditAction.IMPERSONATION_ENDED,
+        user_id=original_super_admin_id,
+        organization_id=current_user.get("organization_id"),
+        entity_type=EntityType.ORGANIZATION,
+        entity_id=current_user.get("organization_id"),
+        changes={
+            "super_admin": original_super_admin_email,
+            "exited_from_user": current_user.get("email")
+        },
+        ip_address=request.client.host if request else None
+    )
 
     # Fetch original super admin user details
     with get_db() as conn:
