@@ -468,7 +468,7 @@ def impersonate_organization(
 
 
 @router.post("/exit-impersonation", response_model=Token)
-def exit_impersonation(current_user: dict = Depends(get_current_super_admin)):
+def exit_impersonation(current_user: dict = Depends(get_current_user)):
     """
     Exit impersonation mode and return to original super admin session.
     Extracts original super admin info from the impersonation token.
