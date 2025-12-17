@@ -31,37 +31,42 @@ def log_audit(
         impersonating: Whether this action was performed while impersonating
         original_super_admin_id: If impersonating, the ID of the super admin
     """
-    with get_db() as conn:
-        cursor = conn.cursor()
+    try:
+        with get_db() as conn:
+            cursor = conn.cursor()
 
-        # Convert changes dict to JSON string
-        changes_json = json.dumps(changes) if changes else None
+            # Convert changes dict to JSON string
+            changes_json = json.dumps(changes) if changes else None
 
-        cursor.execute("""
-            INSERT INTO audit_logs (
+            cursor.execute("""
+                INSERT INTO audit_logs (
+                    user_id,
+                    organization_id,
+                    action,
+                    entity_type,
+                    entity_id,
+                    changes,
+                    ip_address,
+                    impersonating,
+                    original_super_admin_id
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, (
                 user_id,
                 organization_id,
                 action,
                 entity_type,
                 entity_id,
-                changes,
+                changes_json,
                 ip_address,
-                impersonating,
+                1 if impersonating else 0,
                 original_super_admin_id
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-        """, (
-            user_id,
-            organization_id,
-            action,
-            entity_type,
-            entity_id,
-            changes_json,
-            ip_address,
-            1 if impersonating else 0,
-            original_super_admin_id
-        ))
+            ))
 
-        conn.commit()
+            conn.commit()
+    except Exception as e:
+        # Fail gracefully if audit_logs table doesn't exist yet
+        # This allows endpoints to work even if migration hasn't run
+        print(f"Warning: Failed to log audit event: {e}")
 
 
 # Action constants for consistency
