@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime, timedelta
 
-from ..auth import get_current_super_admin, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES, Token
+from ..auth import get_current_super_admin, get_current_user, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES, Token
 from ..database import get_db, dict_from_row
 
 
