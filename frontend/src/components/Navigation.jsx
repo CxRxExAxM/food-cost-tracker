@@ -27,6 +27,28 @@ function Navigation() {
     navigate('/login');
   };
 
+  const handleExitImpersonation = async () => {
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || ''}/super-admin/exit-impersonation`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        localStorage.setItem('token', data.access_token);
+        window.location.href = '/super-admin/organizations';
+      } else {
+        alert('Error exiting impersonation');
+      }
+    } catch (error) {
+      console.error('Error exiting impersonation:', error);
+      alert('Error exiting impersonation');
+    }
+  };
+
   const getTierBadgeClass = (tier) => {
     const tierLower = tier?.toLowerCase() || 'free';
     return `tier-badge tier-${tierLower}`;
@@ -42,10 +64,31 @@ function Navigation() {
   const organizationTier = user?.organization_tier || 'Free';
 
   return (
-    <nav className="navigation">
-      <div className="nav-container">
-        {/* Left: Branding + Nav Links */}
-        <div className="nav-left">
+    <>
+      {/* Impersonation Banner */}
+      {user?.impersonating && (
+        <div className="impersonation-banner">
+          <div className="impersonation-content">
+            <div className="impersonation-info">
+              <span className="impersonation-icon">⚠️</span>
+              <span className="impersonation-text">
+                Viewing as <strong>{user.organization_name || 'Organization'}</strong>
+              </span>
+              <span className="impersonation-subtext">
+                (Super Admin: {user.original_super_admin_email})
+              </span>
+            </div>
+            <button className="btn-exit-impersonation" onClick={handleExitImpersonation}>
+              Exit Impersonation
+            </button>
+          </div>
+        </div>
+      )}
+
+      <nav className="navigation">
+        <div className="nav-container">
+          {/* Left: Branding + Nav Links */}
+          <div className="nav-left">
           <div className="nav-brand">
             <Link to="/" className="brand-link">
               <div className="brand-name">RestauranTek</div>
@@ -124,6 +167,7 @@ function Navigation() {
         </div>
       </div>
     </nav>
+    </>
   );
 }
 

@@ -827,3 +827,65 @@ div[style*="text-align: center"][style*="padding: 3rem"] {
 .org-name-link:hover h3 {
   color: var(--color-red-bright, #ff4d4f);
 }
+
+/* Subscription Management */
+.subscription-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem;
+  background: var(--bg-secondary, #242424);
+  border: 1px solid var(--border-default, #3d3d3d);
+  border-radius: 6px;
+  gap: 2rem;
+}
+
+.subscription-info {
+  display: flex;
+  gap: 2rem;
+  align-items: center;
+}
+
+.info-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.info-label {
+  color: var(--text-secondary, #a3a3a3);
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.action-btn.primary {
+  background: var(--color-yellow, #d4a72c);
+  border-color: var(--color-yellow, #d4a72c);
+  color: var(--bg-primary, #1a1a1a);
+  font-weight: 600;
+}
+
+.action-btn.primary:hover {
+  background: var(--color-yellow-bright, #fadb14);
+  border-color: var(--color-yellow-bright, #fadb14);
+  color: var(--bg-primary, #1a1a1a);
+  transform: translateY(-1px);
+}
+
+.action-btn.impersonate {
+  background: var(--color-red-dim, rgba(255, 77, 79, 0.1));
+  border-color: var(--color-red, #ff4d4f);
+  color: var(--color-red-bright, #ff4d4f);
+  font-weight: 600;
+}
+
+.action-btn.impersonate:hover {
+  background: var(--color-red, #ff4d4f);
+  border-color: var(--color-red, #ff4d4f);
+  color: white;
+}

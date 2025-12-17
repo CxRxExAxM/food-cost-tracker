@@ -13,6 +13,7 @@ export default function SuperAdminOrganizationDetail() {
   const [showEditUserModal, setShowEditUserModal] = useState(false);
   const [showToggleUserModal, setShowToggleUserModal] = useState(false);
   const [showManageOutletsModal, setShowManageOutletsModal] = useState(false);
+  const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
 
   // Form states
@@ -22,6 +23,10 @@ export default function SuperAdminOrganizationDetail() {
     password: ''
   });
   const [selectedOutletIds, setSelectedOutletIds] = useState([]);
+  const [subscriptionForm, setSubscriptionForm] = useState({
+    subscription_tier: '',
+    subscription_status: ''
+  });
 
   useEffect(() => {
     fetchOrganizationDetail();
@@ -144,6 +149,43 @@ export default function SuperAdminOrganizationDetail() {
     }
   };
 
+  const openSubscriptionModal = () => {
+    setSubscriptionForm({
+      subscription_tier: organization.subscription_tier,
+      subscription_status: organization.subscription_status
+    });
+    setShowSubscriptionModal(true);
+  };
+
+  const handleUpdateSubscription = async (e) => {
+    e.preventDefault();
+    try {
+      await axios.patch(`/super-admin/organizations/${orgId}`, subscriptionForm);
+      alert('Subscription updated successfully');
+      setShowSubscriptionModal(false);
+      fetchOrganizationDetail();
+    } catch (error) {
+      console.error('Error updating subscription:', error);
+      alert(error.response?.data?.detail || 'Error updating subscription');
+    }
+  };
+
+  const handleImpersonate = async () => {
+    try {
+      const response = await axios.post(`/super-admin/impersonate/${orgId}`);
+      const { access_token } = response.data;
+
+      // Store the token and redirect to main app
+      localStorage.setItem('token', access_token);
+
+      // Redirect to home page to see the impersonated view
+      window.location.href = '/';
+    } catch (error) {
+      console.error('Error impersonating organization:', error);
+      alert(error.response?.data?.detail || 'Error impersonating organization');
+    }
+  };
+
   if (loading) {
     return <div className="loading">Loading organization details...</div>;
   }
@@ -192,6 +234,38 @@ export default function SuperAdminOrganizationDetail() {
         <div className="stat-card">
           <div className="stat-value">{organization.recipes_count || 0}</div>
           <div className="stat-label">Recipes</div>
+        </div>
+      </div>
+
+      {/* Subscription & Actions */}
+      <div className="detail-section">
+        <h2>Subscription & Actions</h2>
+        <div className="subscription-actions">
+          <div className="subscription-info">
+            <div className="info-item">
+              <span className="info-label">Tier:</span>
+              <span
+                className="org-tier-badge"
+                style={{ backgroundColor: getTierColor(organization.subscription_tier) }}
+              >
+                {organization.subscription_tier}
+              </span>
+            </div>
+            <div className="info-item">
+              <span className="info-label">Status:</span>
+              <span className={`status-badge ${organization.subscription_status === 'active' ? 'active' : 'inactive'}`}>
+                {organization.subscription_status}
+              </span>
+            </div>
+          </div>
+          <div className="action-buttons">
+            <button className="action-btn primary" onClick={openSubscriptionModal}>
+              Manage Subscription
+            </button>
+            <button className="action-btn impersonate" onClick={handleImpersonate}>
+              Impersonate Organization
+            </button>
+          </div>
         </div>
       </div>
 
@@ -431,6 +505,51 @@ export default function SuperAdminOrganizationDetail() {
                 </button>
                 <button type="submit" className="btn-primary" disabled={organization.outlets.length === 0}>
                   Save Assignments
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Subscription Management Modal */}
+      {showSubscriptionModal && (
+        <div className="modal-overlay" onClick={() => setShowSubscriptionModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h2>Manage Subscription: {organization.name}</h2>
+            <form onSubmit={handleUpdateSubscription}>
+              <div className="form-group">
+                <label>Subscription Tier</label>
+                <select
+                  value={subscriptionForm.subscription_tier}
+                  onChange={(e) => setSubscriptionForm({...subscriptionForm, subscription_tier: e.target.value})}
+                  required
+                >
+                  <option value="free">Free</option>
+                  <option value="basic">Basic</option>
+                  <option value="pro">Pro</option>
+                  <option value="enterprise">Enterprise</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Subscription Status</label>
+                <select
+                  value={subscriptionForm.subscription_status}
+                  onChange={(e) => setSubscriptionForm({...subscriptionForm, subscription_status: e.target.value})}
+                  required
+                >
+                  <option value="active">Active</option>
+                  <option value="trial">Trial</option>
+                  <option value="suspended">Suspended</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
+              </div>
+              <div className="modal-actions">
+                <button type="button" onClick={() => setShowSubscriptionModal(false)} className="btn-secondary">
+                  Cancel
+                </button>
+                <button type="submit" className="btn-primary">
+                  Update Subscription
                 </button>
               </div>
             </form>
