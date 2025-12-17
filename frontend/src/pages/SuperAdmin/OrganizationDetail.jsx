@@ -12,6 +12,7 @@ export default function SuperAdminOrganizationDetail() {
   // Modal states
   const [showEditUserModal, setShowEditUserModal] = useState(false);
   const [showToggleUserModal, setShowToggleUserModal] = useState(false);
+  const [showManageOutletsModal, setShowManageOutletsModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
 
   // Form states
@@ -20,6 +21,7 @@ export default function SuperAdminOrganizationDetail() {
     role: 'admin',
     password: ''
   });
+  const [selectedOutletIds, setSelectedOutletIds] = useState([]);
 
   useEffect(() => {
     fetchOrganizationDetail();
@@ -70,6 +72,38 @@ export default function SuperAdminOrganizationDetail() {
   const openToggleUserModal = (user) => {
     setSelectedUser(user);
     setShowToggleUserModal(true);
+  };
+
+  const openManageOutletsModal = (user) => {
+    setSelectedUser(user);
+    setSelectedOutletIds(user.assigned_outlet_ids || []);
+    setShowManageOutletsModal(true);
+  };
+
+  const handleManageOutlets = async (e) => {
+    e.preventDefault();
+    try {
+      await axios.patch(`/super-admin/users/${selectedUser.id}/outlets`, {
+        outlet_ids: selectedOutletIds
+      });
+      alert('Outlet assignments updated successfully');
+      setShowManageOutletsModal(false);
+      setSelectedUser(null);
+      fetchOrganizationDetail();
+    } catch (error) {
+      console.error('Error updating outlet assignments:', error);
+      alert(error.response?.data?.detail || 'Error updating outlet assignments');
+    }
+  };
+
+  const toggleOutletSelection = (outletId) => {
+    setSelectedOutletIds(prev => {
+      if (prev.includes(outletId)) {
+        return prev.filter(id => id !== outletId);
+      } else {
+        return [...prev, outletId];
+      }
+    });
   };
 
   const handleEditUser = async (e) => {
@@ -174,6 +208,7 @@ export default function SuperAdminOrganizationDetail() {
                 <th>Username</th>
                 <th>Full Name</th>
                 <th>Role</th>
+                <th>Outlets</th>
                 <th>Status</th>
                 <th>Actions</th>
               </tr>
@@ -193,6 +228,24 @@ export default function SuperAdminOrganizationDetail() {
                     </span>
                   </td>
                   <td>
+                    {user.role === 'admin' ? (
+                      <span className="outlet-badge all-outlets">All Outlets</span>
+                    ) : user.assigned_outlet_ids && user.assigned_outlet_ids.length > 0 ? (
+                      <div style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap' }}>
+                        {user.assigned_outlet_ids.map(outletId => {
+                          const outlet = organization.outlets.find(o => o.id === outletId);
+                          return outlet ? (
+                            <span key={outletId} className="outlet-badge">
+                              {outlet.name}
+                            </span>
+                          ) : null;
+                        })}
+                      </div>
+                    ) : (
+                      <span className="outlet-badge no-outlets">No Outlets</span>
+                    )}
+                  </td>
+                  <td>
                     <span className={`status-badge ${user.is_active ? 'active' : 'inactive'}`}>
                       {user.is_active ? 'Active' : 'Inactive'}
                     </span>
@@ -201,6 +254,11 @@ export default function SuperAdminOrganizationDetail() {
                     <button className="action-btn" onClick={() => openEditUserModal(user)}>
                       Edit
                     </button>
+                    {user.role !== 'admin' && (
+                      <button className="action-btn" onClick={() => openManageOutletsModal(user)}>
+                        Manage Outlets
+                      </button>
+                    )}
                     <button className="action-btn" onClick={() => openToggleUserModal(user)}>
                       {user.is_active ? 'Deactivate' : 'Activate'}
                     </button>
@@ -320,6 +378,71 @@ export default function SuperAdminOrganizationDetail() {
                 {selectedUser.is_active ? 'Deactivate User' : 'Activate User'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Manage Outlets Modal */}
+      {showManageOutletsModal && selectedUser && (
+        <div className="modal-overlay" onClick={() => setShowManageOutletsModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h2>Manage Outlets: {selectedUser.email}</h2>
+            <p style={{ marginBottom: '1rem', color: '#6b7280' }}>
+              Select which outlets this user can access. Admins always have access to all outlets.
+            </p>
+            <form onSubmit={handleManageOutlets}>
+              <div className="form-group">
+                {organization.outlets.length === 0 ? (
+                  <p style={{ color: '#6b7280', fontStyle: 'italic' }}>
+                    No outlets available. Create outlets first to assign them to users.
+                  </p>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                    {organization.outlets.map(outlet => (
+                      <label
+                        key={outlet.id}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.5rem',
+                          padding: '0.5rem',
+                          border: '1px solid #e5e7eb',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          backgroundColor: selectedOutletIds.includes(outlet.id) ? '#f0f9ff' : 'white'
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedOutletIds.includes(outlet.id)}
+                          onChange={() => toggleOutletSelection(outlet.id)}
+                          style={{ cursor: 'pointer' }}
+                        />
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: 500 }}>{outlet.name}</div>
+                          {outlet.location && (
+                            <div style={{ fontSize: '0.875rem', color: '#6b7280' }}>
+                              {outlet.location}
+                            </div>
+                          )}
+                        </div>
+                        <span className={`status-badge ${outlet.is_active ? 'active' : 'inactive'}`}>
+                          {outlet.is_active ? 'Active' : 'Inactive'}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="modal-actions">
+                <button type="button" onClick={() => setShowManageOutletsModal(false)} className="btn-secondary">
+                  Cancel
+                </button>
+                <button type="submit" className="btn-primary" disabled={organization.outlets.length === 0}>
+                  Save Assignments
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

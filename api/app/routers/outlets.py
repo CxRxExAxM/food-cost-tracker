@@ -13,14 +13,31 @@ router = APIRouter(prefix="/outlets", tags=["outlets"])
 
 @router.get("", response_model=List[OutletResponse])
 def list_outlets(current_user: dict = Depends(get_current_user)):
-    """List all outlets in user's organization."""
+    """
+    List outlets accessible to the current user.
+    - Admins see all outlets in their organization
+    - Chefs/Viewers see only outlets they're assigned to
+    """
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute("""
-            SELECT * FROM outlets
-            WHERE organization_id = %s AND is_active = 1
-            ORDER BY name
-        """, (current_user["organization_id"],))
+
+        # Admins see all outlets
+        if current_user["role"] == "admin":
+            cursor.execute("""
+                SELECT * FROM outlets
+                WHERE organization_id = %s AND is_active = 1
+                ORDER BY name
+            """, (current_user["organization_id"],))
+        else:
+            # Non-admins only see assigned outlets
+            cursor.execute("""
+                SELECT o.* FROM outlets o
+                JOIN user_outlets uo ON uo.outlet_id = o.id
+                WHERE o.organization_id = %s
+                AND o.is_active = 1
+                AND uo.user_id = %s
+                ORDER BY o.name
+            """, (current_user["organization_id"], current_user["id"]))
 
         outlets = dicts_from_rows(cursor.fetchall())
         return outlets

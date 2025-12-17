@@ -72,6 +72,7 @@ class UserResponse(BaseModel):
     role: str
     is_active: bool
     organization_id: int
+    assigned_outlet_ids: List[int] = []
 
 
 class UserUpdate(BaseModel):
@@ -79,6 +80,10 @@ class UserUpdate(BaseModel):
     role: Optional[str] = None
     is_active: Optional[bool] = None
     password: Optional[str] = None
+
+
+class UserOutletAssignments(BaseModel):
+    outlet_ids: List[int]
 
 
 class OutletBasic(BaseModel):
@@ -206,6 +211,25 @@ def get_organization_detail(
             ORDER BY is_active DESC, role, email
         """, (org_id,))
         users = [dict_from_row(row) for row in cursor.fetchall()]
+
+        # Get outlet assignments for all users
+        cursor.execute("""
+            SELECT user_id, outlet_id
+            FROM user_outlets
+            WHERE user_id IN (SELECT id FROM users WHERE organization_id = %s)
+        """, (org_id,))
+
+        # Build a map of user_id -> [outlet_ids]
+        outlet_assignments = {}
+        for row in cursor.fetchall():
+            user_id = row["user_id"]
+            if user_id not in outlet_assignments:
+                outlet_assignments[user_id] = []
+            outlet_assignments[user_id].append(row["outlet_id"])
+
+        # Add assigned_outlet_ids to each user
+        for user in users:
+            user["assigned_outlet_ids"] = outlet_assignments.get(user["id"], [])
 
         # Get all outlets for this organization
         cursor.execute("""
@@ -495,6 +519,73 @@ def update_user(
         conn.commit()
 
         return updated_user
+
+
+@router.patch("/users/{user_id}/outlets", status_code=status.HTTP_200_OK)
+def update_user_outlet_assignments(
+    user_id: int,
+    assignments: UserOutletAssignments,
+    current_user: dict = Depends(get_current_super_admin)
+):
+    """
+    Update outlet assignments for a user (super admin only).
+    Replaces all existing assignments with the provided list.
+    """
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Verify user exists and get their organization
+        cursor.execute("""
+            SELECT id, organization_id, role FROM users WHERE id = %s
+        """, (user_id,))
+        user = cursor.fetchone()
+
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+
+        user_dict = dict_from_row(user)
+        org_id = user_dict["organization_id"]
+
+        # Verify all outlet IDs belong to the user's organization
+        if assignments.outlet_ids:
+            placeholders = ','.join(['%s'] * len(assignments.outlet_ids))
+            cursor.execute(f"""
+                SELECT id FROM outlets
+                WHERE id IN ({placeholders}) AND organization_id = %s
+            """, (*assignments.outlet_ids, org_id))
+
+            valid_outlets = [row["id"] for row in cursor.fetchall()]
+
+            if len(valid_outlets) != len(assignments.outlet_ids):
+                invalid_ids = set(assignments.outlet_ids) - set(valid_outlets)
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Invalid outlet IDs: {invalid_ids}"
+                )
+
+        # Delete existing assignments
+        cursor.execute("""
+            DELETE FROM user_outlets WHERE user_id = %s
+        """, (user_id,))
+
+        # Insert new assignments
+        if assignments.outlet_ids:
+            values = [(user_id, outlet_id) for outlet_id in assignments.outlet_ids]
+            cursor.executemany("""
+                INSERT INTO user_outlets (user_id, outlet_id)
+                VALUES (%s, %s)
+            """, values)
+
+        conn.commit()
+
+        return {
+            "user_id": user_id,
+            "outlet_ids": assignments.outlet_ids,
+            "message": f"Updated outlet assignments for user {user_id}"
+        }
 
 
 # Platform statistics endpoint
