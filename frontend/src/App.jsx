@@ -10,6 +10,7 @@ import Outlets from './pages/Outlets';
 import Login from './pages/Login';
 import SuperAdminDashboard from './pages/SuperAdmin/Dashboard';
 import SuperAdminOrganizations from './pages/SuperAdmin/Organizations';
+import ImpersonationBanner from './components/ImpersonationBanner';
 import './App.css';
 
 // Protected route wrapper
@@ -170,6 +171,7 @@ function App() {
       <AuthProvider>
         <OutletProvider>
           <div className="app">
+            <ImpersonationBanner />
             <AppRoutes />
           </div>
         </OutletProvider>

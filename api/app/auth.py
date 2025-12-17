@@ -36,6 +36,9 @@ class TokenData(BaseModel):
     email: Optional[str] = None
     role: Optional[str] = None
     organization_id: Optional[int] = None
+    impersonating: Optional[bool] = False
+    original_super_admin_id: Optional[int] = None
+    original_super_admin_email: Optional[str] = None
 
 
 class UserCreate(BaseModel):
@@ -62,6 +65,8 @@ class UserResponse(BaseModel):
     is_super_admin: bool = False
     organization_name: Optional[str] = None
     organization_tier: Optional[str] = None
+    impersonating: bool = False
+    original_super_admin_email: Optional[str] = None
 
 
 class UserUpdate(BaseModel):
@@ -98,10 +103,23 @@ def decode_token(token: str) -> Optional[TokenData]:
         email: str = payload.get("email")
         role: str = payload.get("role")
         organization_id: int = payload.get("organization_id")
+        impersonating: bool = payload.get("impersonating", False)
+        original_super_admin_id: int = payload.get("original_super_admin_id")
+        original_super_admin_email: str = payload.get("original_super_admin_email")
+
         if user_id_str is None:
             return None
         user_id = int(user_id_str)
-        return TokenData(user_id=user_id, email=email, role=role, organization_id=organization_id)
+
+        return TokenData(
+            user_id=user_id,
+            email=email,
+            role=role,
+            organization_id=organization_id,
+            impersonating=impersonating,
+            original_super_admin_id=original_super_admin_id,
+            original_super_admin_email=original_super_admin_email
+        )
     except (JWTError, ValueError):
         return None
 
@@ -158,6 +176,11 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="User account is disabled"
             )
+
+        # Add impersonation data from token to user dict
+        user["impersonating"] = token_data.impersonating
+        user["original_super_admin_id"] = token_data.original_super_admin_id
+        user["original_super_admin_email"] = token_data.original_super_admin_email
 
         return user
     except HTTPException:

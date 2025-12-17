@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import axios from '../../lib/axios';
+import { useAuth } from '../../context/AuthContext';
 import './SuperAdmin.css';
 
 export default function SuperAdminOrganizations() {
@@ -9,6 +10,8 @@ export default function SuperAdminOrganizations() {
   const [search, setSearch] = useState('');
   const [tierFilter, setTierFilter] = useState('');
   const location = useLocation();
+  const navigate = useNavigate();
+  const { setToken } = useAuth();
 
   // Modal states
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -104,6 +107,19 @@ export default function SuperAdminOrganizations() {
   const openSuspendModal = (org) => {
     setSelectedOrg(org);
     setShowSuspendModal(true);
+  };
+
+  const handleImpersonate = async (org) => {
+    try {
+      const response = await axios.post(`/super-admin/impersonate/${org.id}`);
+      // Use the setToken function from AuthContext to set the new token
+      await setToken(response.data.access_token);
+      // Navigate to home page in impersonated context
+      navigate('/');
+    } catch (error) {
+      console.error('Error impersonating organization:', error);
+      alert(error.response?.data?.detail || 'Error impersonating organization');
+    }
   };
 
   const getTierColor = (tier) => {
@@ -223,6 +239,12 @@ export default function SuperAdminOrganizations() {
             </div>
 
             <div className="org-actions">
+              <button
+                onClick={() => handleImpersonate(org)}
+                style={{ color: '#fadb14', fontWeight: 600 }}
+              >
+                Login as Admin
+              </button>
               <button onClick={() => openEditTierModal(org)}>Edit Tier</button>
               <button
                 onClick={() => openSuspendModal(org)}

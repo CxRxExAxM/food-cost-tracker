@@ -110,6 +110,26 @@ export function AuthProvider({ children }) {
     }
   };
 
+  const setToken = async (token) => {
+    try {
+      console.log('[AuthContext] Setting new token...');
+      localStorage.setItem('token', token);
+
+      // Fetch user info with new token
+      const userResponse = await axios.get(`${API_URL}/auth/me`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      console.log('[AuthContext] User info received:', userResponse.data);
+      setUser(userResponse.data);
+      return userResponse.data;
+    } catch (error) {
+      console.error('[AuthContext] Failed to set token:', error);
+      localStorage.removeItem('token');
+      throw error;
+    }
+  };
+
   const logout = () => {
     localStorage.removeItem('token');
     setUser(null);
@@ -136,6 +156,7 @@ export function AuthProvider({ children }) {
       setupRequired,
       login,
       setup,
+      setToken,
       logout,
       getAuthHeader,
       hasRole,
