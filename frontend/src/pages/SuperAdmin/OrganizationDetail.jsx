@@ -9,6 +9,17 @@ export default function SuperAdminOrganizationDetail() {
   const [organization, setOrganization] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // Modal states
+  const [showEditUserModal, setShowEditUserModal] = useState(false);
+  const [showToggleUserModal, setShowToggleUserModal] = useState(false);
+  const [selectedUser, setSelectedUser] = useState(null);
+
+  // Form states
+  const [editUserForm, setEditUserForm] = useState({
+    full_name: '',
+    role: 'admin'
+  });
+
   useEffect(() => {
     fetchOrganizationDetail();
   }, [orgId]);
@@ -43,6 +54,49 @@ export default function SuperAdminOrganizationDetail() {
       viewer: '#6b7280'
     };
     return colors[role] || '#6b7280';
+  };
+
+  const openEditUserModal = (user) => {
+    setSelectedUser(user);
+    setEditUserForm({
+      full_name: user.full_name || '',
+      role: user.role
+    });
+    setShowEditUserModal(true);
+  };
+
+  const openToggleUserModal = (user) => {
+    setSelectedUser(user);
+    setShowToggleUserModal(true);
+  };
+
+  const handleEditUser = async (e) => {
+    e.preventDefault();
+    try {
+      await axios.patch(`/super-admin/users/${selectedUser.id}`, editUserForm);
+      alert('User updated successfully');
+      setShowEditUserModal(false);
+      setSelectedUser(null);
+      fetchOrganizationDetail();
+    } catch (error) {
+      console.error('Error updating user:', error);
+      alert(error.response?.data?.detail || 'Error updating user');
+    }
+  };
+
+  const handleToggleUserStatus = async () => {
+    try {
+      await axios.patch(`/super-admin/users/${selectedUser.id}`, {
+        is_active: !selectedUser.is_active
+      });
+      alert(`User ${selectedUser.is_active ? 'deactivated' : 'activated'} successfully`);
+      setShowToggleUserModal(false);
+      setSelectedUser(null);
+      fetchOrganizationDetail();
+    } catch (error) {
+      console.error('Error toggling user status:', error);
+      alert(error.response?.data?.detail || 'Error updating user status');
+    }
   };
 
   if (loading) {
@@ -133,10 +187,10 @@ export default function SuperAdminOrganizationDetail() {
                     </span>
                   </td>
                   <td>
-                    <button className="action-btn" disabled>
+                    <button className="action-btn" onClick={() => openEditUserModal(user)}>
                       Edit
                     </button>
-                    <button className="action-btn" disabled>
+                    <button className="action-btn" onClick={() => openToggleUserModal(user)}>
                       {user.is_active ? 'Deactivate' : 'Activate'}
                     </button>
                   </td>
@@ -177,6 +231,78 @@ export default function SuperAdminOrganizationDetail() {
           </table>
         )}
       </div>
+
+      {/* Edit User Modal */}
+      {showEditUserModal && selectedUser && (
+        <div className="modal-overlay" onClick={() => setShowEditUserModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h2>Edit User: {selectedUser.email}</h2>
+            <form onSubmit={handleEditUser}>
+              <div className="form-group">
+                <label>Full Name</label>
+                <input
+                  type="text"
+                  value={editUserForm.full_name}
+                  onChange={(e) => setEditUserForm({...editUserForm, full_name: e.target.value})}
+                  placeholder="John Doe"
+                />
+              </div>
+              <div className="form-group">
+                <label>Role</label>
+                <select
+                  value={editUserForm.role}
+                  onChange={(e) => setEditUserForm({...editUserForm, role: e.target.value})}
+                >
+                  <option value="admin">Admin</option>
+                  <option value="chef">Chef</option>
+                  <option value="viewer">Viewer</option>
+                </select>
+              </div>
+              <div className="modal-actions">
+                <button type="button" onClick={() => setShowEditUserModal(false)} className="btn-secondary">
+                  Cancel
+                </button>
+                <button type="submit" className="btn-primary">
+                  Update User
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Toggle User Status Modal */}
+      {showToggleUserModal && selectedUser && (
+        <div className="modal-overlay" onClick={() => setShowToggleUserModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h2>{selectedUser.is_active ? 'Deactivate' : 'Activate'} User</h2>
+            <p>
+              Are you sure you want to {selectedUser.is_active ? 'deactivate' : 'activate'}{' '}
+              <strong>{selectedUser.email}</strong>?
+            </p>
+            {selectedUser.is_active && (
+              <p style={{ color: '#dc2626', marginTop: '1rem' }}>
+                Warning: Deactivating this user will prevent them from accessing the system.
+              </p>
+            )}
+            <div className="modal-actions">
+              <button onClick={() => setShowToggleUserModal(false)} className="btn-secondary">
+                Cancel
+              </button>
+              <button
+                onClick={handleToggleUserStatus}
+                className="btn-primary"
+                style={{
+                  background: selectedUser.is_active ? '#dc2626' : '#52c41a',
+                  borderColor: selectedUser.is_active ? '#dc2626' : '#52c41a'
+                }}
+              >
+                {selectedUser.is_active ? 'Deactivate User' : 'Activate User'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

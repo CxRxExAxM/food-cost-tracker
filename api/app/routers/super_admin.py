@@ -74,6 +74,12 @@ class UserResponse(BaseModel):
     organization_id: int
 
 
+class UserUpdate(BaseModel):
+    full_name: Optional[str] = None
+    role: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
 class OutletBasic(BaseModel):
     id: int
     name: str
@@ -416,6 +422,72 @@ def create_user_for_organization(
         conn.commit()
 
         return new_user
+
+
+@router.patch("/users/{user_id}", response_model=UserResponse)
+def update_user(
+    user_id: int,
+    user_update: UserUpdate,
+    current_user: dict = Depends(get_current_super_admin)
+):
+    """Update user details (super admin only)."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Verify user exists
+        cursor.execute("SELECT id, organization_id FROM users WHERE id = %s", (user_id,))
+        existing_user = cursor.fetchone()
+        if not existing_user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+
+        # Build update query dynamically based on provided fields
+        update_fields = []
+        params = []
+
+        if user_update.full_name is not None:
+            update_fields.append("full_name = %s")
+            params.append(user_update.full_name)
+
+        if user_update.role is not None:
+            # Validate role
+            if user_update.role not in ['admin', 'chef', 'viewer']:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid role. Must be 'admin', 'chef', or 'viewer'"
+                )
+            update_fields.append("role = %s")
+            params.append(user_update.role)
+
+        if user_update.is_active is not None:
+            update_fields.append("is_active = %s")
+            params.append(1 if user_update.is_active else 0)
+
+        if not update_fields:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No fields to update"
+            )
+
+        # Add updated_at
+        update_fields.append("updated_at = NOW()")
+        params.append(user_id)
+
+        # Execute update
+        query = f"""
+            UPDATE users
+            SET {', '.join(update_fields)}
+            WHERE id = %s
+            RETURNING id, email, username, full_name, role, is_active, organization_id
+        """
+        cursor.execute(query, params)
+
+        updated_user = dict_from_row(cursor.fetchone())
+        conn.commit()
+
+        return updated_user
 
 
 # Platform statistics endpoint
