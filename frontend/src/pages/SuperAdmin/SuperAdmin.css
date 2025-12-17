@@ -772,6 +772,22 @@ div[style*="text-align: center"][style*="padding: 3rem"] {
   font-style: italic;
 }
 
+.outlet-assignment-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border-default, #3d3d3d);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.outlet-assignment-item:hover {
+  border-color: var(--color-red-bright, #ff4d4f);
+  background: rgba(59, 130, 246, 0.05);
+}
+
 .action-btn {
   padding: 0.375rem 0.75rem;
   background: var(--bg-tertiary, #2d2d2d);

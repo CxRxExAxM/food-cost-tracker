@@ -265,3 +265,121 @@ def update_user(user_id: int, updates: UserUpdate, current_user: dict = Depends(
             **updated_user,
             "is_active": bool(updated_user["is_active"])
         }
+
+
+@router.get("/users/{user_id}/outlets")
+def get_user_outlet_assignments(
+    user_id: int,
+    current_user: dict = Depends(require_admin)
+):
+    """Get outlet assignments for a user (admin only)."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Verify user exists and is in same organization
+        cursor.execute("""
+            SELECT id, role FROM users
+            WHERE id = %s AND organization_id = %s
+        """, (user_id, current_user["organization_id"]))
+
+        user = cursor.fetchone()
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found in your organization"
+            )
+
+        user_dict = dict_from_row(user)
+
+        # Admins don't have outlet assignments (they see all)
+        if user_dict["role"] == "admin":
+            return {"outlet_ids": []}
+
+        # Get outlet assignments for non-admin users
+        cursor.execute("""
+            SELECT outlet_id FROM user_outlets
+            WHERE user_id = %s
+        """, (user_id,))
+
+        outlet_ids = [row["outlet_id"] for row in cursor.fetchall()]
+        return {"outlet_ids": outlet_ids}
+
+
+@router.patch("/users/{user_id}/outlets")
+def update_user_outlet_assignments(
+    user_id: int,
+    assignments: dict,
+    current_user: dict = Depends(require_admin)
+):
+    """Update outlet assignments for a user (admin only)."""
+    from pydantic import BaseModel
+    from typing import List
+
+    class OutletAssignments(BaseModel):
+        outlet_ids: List[int]
+
+    # Validate input
+    outlet_ids = assignments.get("outlet_ids", [])
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Verify user exists and is in same organization
+        cursor.execute("""
+            SELECT id, role FROM users
+            WHERE id = %s AND organization_id = %s
+        """, (user_id, current_user["organization_id"]))
+
+        user = cursor.fetchone()
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found in your organization"
+            )
+
+        user_dict = dict_from_row(user)
+
+        # Don't allow modifying admin outlet assignments (they always see all)
+        if user_dict["role"] == "admin":
+            return {
+                "message": "Admins have access to all outlets by default",
+                "outlet_ids": []
+            }
+
+        # Verify all outlet IDs belong to the organization
+        if outlet_ids:
+            placeholders = ','.join(['%s'] * len(outlet_ids))
+            cursor.execute(f"""
+                SELECT id FROM outlets
+                WHERE id IN ({placeholders}) AND organization_id = %s
+            """, (*outlet_ids, current_user["organization_id"]))
+
+            valid_outlets = [row["id"] for row in cursor.fetchall()]
+
+            if len(valid_outlets) != len(outlet_ids):
+                invalid_ids = set(outlet_ids) - set(valid_outlets)
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Invalid outlet IDs: {invalid_ids}"
+                )
+
+        # Delete existing assignments
+        cursor.execute("""
+            DELETE FROM user_outlets WHERE user_id = %s
+        """, (user_id,))
+
+        # Insert new assignments
+        if outlet_ids:
+            values = [(user_id, outlet_id) for outlet_id in outlet_ids]
+            cursor.executemany("""
+                INSERT INTO user_outlets (user_id, outlet_id)
+                VALUES (%s, %s)
+            """, values)
+
+        conn.commit()
+
+        return {
+            "user_id": user_id,
+            "outlet_ids": outlet_ids,
+            "message": f"Updated outlet assignments for user {user_id}"
+        }

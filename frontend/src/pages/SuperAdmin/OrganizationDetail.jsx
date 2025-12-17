@@ -401,15 +401,9 @@ export default function SuperAdminOrganizationDetail() {
                     {organization.outlets.map(outlet => (
                       <label
                         key={outlet.id}
+                        className="outlet-assignment-item"
                         style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '0.5rem',
-                          padding: '0.5rem',
-                          border: '1px solid #e5e7eb',
-                          borderRadius: '4px',
-                          cursor: 'pointer',
-                          backgroundColor: selectedOutletIds.includes(outlet.id) ? '#f0f9ff' : 'white'
+                          backgroundColor: selectedOutletIds.includes(outlet.id) ? 'rgba(59, 130, 246, 0.1)' : 'transparent'
                         }}
                       >
                         <input
@@ -421,14 +415,11 @@ export default function SuperAdminOrganizationDetail() {
                         <div style={{ flex: 1 }}>
                           <div style={{ fontWeight: 500 }}>{outlet.name}</div>
                           {outlet.location && (
-                            <div style={{ fontSize: '0.875rem', color: '#6b7280' }}>
+                            <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary, #a3a3a3)' }}>
                               {outlet.location}
                             </div>
                           )}
                         </div>
-                        <span className={`status-badge ${outlet.is_active ? 'active' : 'inactive'}`}>
-                          {outlet.is_active ? 'Active' : 'Inactive'}
-                        </span>
                       </label>
                     ))}
                   </div>

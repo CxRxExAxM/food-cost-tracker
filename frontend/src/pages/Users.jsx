@@ -11,10 +11,14 @@ function Users() {
   const { user, getAuthHeader, logout, isAdmin } = useAuth();
   const navigate = useNavigate();
   const [users, setUsers] = useState([]);
+  const [outlets, setOutlets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [editingUser, setEditingUser] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showManageOutletsModal, setShowManageOutletsModal] = useState(false);
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [selectedOutletIds, setSelectedOutletIds] = useState([]);
   const [newUser, setNewUser] = useState({
     email: '',
     username: '',
@@ -29,6 +33,7 @@ function Users() {
       return;
     }
     fetchUsers();
+    fetchOutlets();
   }, []);
 
   const fetchUsers = async () => {
@@ -37,13 +42,37 @@ function Users() {
       const response = await axios.get(`${API_URL}/auth/users`, {
         headers: getAuthHeader()
       });
-      setUsers(response.data);
+      // Fetch outlet assignments for each user
+      const usersWithOutlets = await Promise.all(
+        response.data.map(async (u) => {
+          try {
+            const outletResponse = await axios.get(`${API_URL}/auth/users/${u.id}/outlets`, {
+              headers: getAuthHeader()
+            });
+            return { ...u, assigned_outlet_ids: outletResponse.data.outlet_ids || [] };
+          } catch {
+            return { ...u, assigned_outlet_ids: [] };
+          }
+        })
+      );
+      setUsers(usersWithOutlets);
       setError(null);
     } catch (err) {
       console.error('Error fetching users:', err);
       setError('Failed to load users');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchOutlets = async () => {
+    try {
+      const response = await axios.get(`${API_URL}/outlets`, {
+        headers: getAuthHeader()
+      });
+      setOutlets(response.data);
+    } catch (err) {
+      console.error('Error fetching outlets:', err);
     }
   };
 
@@ -103,6 +132,39 @@ function Users() {
     }
   };
 
+  const openManageOutletsModal = (u) => {
+    setSelectedUser(u);
+    setSelectedOutletIds(u.assigned_outlet_ids || []);
+    setShowManageOutletsModal(true);
+  };
+
+  const toggleOutletSelection = (outletId) => {
+    setSelectedOutletIds(prev => {
+      if (prev.includes(outletId)) {
+        return prev.filter(id => id !== outletId);
+      } else {
+        return [...prev, outletId];
+      }
+    });
+  };
+
+  const handleManageOutlets = async (e) => {
+    e.preventDefault();
+    try {
+      await axios.patch(
+        `${API_URL}/auth/users/${selectedUser.id}/outlets`,
+        { outlet_ids: selectedOutletIds },
+        { headers: getAuthHeader() }
+      );
+      setShowManageOutletsModal(false);
+      setSelectedUser(null);
+      fetchUsers();
+    } catch (err) {
+      console.error('Error updating outlet assignments:', err);
+      setError(err.response?.data?.detail || 'Failed to update outlet assignments');
+    }
+  };
+
   const handleLogout = () => {
     logout();
     navigate('/login');
@@ -151,6 +213,7 @@ function Users() {
                 <th>User</th>
                 <th>Email</th>
                 <th>Role</th>
+                <th>Outlets</th>
                 <th>Status</th>
                 <th>Actions</th>
               </tr>
@@ -189,11 +252,38 @@ function Users() {
                     )}
                   </td>
                   <td>
+                    {u.role === 'admin' ? (
+                      <span className="outlet-badge all-outlets" style={{fontSize: '0.75rem'}}>All Outlets</span>
+                    ) : u.assigned_outlet_ids && u.assigned_outlet_ids.length > 0 ? (
+                      <div style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap' }}>
+                        {u.assigned_outlet_ids.map(outletId => {
+                          const outlet = outlets.find(o => o.id === outletId);
+                          return outlet ? (
+                            <span key={outletId} className="outlet-badge" style={{fontSize: '0.75rem'}}>
+                              {outlet.name}
+                            </span>
+                          ) : null;
+                        })}
+                      </div>
+                    ) : (
+                      <span className="outlet-badge no-outlets" style={{fontSize: '0.75rem'}}>No Outlets</span>
+                    )}
+                  </td>
+                  <td>
                     <span className={`status-badge ${u.is_active ? 'active' : 'inactive'}`}>
                       {u.is_active ? 'Active' : 'Inactive'}
                     </span>
                   </td>
                   <td>
+                    {u.id !== user.id && u.role !== 'admin' && (
+                      <button
+                        className="btn-manage-outlets"
+                        onClick={() => openManageOutletsModal(u)}
+                        style={{marginRight: '0.5rem'}}
+                      >
+                        Manage Outlets
+                      </button>
+                    )}
                     {u.id !== user.id && (
                       <button
                         className={`btn-toggle ${u.is_active ? 'deactivate' : 'activate'}`}
@@ -272,6 +362,65 @@ function Users() {
                 </button>
                 <button type="submit" className="btn-submit">
                   Add User
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Manage Outlets Modal */}
+      {showManageOutletsModal && selectedUser && (
+        <div className="modal-overlay" onClick={() => setShowManageOutletsModal(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Manage Outlets: {selectedUser.username}</h2>
+              <button className="modal-close" onClick={() => setShowManageOutletsModal(false)}>×</button>
+            </div>
+            <p style={{ marginBottom: '1rem', color: 'var(--text-secondary, #a3a3a3)' }}>
+              Select which outlets this user can access. Admins always have access to all outlets.
+            </p>
+            <form onSubmit={handleManageOutlets}>
+              <div className="form-group">
+                {outlets.length === 0 ? (
+                  <p style={{ color: 'var(--text-secondary, #a3a3a3)', fontStyle: 'italic' }}>
+                    No outlets available. Create outlets first to assign them to users.
+                  </p>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                    {outlets.map(outlet => (
+                      <label
+                        key={outlet.id}
+                        className="outlet-assignment-item"
+                        style={{
+                          backgroundColor: selectedOutletIds.includes(outlet.id) ? 'rgba(59, 130, 246, 0.1)' : 'transparent'
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedOutletIds.includes(outlet.id)}
+                          onChange={() => toggleOutletSelection(outlet.id)}
+                          style={{ cursor: 'pointer' }}
+                        />
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: 500 }}>{outlet.name}</div>
+                          {outlet.location && (
+                            <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary, #a3a3a3)' }}>
+                              {outlet.location}
+                            </div>
+                          )}
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="modal-actions">
+                <button type="button" className="btn-cancel" onClick={() => setShowManageOutletsModal(false)}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn-submit" disabled={outlets.length === 0}>
+                  Save Assignments
                 </button>
               </div>
             </form>
