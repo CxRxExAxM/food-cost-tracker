@@ -58,7 +58,7 @@ def log_audit(
                 entity_id,
                 changes_json,
                 ip_address,
-                1 if impersonating else 0,
+                bool(impersonating),
                 original_super_admin_id
             ))
 
