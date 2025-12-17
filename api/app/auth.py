@@ -225,12 +225,29 @@ require_any_auth = require_role(["admin", "chef", "viewer"])
 def get_user_outlet_ids(user_id: int) -> list:
     """
     Get list of outlet IDs that a user has access to.
-    Returns empty list if user has access to ALL outlets (org-wide admin).
+    Returns empty list if user has access to ALL outlets (admin role).
+    Returns list of outlet IDs for outlet-specific users.
+    Returns None if non-admin user with no assignments (no access).
     """
     from .database import get_db
 
     with get_db() as conn:
         cursor = conn.cursor()
+
+        # Check if user is admin
+        cursor.execute("""
+            SELECT role FROM users WHERE id = %s
+        """, (user_id,))
+        user = cursor.fetchone()
+
+        if not user:
+            return None
+
+        # Admins have access to all outlets
+        if user["role"] == "admin":
+            return []
+
+        # Non-admins: check outlet assignments
         cursor.execute("""
             SELECT outlet_id FROM user_outlets
             WHERE user_id = %s
@@ -239,8 +256,8 @@ def get_user_outlet_ids(user_id: int) -> list:
         rows = cursor.fetchall()
 
         if not rows:
-            # No outlet assignments = org-wide admin
-            return []
+            # Non-admin with no assignments = no access
+            return None
 
         return [row["outlet_id"] for row in rows]
 
@@ -254,18 +271,25 @@ def build_outlet_filter(current_user: dict, table_alias: str = "") -> tuple:
         table_alias: Optional table alias (e.g., "p" for products)
 
     Returns:
-        Tuple of (where_clause, params)
+        Tuple of (where_clause, params) or None if user has no access
 
     Example:
         where_clause, params = build_outlet_filter(current_user, "p")
+        if where_clause is None:
+            return []  # No access
         query = f"SELECT * FROM products p WHERE {where_clause}"
         cursor.execute(query, params)
     """
     outlet_ids = get_user_outlet_ids(current_user["id"])
     prefix = f"{table_alias}." if table_alias else ""
 
-    if not outlet_ids:
-        # Org-wide admin - sees all outlets in organization
+    if outlet_ids is None:
+        # Non-admin with no outlet assignments - no access
+        # Return a WHERE clause that matches nothing
+        where_clause = f"1 = 0"  # Always false
+        params = []
+    elif len(outlet_ids) == 0:
+        # Admin - sees all outlets in organization
         where_clause = f"{prefix}organization_id = %s"
         params = [current_user["organization_id"]]
     else:
@@ -304,12 +328,15 @@ def check_outlet_access(current_user: dict, outlet_id: int) -> bool:
     # Get user's outlet access
     outlet_ids = get_user_outlet_ids(current_user["id"])
 
-    if not outlet_ids:
-        # Org-wide admin - has access to all outlets
+    if outlet_ids is None:
+        # Non-admin with no assignments - no access
+        return False
+    elif len(outlet_ids) == 0:
+        # Admin - has access to all outlets
         return True
-
-    # Check if outlet_id is in user's list
-    return outlet_id in outlet_ids
+    else:
+        # Check if outlet_id is in user's list
+        return outlet_id in outlet_ids
 
 
 def require_outlet_access(outlet_id: int):
