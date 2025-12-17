@@ -78,6 +78,7 @@ class UserUpdate(BaseModel):
     full_name: Optional[str] = None
     role: Optional[str] = None
     is_active: Optional[bool] = None
+    password: Optional[str] = None
 
 
 class OutletBasic(BaseModel):
@@ -464,6 +465,12 @@ def update_user(
         if user_update.is_active is not None:
             update_fields.append("is_active = %s")
             params.append(1 if user_update.is_active else 0)
+
+        if user_update.password is not None:
+            # Hash the new password
+            hashed_password = get_password_hash(user_update.password)
+            update_fields.append("hashed_password = %s")
+            params.append(hashed_password)
 
         if not update_fields:
             raise HTTPException(

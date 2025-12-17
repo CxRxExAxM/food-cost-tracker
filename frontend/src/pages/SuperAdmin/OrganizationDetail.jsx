@@ -17,7 +17,8 @@ export default function SuperAdminOrganizationDetail() {
   // Form states
   const [editUserForm, setEditUserForm] = useState({
     full_name: '',
-    role: 'admin'
+    role: 'admin',
+    password: ''
   });
 
   useEffect(() => {
@@ -60,7 +61,8 @@ export default function SuperAdminOrganizationDetail() {
     setSelectedUser(user);
     setEditUserForm({
       full_name: user.full_name || '',
-      role: user.role
+      role: user.role,
+      password: ''
     });
     setShowEditUserModal(true);
   };
@@ -73,7 +75,16 @@ export default function SuperAdminOrganizationDetail() {
   const handleEditUser = async (e) => {
     e.preventDefault();
     try {
-      await axios.patch(`/super-admin/users/${selectedUser.id}`, editUserForm);
+      // Only include password if it's not empty
+      const updateData = {
+        full_name: editUserForm.full_name,
+        role: editUserForm.role
+      };
+      if (editUserForm.password) {
+        updateData.password = editUserForm.password;
+      }
+
+      await axios.patch(`/super-admin/users/${selectedUser.id}`, updateData);
       alert('User updated successfully');
       setShowEditUserModal(false);
       setSelectedUser(null);
@@ -257,6 +268,15 @@ export default function SuperAdminOrganizationDetail() {
                   <option value="chef">Chef</option>
                   <option value="viewer">Viewer</option>
                 </select>
+              </div>
+              <div className="form-group">
+                <label>New Password (optional)</label>
+                <input
+                  type="text"
+                  value={editUserForm.password}
+                  onChange={(e) => setEditUserForm({...editUserForm, password: e.target.value})}
+                  placeholder="Leave blank to keep current password"
+                />
               </div>
               <div className="modal-actions">
                 <button type="button" onClick={() => setShowEditUserModal(false)} className="btn-secondary">
