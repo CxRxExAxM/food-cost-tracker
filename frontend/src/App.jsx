@@ -10,6 +10,7 @@ import Outlets from './pages/Outlets';
 import Login from './pages/Login';
 import SuperAdminDashboard from './pages/SuperAdmin/Dashboard';
 import SuperAdminOrganizations from './pages/SuperAdmin/Organizations';
+import SuperAdminOrganizationDetail from './pages/SuperAdmin/OrganizationDetail';
 import ImpersonationBanner from './components/ImpersonationBanner';
 import './App.css';
 
@@ -158,6 +159,14 @@ function AppRoutes() {
         element={
           <SuperAdminRoute>
             <SuperAdminOrganizations />
+          </SuperAdminRoute>
+        }
+      />
+      <Route
+        path="/super-admin/organizations/:orgId"
+        element={
+          <SuperAdminRoute>
+            <SuperAdminOrganizationDetail />
           </SuperAdminRoute>
         }
       />

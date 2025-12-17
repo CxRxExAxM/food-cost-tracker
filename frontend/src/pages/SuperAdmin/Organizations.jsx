@@ -226,7 +226,9 @@ export default function SuperAdminOrganizations() {
           <div key={org.id} className="org-card">
             <div className="org-header">
               <div className="org-info">
-                <h3>{org.name}</h3>
+                <Link to={`/super-admin/organizations/${org.id}`} className="org-name-link">
+                  <h3>{org.name}</h3>
+                </Link>
                 <div className="org-slug">{org.slug}</div>
               </div>
               <div

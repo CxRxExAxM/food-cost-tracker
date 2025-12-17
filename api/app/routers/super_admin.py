@@ -74,6 +74,37 @@ class UserResponse(BaseModel):
     organization_id: int
 
 
+class UserUpdate(BaseModel):
+    full_name: Optional[str] = None
+    role: Optional[str] = None
+    is_active: Optional[bool] = None
+    password: Optional[str] = None
+
+
+class OutletBasic(BaseModel):
+    id: int
+    name: str
+    location: Optional[str]
+    is_active: bool
+
+
+class OrganizationDetailResponse(BaseModel):
+    id: int
+    name: str
+    slug: str
+    subscription_tier: str
+    subscription_status: str
+    max_users: int
+    max_recipes: int
+    created_at: datetime
+    users_count: int
+    outlets_count: int
+    products_count: int
+    recipes_count: int
+    users: List[UserResponse]
+    outlets: List[OutletBasic]
+
+
 # Organizations endpoints
 @router.get("/organizations", response_model=List[OrganizationResponse])
 def list_all_organizations(
@@ -132,15 +163,16 @@ def list_all_organizations(
         return organizations
 
 
-@router.get("/organizations/{org_id}", response_model=OrganizationResponse)
+@router.get("/organizations/{org_id}", response_model=OrganizationDetailResponse)
 def get_organization_detail(
     org_id: int,
     current_user: dict = Depends(get_current_super_admin)
 ):
-    """Get detailed organization information (super admin only)."""
+    """Get detailed organization information with users and outlets (super admin only)."""
     with get_db() as conn:
         cursor = conn.cursor()
 
+        # Get organization info with counts
         cursor.execute("""
             SELECT
                 o.*,
@@ -149,8 +181,8 @@ def get_organization_detail(
                 COUNT(DISTINCT p.id) as products_count,
                 COUNT(DISTINCT r.id) as recipes_count
             FROM organizations o
-            LEFT JOIN users u ON u.organization_id = o.id AND u.is_active = 1
-            LEFT JOIN outlets ot ON ot.organization_id = o.id AND ot.is_active = 1
+            LEFT JOIN users u ON u.organization_id = o.id
+            LEFT JOIN outlets ot ON ot.organization_id = o.id
             LEFT JOIN products p ON p.organization_id = o.id AND p.is_active = 1
             LEFT JOIN recipes r ON r.organization_id = o.id AND r.is_active = 1
             WHERE o.id = %s
@@ -164,7 +196,30 @@ def get_organization_detail(
                 detail="Organization not found"
             )
 
-        return dict_from_row(org)
+        org_dict = dict_from_row(org)
+
+        # Get all users for this organization
+        cursor.execute("""
+            SELECT id, email, username, full_name, role, is_active, organization_id
+            FROM users
+            WHERE organization_id = %s
+            ORDER BY is_active DESC, role, email
+        """, (org_id,))
+        users = [dict_from_row(row) for row in cursor.fetchall()]
+
+        # Get all outlets for this organization
+        cursor.execute("""
+            SELECT id, name, location, is_active
+            FROM outlets
+            WHERE organization_id = %s
+            ORDER BY is_active DESC, name
+        """, (org_id,))
+        outlets = [dict_from_row(row) for row in cursor.fetchall()]
+
+        org_dict['users'] = users
+        org_dict['outlets'] = outlets
+
+        return org_dict
 
 
 @router.post("/organizations", response_model=OrganizationResponse)
@@ -368,6 +423,78 @@ def create_user_for_organization(
         conn.commit()
 
         return new_user
+
+
+@router.patch("/users/{user_id}", response_model=UserResponse)
+def update_user(
+    user_id: int,
+    user_update: UserUpdate,
+    current_user: dict = Depends(get_current_super_admin)
+):
+    """Update user details (super admin only)."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Verify user exists
+        cursor.execute("SELECT id, organization_id FROM users WHERE id = %s", (user_id,))
+        existing_user = cursor.fetchone()
+        if not existing_user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+
+        # Build update query dynamically based on provided fields
+        update_fields = []
+        params = []
+
+        if user_update.full_name is not None:
+            update_fields.append("full_name = %s")
+            params.append(user_update.full_name)
+
+        if user_update.role is not None:
+            # Validate role
+            if user_update.role not in ['admin', 'chef', 'viewer']:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid role. Must be 'admin', 'chef', or 'viewer'"
+                )
+            update_fields.append("role = %s")
+            params.append(user_update.role)
+
+        if user_update.is_active is not None:
+            update_fields.append("is_active = %s")
+            params.append(1 if user_update.is_active else 0)
+
+        if user_update.password is not None:
+            # Hash the new password
+            hashed_password = get_password_hash(user_update.password)
+            update_fields.append("hashed_password = %s")
+            params.append(hashed_password)
+
+        if not update_fields:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No fields to update"
+            )
+
+        # Add updated_at
+        update_fields.append("updated_at = NOW()")
+        params.append(user_id)
+
+        # Execute update
+        query = f"""
+            UPDATE users
+            SET {', '.join(update_fields)}
+            WHERE id = %s
+            RETURNING id, email, username, full_name, role, is_active, organization_id
+        """
+        cursor.execute(query, params)
+
+        updated_user = dict_from_row(cursor.fetchone())
+        conn.commit()
+
+        return updated_user
 
 
 # Platform statistics endpoint
