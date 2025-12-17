@@ -54,6 +54,12 @@ export default function SuperAdminDashboard() {
           >
             Organizations
           </Link>
+          <Link
+            to="/super-admin/audit-logs"
+            className={`super-admin-tab ${location.pathname === '/super-admin/audit-logs' ? 'active' : ''}`}
+          >
+            Audit Logs
+          </Link>
         </div>
         <Link to="/" className="return-to-main-btn">
           ← Return to Main Site

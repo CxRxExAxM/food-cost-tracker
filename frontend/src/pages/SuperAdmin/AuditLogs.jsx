@@ -6,12 +6,26 @@ import './SuperAdmin.css';
 export default function SuperAdminAuditLogs() {
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [organizations, setOrganizations] = useState([]);
   const [organizationFilter, setOrganizationFilter] = useState('');
   const [actionFilter, setActionFilter] = useState('');
 
   useEffect(() => {
+    fetchOrganizations();
+  }, []);
+
+  useEffect(() => {
     fetchAuditLogs();
   }, [organizationFilter, actionFilter]);
+
+  const fetchOrganizations = async () => {
+    try {
+      const response = await axios.get('/super-admin/organizations');
+      setOrganizations(response.data);
+    } catch (error) {
+      console.error('Error fetching organizations:', error);
+    }
+  };
 
   const fetchAuditLogs = async () => {
     try {
@@ -99,14 +113,17 @@ export default function SuperAdminAuditLogs() {
       {/* Filters */}
       <div className="filters-section">
         <div className="filter-group">
-          <label>Organization ID</label>
-          <input
-            type="number"
-            placeholder="Filter by organization..."
+          <label>Organization</label>
+          <select
             value={organizationFilter}
             onChange={(e) => setOrganizationFilter(e.target.value)}
-            className="filter-input"
-          />
+            className="filter-select"
+          >
+            <option value="">All Organizations</option>
+            {organizations.map(org => (
+              <option key={org.id} value={org.id}>{org.name}</option>
+            ))}
+          </select>
         </div>
         <div className="filter-group">
           <label>Action</label>
