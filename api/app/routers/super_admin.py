@@ -861,3 +861,58 @@ def exit_impersonation(current_user: dict = Depends(get_current_user), request: 
         "access_token": access_token,
         "token_type": "bearer"
     }
+
+
+# Audit logs endpoint
+@router.get("/audit-logs")
+def get_audit_logs(
+    skip: int = 0,
+    limit: int = 100,
+    organization_id: Optional[int] = None,
+    action: Optional[str] = None,
+    current_user: dict = Depends(get_current_super_admin)
+):
+    """Get audit logs with optional filters (super admin only)."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        where_clauses = []
+        params = []
+
+        if organization_id:
+            where_clauses.append("organization_id = %s")
+            params.append(organization_id)
+
+        if action:
+            where_clauses.append("action = %s")
+            params.append(action)
+
+        where_clause = " AND ".join(where_clauses) if where_clauses else "1=1"
+        params.extend([limit, skip])
+
+        cursor.execute(f"""
+            SELECT
+                al.*,
+                u.email as user_email,
+                u.username as user_username,
+                o.name as organization_name
+            FROM audit_logs al
+            LEFT JOIN users u ON u.id = al.user_id
+            LEFT JOIN organizations o ON o.id = al.organization_id
+            WHERE {where_clause}
+            ORDER BY al.created_at DESC
+            LIMIT %s OFFSET %s
+        """, params)
+
+        logs = [dict_from_row(row) for row in cursor.fetchall()]
+
+        # Parse changes JSON back to dict for easier frontend consumption
+        for log in logs:
+            if log.get("changes"):
+                import json
+                try:
+                    log["changes"] = json.loads(log["changes"])
+                except:
+                    pass
+
+        return logs
