@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import axios from '../../lib/axios';
+import { useAuth } from '../../context/AuthContext';
 import './SuperAdmin.css';
 
 export default function SuperAdminOrganizationDetail() {
   const { orgId } = useParams();
   const navigate = useNavigate();
+  const { setToken } = useAuth();
   const [organization, setOrganization] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -173,13 +175,10 @@ export default function SuperAdminOrganizationDetail() {
   const handleImpersonate = async () => {
     try {
       const response = await axios.post(`/super-admin/impersonate/${orgId}`);
-      const { access_token } = response.data;
-
-      // Store the token and redirect to main app
-      localStorage.setItem('token', access_token);
-
-      // Redirect to home page to see the impersonated view
-      window.location.href = '/';
+      // Use the setToken function from AuthContext to set the new token
+      await setToken(response.data.access_token);
+      // Navigate to home page in impersonated context
+      navigate('/');
     } catch (error) {
       console.error('Error impersonating organization:', error);
       alert(error.response?.data?.detail || 'Error impersonating organization');

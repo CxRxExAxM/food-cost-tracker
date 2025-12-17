@@ -5,7 +5,7 @@ import OutletSelector from './outlets/OutletSelector';
 import './Navigation.css';
 
 function Navigation() {
-  const { user, logout, isAdmin } = useAuth();
+  const { user, logout, isAdmin, setToken } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -29,20 +29,11 @@ function Navigation() {
 
   const handleExitImpersonation = async () => {
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL || ''}/super-admin/exit-impersonation`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        localStorage.setItem('token', data.access_token);
-        window.location.href = '/super-admin/organizations';
-      } else {
-        alert('Error exiting impersonation');
-      }
+      const response = await axios.post('/super-admin/exit-impersonation');
+      // Use the setToken function from AuthContext to set the new token
+      await setToken(response.data.access_token);
+      // Navigate back to super admin
+      navigate('/super-admin/organizations');
     } catch (error) {
       console.error('Error exiting impersonation:', error);
       alert('Error exiting impersonation');
