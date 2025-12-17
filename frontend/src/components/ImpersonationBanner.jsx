@@ -4,7 +4,7 @@ import axios from '../lib/axios';
 import './ImpersonationBanner.css';
 
 export default function ImpersonationBanner() {
-  const { user, login } = useAuth();
+  const { user, setToken } = useAuth();
   const navigate = useNavigate();
 
   if (!user?.impersonating) {
@@ -15,7 +15,7 @@ export default function ImpersonationBanner() {
     try {
       const response = await axios.post('/super-admin/exit-impersonation');
       // Set the original super admin token
-      login(response.data.access_token);
+      await setToken(response.data.access_token);
       // Navigate back to Super Admin
       navigate('/super-admin/organizations');
     } catch (error) {

@@ -11,7 +11,7 @@ export default function SuperAdminOrganizations() {
   const [tierFilter, setTierFilter] = useState('');
   const location = useLocation();
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { setToken } = useAuth();
 
   // Modal states
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -112,8 +112,8 @@ export default function SuperAdminOrganizations() {
   const handleImpersonate = async (org) => {
     try {
       const response = await axios.post(`/super-admin/impersonate/${org.id}`);
-      // Use the login function from AuthContext to set the new token
-      login(response.data.access_token);
+      // Use the setToken function from AuthContext to set the new token
+      await setToken(response.data.access_token);
       // Navigate to home page in impersonated context
       navigate('/');
     } catch (error) {
