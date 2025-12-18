@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { parseRecipeFile, getUsageStats } from '../../services/aiParseService';
 import './RecipeImport.css';
 
@@ -11,7 +11,7 @@ export default function UploadRecipeModal({ isOpen, onClose, outletId, onParseCo
   const [usageStats, setUsageStats] = useState(null);
 
   // Load usage stats when modal opens
-  useState(() => {
+  useEffect(() => {
     if (isOpen) {
       loadUsageStats();
     }
