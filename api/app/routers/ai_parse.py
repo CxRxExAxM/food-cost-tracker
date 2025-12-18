@@ -336,22 +336,29 @@ async def parse_recipe_file(
 
         # Log audit event
         print(f"[PARSE] Logging audit event...")
-        log_audit(
-            user_id=user_id,
-            organization_id=organization_id,
-            action='recipe_parsed_with_ai',
-            entity_type='ai_parse_usage',
-            entity_id=parse_id,
-            changes={
-                'filename': filename,
-                'parse_status': parse_status,
-                'ingredients_count': total_ingredients,
-                'matched_count': ingredients_matched
-            },
-            ip_address=request.client.host if request else None,
-            conn=conn
-        )
-        print(f"[PARSE] Audit logged successfully")
+        try:
+            log_audit(
+                user_id=user_id,
+                organization_id=organization_id,
+                action='recipe_parsed_with_ai',
+                entity_type='ai_parse_usage',
+                entity_id=parse_id,
+                changes={
+                    'filename': filename,
+                    'parse_status': parse_status,
+                    'ingredients_count': total_ingredients,
+                    'matched_count': ingredients_matched
+                },
+                ip_address=request.client.host if request else None,
+                conn=conn
+            )
+            print(f"[PARSE] Audit logged successfully")
+        except Exception as e:
+            print(f"[PARSE ERROR] Audit logging failed: {type(e).__name__}: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            # Don't fail the whole request if audit logging fails
+            print(f"[PARSE] Continuing despite audit log failure...")
 
         print(f"[PARSE] Creating ParseFileResponse object...")
         print(f"[PARSE] - parse_id: {parse_id}")
