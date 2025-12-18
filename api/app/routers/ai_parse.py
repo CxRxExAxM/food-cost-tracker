@@ -6,7 +6,7 @@ Handles file upload, parsing, and usage statistics for AI-powered recipe import.
 
 import time
 from typing import List
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Request
+from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Request, Form
 from fastapi.responses import JSONResponse
 
 from ..auth import get_current_user
@@ -42,7 +42,7 @@ router = APIRouter(prefix="/api", tags=["ai_parse"])
 @router.post("/recipes/parse-file", response_model=ParseFileResponse)
 async def parse_recipe_file(
     file: UploadFile = File(...),
-    outlet_id: int = None,
+    outlet_id: int = Form(...),
     request: Request = None,
     current_user: dict = Depends(get_current_user)
 ):
