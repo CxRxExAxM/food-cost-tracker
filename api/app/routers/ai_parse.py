@@ -132,7 +132,7 @@ async def parse_recipe_file(
     start_time = time.time()
 
     # Log request details for debugging
-    print(f"[PARSE] Request received - user: {current_user.get('user_id')}, outlet: {outlet_id}, file: {file.filename if file else 'None'}")
+    print(f"[PARSE] Request received - user: {current_user.get('id')}, outlet: {outlet_id}, file: {file.filename if file else 'None'}")
 
     # Check permissions
     if current_user['role'] not in ['chef', 'admin']:
@@ -149,7 +149,7 @@ async def parse_recipe_file(
         )
 
     organization_id = current_user['organization_id']
-    user_id = current_user['user_id']
+    user_id = current_user['id']  # Database column is 'id', not 'user_id'
 
     with get_db() as conn:
         # Verify outlet belongs to organization
@@ -396,7 +396,7 @@ async def create_recipe_from_parse(
         )
 
     organization_id = current_user['organization_id']
-    user_id = current_user['user_id']
+    user_id = current_user['id']  # Database column is 'id', not 'user_id'
 
     with get_db() as conn:
         cursor = conn.cursor()
