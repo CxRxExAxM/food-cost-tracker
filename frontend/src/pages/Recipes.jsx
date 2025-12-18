@@ -843,8 +843,10 @@ function RecipeIngredients({ recipe, onIngredientsChange }) {
   const [commonProducts, setCommonProducts] = useState([]);
   const [units, setUnits] = useState([]);
   const [showAddRow, setShowAddRow] = useState(false);
+  const [addMode, setAddMode] = useState('map'); // 'map' or 'text'
   const [newIngredient, setNewIngredient] = useState({
     common_product_id: '',
+    ingredient_name: '',
     quantity: '',
     unit_id: '',
     yield_percentage: 100
@@ -897,18 +899,35 @@ function RecipeIngredients({ recipe, onIngredientsChange }) {
   };
 
   const handleAddIngredient = async () => {
-    if (!newIngredient.common_product_id || !newIngredient.quantity || !newIngredient.unit_id) {
-      alert('Please fill in all required fields');
-      return;
+    // Validate based on mode
+    if (addMode === 'map') {
+      if (!newIngredient.common_product_id || !newIngredient.quantity || !newIngredient.unit_id) {
+        alert('Please fill in all required fields');
+        return;
+      }
+    } else {
+      if (!newIngredient.ingredient_name || !newIngredient.quantity || !newIngredient.unit_id) {
+        alert('Please fill in all required fields');
+        return;
+      }
     }
 
     try {
-      await axios.post(`${API_URL}/recipes/${recipe.id}/ingredients`, {
-        common_product_id: parseInt(newIngredient.common_product_id),
-        quantity: parseFloat(newIngredient.quantity),
-        unit_id: parseInt(newIngredient.unit_id),
-        yield_percentage: parseFloat(newIngredient.yield_percentage)
-      });
+      const ingredientData = addMode === 'map'
+        ? {
+            common_product_id: parseInt(newIngredient.common_product_id),
+            quantity: parseFloat(newIngredient.quantity),
+            unit_id: parseInt(newIngredient.unit_id),
+            yield_percentage: parseFloat(newIngredient.yield_percentage)
+          }
+        : {
+            ingredient_name: newIngredient.ingredient_name,
+            quantity: parseFloat(newIngredient.quantity),
+            unit_id: parseInt(newIngredient.unit_id),
+            yield_percentage: parseFloat(newIngredient.yield_percentage)
+          };
+
+      await axios.post(`${API_URL}/recipes/${recipe.id}/ingredients`, ingredientData);
 
       // Refresh recipe to get updated ingredients
       onIngredientsChange();
@@ -916,6 +935,7 @@ function RecipeIngredients({ recipe, onIngredientsChange }) {
       // Reset form
       setNewIngredient({
         common_product_id: '',
+        ingredient_name: '',
         quantity: '',
         unit_id: '',
         yield_percentage: 100
@@ -958,7 +978,14 @@ function RecipeIngredients({ recipe, onIngredientsChange }) {
             {recipe.ingredients && recipe.ingredients.length > 0 ? (
               recipe.ingredients.map((ing) => (
                 <tr key={ing.id}>
-                  <td>{ing.common_name || ing.sub_recipe_name || 'Unknown'}</td>
+                  <td>
+                    {ing.ingredient_name || ing.common_name || ing.sub_recipe_name || 'Unknown'}
+                    {ing.ingredient_name && !ing.common_product_id && (
+                      <span className="unmapped-badge" style={{ marginLeft: '8px', padding: '3px 8px', background: '#fef3c7', color: '#92400e', borderRadius: '4px', fontSize: '11px', fontWeight: '600' }}>
+                        Text only
+                      </span>
+                    )}
+                  </td>
                   <td>{ing.quantity}</td>
                   <td>{ing.unit_abbreviation}</td>
                   <td>{ing.yield_percentage}%</td>
@@ -980,90 +1007,151 @@ function RecipeIngredients({ recipe, onIngredientsChange }) {
             )}
             {showAddRow && (
               <tr className="ingredient-add-row">
-                <td>
-                  <div className="autocomplete-container">
-                    <input
-                      type="text"
-                      className="ingredient-input"
-                      value={searchTerm}
-                      onChange={(e) => handleSearchChange(e.target.value)}
-                      placeholder="Search common products..."
-                      autoFocus
-                    />
-                    {showAutocomplete && filteredProducts.length > 0 && (
-                      <div className="autocomplete-dropdown">
-                        {filteredProducts.slice(0, 10).map(product => (
-                          <div
-                            key={product.id}
-                            className="autocomplete-item"
-                            onClick={() => selectProduct(product)}
-                          >
-                            {product.common_name}
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                <td colSpan="5">
+                  <div style={{ marginBottom: '0.75rem' }}>
+                    <div className="add-mode-toggle" style={{ display: 'inline-flex', gap: 0, border: '1px solid #d1d5db', borderRadius: '6px', overflow: 'hidden' }}>
+                      <button
+                        type="button"
+                        style={{
+                          padding: '0.5rem 1rem',
+                          background: addMode === 'map' ? '#3b82f6' : '#fff',
+                          color: addMode === 'map' ? 'white' : '#6b7280',
+                          border: 'none',
+                          fontWeight: '500',
+                          cursor: 'pointer'
+                        }}
+                        onClick={() => setAddMode('map')}
+                      >
+                        Map to Product
+                      </button>
+                      <button
+                        type="button"
+                        style={{
+                          padding: '0.5rem 1rem',
+                          background: addMode === 'text' ? '#3b82f6' : '#fff',
+                          color: addMode === 'text' ? 'white' : '#6b7280',
+                          border: 'none',
+                          fontWeight: '500',
+                          cursor: 'pointer'
+                        }}
+                        onClick={() => setAddMode('text')}
+                      >
+                        Quick Add Text
+                      </button>
+                    </div>
                   </div>
-                </td>
-                <td>
-                  <input
-                    type="number"
-                    className="ingredient-input"
-                    value={newIngredient.quantity}
-                    onChange={(e) => setNewIngredient({ ...newIngredient, quantity: e.target.value })}
-                    placeholder="0"
-                    step="0.01"
-                  />
-                </td>
-                <td>
-                  <select
-                    className="ingredient-input"
-                    value={newIngredient.unit_id}
-                    onChange={(e) => setNewIngredient({ ...newIngredient, unit_id: e.target.value })}
-                  >
-                    <option value="">Select unit</option>
-                    {units.map(unit => (
-                      <option key={unit.id} value={unit.id}>
-                        {unit.abbreviation}
-                      </option>
-                    ))}
-                  </select>
-                </td>
-                <td>
-                  <input
-                    type="number"
-                    className="ingredient-input"
-                    value={newIngredient.yield_percentage}
-                    onChange={(e) => setNewIngredient({ ...newIngredient, yield_percentage: e.target.value })}
-                    step="1"
-                    min="0"
-                    max="100"
-                  />
-                </td>
-                <td>
-                  <button
-                    className="btn-icon-small btn-save-ingredient"
-                    onClick={handleAddIngredient}
-                    title="Save ingredient"
-                  >
-                    ✓
-                  </button>
-                  <button
-                    className="btn-icon-small"
-                    onClick={() => {
-                      setShowAddRow(false);
-                      setSearchTerm('');
-                      setNewIngredient({
-                        common_product_id: '',
-                        quantity: '',
-                        unit_id: '',
-                        yield_percentage: 100
-                      });
-                    }}
-                    title="Cancel"
-                  >
-                    ×
-                  </button>
+
+                  {addMode === 'map' ? (
+                    <div className="autocomplete-container">
+                      <input
+                        type="text"
+                        className="ingredient-input"
+                        value={searchTerm}
+                        onChange={(e) => handleSearchChange(e.target.value)}
+                        placeholder="Search common products..."
+                        autoFocus
+                        style={{ width: '100%', marginBottom: '0.5rem' }}
+                      />
+                      {showAutocomplete && filteredProducts.length > 0 && (
+                        <div className="autocomplete-dropdown">
+                          {filteredProducts.slice(0, 10).map(product => (
+                            <div
+                              key={product.id}
+                              className="autocomplete-item"
+                              onClick={() => selectProduct(product)}
+                            >
+                              {product.common_name}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div style={{ marginBottom: '0.5rem' }}>
+                      <input
+                        type="text"
+                        className="ingredient-input"
+                        value={newIngredient.ingredient_name}
+                        onChange={(e) => setNewIngredient({ ...newIngredient, ingredient_name: e.target.value })}
+                        placeholder="Ingredient name (e.g., 'Fresh basil, chopped')"
+                        autoFocus
+                        style={{ width: '100%' }}
+                      />
+                      <small style={{ display: 'block', marginTop: '0.25rem', color: '#6b7280', fontSize: '0.75rem' }}>
+                        Text-only ingredients won't have cost tracking
+                      </small>
+                    </div>
+                  )}
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto', gap: '0.5rem' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.75rem', color: '#6b7280', marginBottom: '0.25rem' }}>Quantity</label>
+                      <input
+                        type="number"
+                        className="ingredient-input"
+                        value={newIngredient.quantity}
+                        onChange={(e) => setNewIngredient({ ...newIngredient, quantity: e.target.value })}
+                        placeholder="0"
+                        step="0.01"
+                        style={{ width: '100%' }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.75rem', color: '#6b7280', marginBottom: '0.25rem' }}>Unit</label>
+                      <select
+                        className="ingredient-input"
+                        value={newIngredient.unit_id}
+                        onChange={(e) => setNewIngredient({ ...newIngredient, unit_id: e.target.value })}
+                        style={{ width: '100%' }}
+                      >
+                        <option value="">Select unit</option>
+                        {units.map(unit => (
+                          <option key={unit.id} value={unit.id}>
+                            {unit.abbreviation}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.75rem', color: '#6b7280', marginBottom: '0.25rem' }}>Yield %</label>
+                      <input
+                        type="number"
+                        className="ingredient-input"
+                        value={newIngredient.yield_percentage}
+                        onChange={(e) => setNewIngredient({ ...newIngredient, yield_percentage: e.target.value })}
+                        step="1"
+                        min="0"
+                        max="100"
+                        style={{ width: '100%' }}
+                      />
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.25rem', alignSelf: 'end' }}>
+                      <button
+                        className="btn-icon-small btn-save-ingredient"
+                        onClick={handleAddIngredient}
+                        title="Save ingredient"
+                      >
+                        ✓
+                      </button>
+                      <button
+                        className="btn-icon-small"
+                        onClick={() => {
+                          setShowAddRow(false);
+                          setSearchTerm('');
+                          setNewIngredient({
+                            common_product_id: '',
+                            ingredient_name: '',
+                            quantity: '',
+                            unit_id: '',
+                            yield_percentage: 100
+                          });
+                        }}
+                        title="Cancel"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  </div>
                 </td>
               </tr>
             )}
