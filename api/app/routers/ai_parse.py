@@ -34,9 +34,84 @@ from ..utils.tier_limits import (
     get_usage_stats,
 )
 from ..audit import log_audit
+import os
 
 
 router = APIRouter(prefix="/api", tags=["ai_parse"])
+
+
+@router.get("/ai-parse/health")
+async def ai_parse_health_check():
+    """
+    Health check for AI parsing service.
+
+    Verifies dependencies and configuration without requiring authentication.
+    """
+
+    health = {
+        "status": "healthy",
+        "dependencies": {},
+        "configuration": {}
+    }
+
+    # Check Anthropic dependency
+    try:
+        import anthropic
+        health["dependencies"]["anthropic"] = {
+            "installed": True,
+            "version": anthropic.__version__ if hasattr(anthropic, '__version__') else "unknown"
+        }
+    except ImportError as e:
+        health["dependencies"]["anthropic"] = {
+            "installed": False,
+            "error": str(e)
+        }
+        health["status"] = "unhealthy"
+
+    # Check python-docx dependency
+    try:
+        import docx
+        health["dependencies"]["python-docx"] = {"installed": True}
+    except ImportError as e:
+        health["dependencies"]["python-docx"] = {
+            "installed": False,
+            "error": str(e)
+        }
+        health["status"] = "unhealthy"
+
+    # Check pypdf dependency
+    try:
+        import pypdf
+        health["dependencies"]["pypdf"] = {"installed": True}
+    except ImportError as e:
+        health["dependencies"]["pypdf"] = {
+            "installed": False,
+            "error": str(e)
+        }
+        health["status"] = "unhealthy"
+
+    # Check openpyxl dependency
+    try:
+        import openpyxl
+        health["dependencies"]["openpyxl"] = {"installed": True}
+    except ImportError as e:
+        health["dependencies"]["openpyxl"] = {
+            "installed": False,
+            "error": str(e)
+        }
+        health["status"] = "unhealthy"
+
+    # Check API key configuration (don't reveal the actual key)
+    api_key = os.getenv("ANTHROPIC_API_KEY")
+    health["configuration"]["anthropic_api_key"] = {
+        "configured": bool(api_key),
+        "length": len(api_key) if api_key else 0
+    }
+
+    if not api_key:
+        health["status"] = "unhealthy"
+
+    return health
 
 
 @router.post("/recipes/parse-file", response_model=ParseFileResponse)
