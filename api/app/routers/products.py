@@ -125,20 +125,41 @@ def list_products(
     with get_db() as conn:
         cursor = conn.cursor()
 
-        # Base WHERE clause - filter by organization
+        # Base WHERE clause - filter by organization and user's outlet access
         org_id = current_user["organization_id"]
         where_clause = f"WHERE p.is_active = 1 AND p.organization_id = %s"
         params = [org_id]
 
-        # If specific outlet requested, show products imported by this outlet
-        # Check price_history to see which outlets have imported this product
-        if outlet_id is not None:
-            where_clause += """ AND EXISTS (
+        # Get user's accessible outlet IDs
+        from ..auth import get_user_outlet_ids
+        user_outlet_ids = get_user_outlet_ids(current_user["id"])
+
+        # If user has no outlet access, return empty results
+        if user_outlet_ids is None:
+            where_clause += " AND 1 = 0"  # Always false
+        # If specific outlet requested, show only products from that outlet
+        elif outlet_id is not None:
+            # Verify user has access to this outlet
+            if user_outlet_ids and outlet_id not in user_outlet_ids:
+                # User requested an outlet they don't have access to
+                where_clause += " AND 1 = 0"  # Return empty
+            else:
+                where_clause += """ AND EXISTS (
+                    SELECT 1 FROM price_history ph_filter
+                    JOIN distributor_products dp_filter ON dp_filter.id = ph_filter.distributor_product_id
+                    WHERE dp_filter.product_id = p.id AND ph_filter.outlet_id = %s
+                )"""
+                params.append(outlet_id)
+        # If user is outlet-restricted (non-admin with assignments), filter by their outlets
+        elif user_outlet_ids:  # Non-empty list means outlet-restricted
+            placeholders = ','.join(['%s'] * len(user_outlet_ids))
+            where_clause += f""" AND EXISTS (
                 SELECT 1 FROM price_history ph_filter
                 JOIN distributor_products dp_filter ON dp_filter.id = ph_filter.distributor_product_id
-                WHERE dp_filter.product_id = p.id AND ph_filter.outlet_id = %s
+                WHERE dp_filter.product_id = p.id AND ph_filter.outlet_id IN ({placeholders})
             )"""
-            params.append(outlet_id)
+            params.extend(user_outlet_ids)
+        # else: admin user, show all products (no additional filter)
 
         if search:
             where_clause += " AND (p.name LIKE %s OR p.brand LIKE %s)"

@@ -1,17 +1,21 @@
 import { useState, useEffect } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import axios from '../../lib/axios';
+import { useAuth } from '../../context/AuthContext';
 import './SuperAdmin.css';
 
 export default function SuperAdminOrganizationDetail() {
   const { orgId } = useParams();
   const navigate = useNavigate();
+  const { setToken } = useAuth();
   const [organization, setOrganization] = useState(null);
   const [loading, setLoading] = useState(true);
 
   // Modal states
   const [showEditUserModal, setShowEditUserModal] = useState(false);
   const [showToggleUserModal, setShowToggleUserModal] = useState(false);
+  const [showManageOutletsModal, setShowManageOutletsModal] = useState(false);
+  const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
 
   // Form states
@@ -19,6 +23,11 @@ export default function SuperAdminOrganizationDetail() {
     full_name: '',
     role: 'admin',
     password: ''
+  });
+  const [selectedOutletIds, setSelectedOutletIds] = useState([]);
+  const [subscriptionForm, setSubscriptionForm] = useState({
+    subscription_tier: '',
+    subscription_status: ''
   });
 
   useEffect(() => {
@@ -72,6 +81,38 @@ export default function SuperAdminOrganizationDetail() {
     setShowToggleUserModal(true);
   };
 
+  const openManageOutletsModal = (user) => {
+    setSelectedUser(user);
+    setSelectedOutletIds(user.assigned_outlet_ids || []);
+    setShowManageOutletsModal(true);
+  };
+
+  const handleManageOutlets = async (e) => {
+    e.preventDefault();
+    try {
+      await axios.patch(`/super-admin/users/${selectedUser.id}/outlets`, {
+        outlet_ids: selectedOutletIds
+      });
+      alert('Outlet assignments updated successfully');
+      setShowManageOutletsModal(false);
+      setSelectedUser(null);
+      fetchOrganizationDetail();
+    } catch (error) {
+      console.error('Error updating outlet assignments:', error);
+      alert(error.response?.data?.detail || 'Error updating outlet assignments');
+    }
+  };
+
+  const toggleOutletSelection = (outletId) => {
+    setSelectedOutletIds(prev => {
+      if (prev.includes(outletId)) {
+        return prev.filter(id => id !== outletId);
+      } else {
+        return [...prev, outletId];
+      }
+    });
+  };
+
   const handleEditUser = async (e) => {
     e.preventDefault();
     try {
@@ -107,6 +148,40 @@ export default function SuperAdminOrganizationDetail() {
     } catch (error) {
       console.error('Error toggling user status:', error);
       alert(error.response?.data?.detail || 'Error updating user status');
+    }
+  };
+
+  const openSubscriptionModal = () => {
+    setSubscriptionForm({
+      subscription_tier: organization.subscription_tier,
+      subscription_status: organization.subscription_status
+    });
+    setShowSubscriptionModal(true);
+  };
+
+  const handleUpdateSubscription = async (e) => {
+    e.preventDefault();
+    try {
+      await axios.patch(`/super-admin/organizations/${orgId}`, subscriptionForm);
+      alert('Subscription updated successfully');
+      setShowSubscriptionModal(false);
+      fetchOrganizationDetail();
+    } catch (error) {
+      console.error('Error updating subscription:', error);
+      alert(error.response?.data?.detail || 'Error updating subscription');
+    }
+  };
+
+  const handleImpersonate = async () => {
+    try {
+      const response = await axios.post(`/super-admin/impersonate/${orgId}`);
+      // Use the setToken function from AuthContext to set the new token
+      await setToken(response.data.access_token);
+      // Navigate to home page in impersonated context
+      navigate('/');
+    } catch (error) {
+      console.error('Error impersonating organization:', error);
+      alert(error.response?.data?.detail || 'Error impersonating organization');
     }
   };
 
@@ -161,6 +236,38 @@ export default function SuperAdminOrganizationDetail() {
         </div>
       </div>
 
+      {/* Subscription & Actions */}
+      <div className="detail-section">
+        <h2>Subscription & Actions</h2>
+        <div className="subscription-actions">
+          <div className="subscription-info">
+            <div className="info-item">
+              <span className="info-label">Tier:</span>
+              <span
+                className="org-tier-badge"
+                style={{ backgroundColor: getTierColor(organization.subscription_tier) }}
+              >
+                {organization.subscription_tier}
+              </span>
+            </div>
+            <div className="info-item">
+              <span className="info-label">Status:</span>
+              <span className={`status-badge ${organization.subscription_status === 'active' ? 'active' : 'inactive'}`}>
+                {organization.subscription_status}
+              </span>
+            </div>
+          </div>
+          <div className="action-buttons">
+            <button className="action-btn primary" onClick={openSubscriptionModal}>
+              Manage Subscription
+            </button>
+            <button className="action-btn impersonate" onClick={handleImpersonate}>
+              Impersonate Organization
+            </button>
+          </div>
+        </div>
+      </div>
+
       {/* Users Table */}
       <div className="detail-section">
         <h2>Users ({organization.users.length})</h2>
@@ -174,6 +281,7 @@ export default function SuperAdminOrganizationDetail() {
                 <th>Username</th>
                 <th>Full Name</th>
                 <th>Role</th>
+                <th>Outlets</th>
                 <th>Status</th>
                 <th>Actions</th>
               </tr>
@@ -193,6 +301,24 @@ export default function SuperAdminOrganizationDetail() {
                     </span>
                   </td>
                   <td>
+                    {user.role === 'admin' ? (
+                      <span className="outlet-badge all-outlets">All Outlets</span>
+                    ) : user.assigned_outlet_ids && user.assigned_outlet_ids.length > 0 ? (
+                      <div style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap' }}>
+                        {user.assigned_outlet_ids.map(outletId => {
+                          const outlet = organization.outlets.find(o => o.id === outletId);
+                          return outlet ? (
+                            <span key={outletId} className="outlet-badge">
+                              {outlet.name}
+                            </span>
+                          ) : null;
+                        })}
+                      </div>
+                    ) : (
+                      <span className="outlet-badge no-outlets">No Outlets</span>
+                    )}
+                  </td>
+                  <td>
                     <span className={`status-badge ${user.is_active ? 'active' : 'inactive'}`}>
                       {user.is_active ? 'Active' : 'Inactive'}
                     </span>
@@ -201,6 +327,11 @@ export default function SuperAdminOrganizationDetail() {
                     <button className="action-btn" onClick={() => openEditUserModal(user)}>
                       Edit
                     </button>
+                    {user.role !== 'admin' && (
+                      <button className="action-btn" onClick={() => openManageOutletsModal(user)}>
+                        Manage Outlets
+                      </button>
+                    )}
                     <button className="action-btn" onClick={() => openToggleUserModal(user)}>
                       {user.is_active ? 'Deactivate' : 'Activate'}
                     </button>
@@ -320,6 +451,107 @@ export default function SuperAdminOrganizationDetail() {
                 {selectedUser.is_active ? 'Deactivate User' : 'Activate User'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Manage Outlets Modal */}
+      {showManageOutletsModal && selectedUser && (
+        <div className="modal-overlay" onClick={() => setShowManageOutletsModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h2>Manage Outlets: {selectedUser.email}</h2>
+            <p style={{ marginBottom: '1rem', color: '#6b7280' }}>
+              Select which outlets this user can access. Admins always have access to all outlets.
+            </p>
+            <form onSubmit={handleManageOutlets}>
+              <div className="form-group">
+                {organization.outlets.length === 0 ? (
+                  <p style={{ color: '#6b7280', fontStyle: 'italic' }}>
+                    No outlets available. Create outlets first to assign them to users.
+                  </p>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                    {organization.outlets.map(outlet => (
+                      <label
+                        key={outlet.id}
+                        className="outlet-assignment-item"
+                        style={{
+                          backgroundColor: selectedOutletIds.includes(outlet.id) ? 'rgba(59, 130, 246, 0.1)' : 'transparent'
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedOutletIds.includes(outlet.id)}
+                          onChange={() => toggleOutletSelection(outlet.id)}
+                          style={{ cursor: 'pointer' }}
+                        />
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: 500 }}>{outlet.name}</div>
+                          {outlet.location && (
+                            <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary, #a3a3a3)' }}>
+                              {outlet.location}
+                            </div>
+                          )}
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="modal-actions">
+                <button type="button" onClick={() => setShowManageOutletsModal(false)} className="btn-secondary">
+                  Cancel
+                </button>
+                <button type="submit" className="btn-primary" disabled={organization.outlets.length === 0}>
+                  Save Assignments
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Subscription Management Modal */}
+      {showSubscriptionModal && (
+        <div className="modal-overlay" onClick={() => setShowSubscriptionModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h2>Manage Subscription: {organization.name}</h2>
+            <form onSubmit={handleUpdateSubscription}>
+              <div className="form-group">
+                <label>Subscription Tier</label>
+                <select
+                  value={subscriptionForm.subscription_tier}
+                  onChange={(e) => setSubscriptionForm({...subscriptionForm, subscription_tier: e.target.value})}
+                  required
+                >
+                  <option value="free">Free</option>
+                  <option value="basic">Basic</option>
+                  <option value="pro">Pro</option>
+                  <option value="enterprise">Enterprise</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Subscription Status</label>
+                <select
+                  value={subscriptionForm.subscription_status}
+                  onChange={(e) => setSubscriptionForm({...subscriptionForm, subscription_status: e.target.value})}
+                  required
+                >
+                  <option value="active">Active</option>
+                  <option value="trial">Trial</option>
+                  <option value="suspended">Suspended</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
+              </div>
+              <div className="modal-actions">
+                <button type="button" onClick={() => setShowSubscriptionModal(false)} className="btn-secondary">
+                  Cancel
+                </button>
+                <button type="submit" className="btn-primary">
+                  Update Subscription
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

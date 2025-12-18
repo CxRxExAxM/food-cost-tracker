@@ -43,9 +43,9 @@ function Navigation() {
 
   return (
     <nav className="navigation">
-      <div className="nav-container">
-        {/* Left: Branding + Nav Links */}
-        <div className="nav-left">
+        <div className="nav-container">
+          {/* Left: Branding + Nav Links */}
+          <div className="nav-left">
           <div className="nav-brand">
             <Link to="/" className="brand-link">
               <div className="brand-name">RestauranTek</div>

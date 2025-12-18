@@ -1,13 +1,14 @@
 """
 Super Admin router - Platform owner dashboard for managing all organizations.
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime, timedelta
 
 from ..auth import get_current_super_admin, get_current_user, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES, Token, get_password_hash
 from ..database import get_db, dict_from_row
+from ..audit import log_audit, AuditAction, EntityType
 
 
 router = APIRouter(prefix="/super-admin", tags=["super-admin"])
@@ -72,6 +73,7 @@ class UserResponse(BaseModel):
     role: str
     is_active: bool
     organization_id: int
+    assigned_outlet_ids: List[int] = []
 
 
 class UserUpdate(BaseModel):
@@ -79,6 +81,10 @@ class UserUpdate(BaseModel):
     role: Optional[str] = None
     is_active: Optional[bool] = None
     password: Optional[str] = None
+
+
+class UserOutletAssignments(BaseModel):
+    outlet_ids: List[int]
 
 
 class OutletBasic(BaseModel):
@@ -207,6 +213,25 @@ def get_organization_detail(
         """, (org_id,))
         users = [dict_from_row(row) for row in cursor.fetchall()]
 
+        # Get outlet assignments for all users
+        cursor.execute("""
+            SELECT user_id, outlet_id
+            FROM user_outlets
+            WHERE user_id IN (SELECT id FROM users WHERE organization_id = %s)
+        """, (org_id,))
+
+        # Build a map of user_id -> [outlet_ids]
+        outlet_assignments = {}
+        for row in cursor.fetchall():
+            user_id = row["user_id"]
+            if user_id not in outlet_assignments:
+                outlet_assignments[user_id] = []
+            outlet_assignments[user_id].append(row["outlet_id"])
+
+        # Add assigned_outlet_ids to each user
+        for user in users:
+            user["assigned_outlet_ids"] = outlet_assignments.get(user["id"], [])
+
         # Get all outlets for this organization
         cursor.execute("""
             SELECT id, name, location, is_active
@@ -270,19 +295,24 @@ def create_organization(
 def update_organization(
     org_id: int,
     org_update: OrganizationUpdate,
-    current_user: dict = Depends(get_current_super_admin)
+    current_user: dict = Depends(get_current_super_admin),
+    request: Request = None
 ):
     """Update organization details (super admin only)."""
     with get_db() as conn:
         cursor = conn.cursor()
 
-        # Check organization exists
+        # Check organization exists and get current values
         cursor.execute("SELECT * FROM organizations WHERE id = %s", (org_id,))
-        if not cursor.fetchone():
+        old_org = dict_from_row(cursor.fetchone())
+        if not old_org:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Organization not found"
             )
+
+        # Track changes for audit log
+        changes = {}
 
         # Build update query
         update_fields = []
@@ -291,22 +321,27 @@ def update_organization(
         if org_update.name is not None:
             update_fields.append("name = %s")
             params.append(org_update.name)
+            changes["name"] = {"from": old_org["name"], "to": org_update.name}
 
         if org_update.subscription_tier is not None:
             update_fields.append("subscription_tier = %s")
             params.append(org_update.subscription_tier)
+            changes["subscription_tier"] = {"from": old_org["subscription_tier"], "to": org_update.subscription_tier}
 
         if org_update.subscription_status is not None:
             update_fields.append("subscription_status = %s")
             params.append(org_update.subscription_status)
+            changes["subscription_status"] = {"from": old_org["subscription_status"], "to": org_update.subscription_status}
 
         if org_update.max_users is not None:
             update_fields.append("max_users = %s")
             params.append(org_update.max_users)
+            changes["max_users"] = {"from": old_org["max_users"], "to": org_update.max_users}
 
         if org_update.max_recipes is not None:
             update_fields.append("max_recipes = %s")
             params.append(org_update.max_recipes)
+            changes["max_recipes"] = {"from": old_org["max_recipes"], "to": org_update.max_recipes}
 
         if not update_fields:
             raise HTTPException(
@@ -327,6 +362,20 @@ def update_organization(
         cursor.execute(query, params)
         updated_org = dict_from_row(cursor.fetchone())
         conn.commit()
+
+        # Log audit event
+        action = AuditAction.SUBSCRIPTION_UPDATED if "subscription_tier" in changes or "subscription_status" in changes else AuditAction.ORG_UPDATED
+        log_audit(
+            action=action,
+            user_id=current_user["id"],
+            organization_id=org_id,
+            entity_type=EntityType.ORGANIZATION,
+            entity_id=org_id,
+            changes=changes,
+            ip_address=request.client.host if request else None,
+            impersonating=current_user.get("impersonating", False),
+            original_super_admin_id=current_user.get("original_super_admin_id")
+        )
 
         # Add counts
         cursor.execute("""
@@ -497,6 +546,73 @@ def update_user(
         return updated_user
 
 
+@router.patch("/users/{user_id}/outlets", status_code=status.HTTP_200_OK)
+def update_user_outlet_assignments(
+    user_id: int,
+    assignments: UserOutletAssignments,
+    current_user: dict = Depends(get_current_super_admin)
+):
+    """
+    Update outlet assignments for a user (super admin only).
+    Replaces all existing assignments with the provided list.
+    """
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Verify user exists and get their organization
+        cursor.execute("""
+            SELECT id, organization_id, role FROM users WHERE id = %s
+        """, (user_id,))
+        user = cursor.fetchone()
+
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+
+        user_dict = dict_from_row(user)
+        org_id = user_dict["organization_id"]
+
+        # Verify all outlet IDs belong to the user's organization
+        if assignments.outlet_ids:
+            placeholders = ','.join(['%s'] * len(assignments.outlet_ids))
+            cursor.execute(f"""
+                SELECT id FROM outlets
+                WHERE id IN ({placeholders}) AND organization_id = %s
+            """, (*assignments.outlet_ids, org_id))
+
+            valid_outlets = [row["id"] for row in cursor.fetchall()]
+
+            if len(valid_outlets) != len(assignments.outlet_ids):
+                invalid_ids = set(assignments.outlet_ids) - set(valid_outlets)
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Invalid outlet IDs: {invalid_ids}"
+                )
+
+        # Delete existing assignments
+        cursor.execute("""
+            DELETE FROM user_outlets WHERE user_id = %s
+        """, (user_id,))
+
+        # Insert new assignments
+        if assignments.outlet_ids:
+            values = [(user_id, outlet_id) for outlet_id in assignments.outlet_ids]
+            cursor.executemany("""
+                INSERT INTO user_outlets (user_id, outlet_id)
+                VALUES (%s, %s)
+            """, values)
+
+        conn.commit()
+
+        return {
+            "user_id": user_id,
+            "outlet_ids": assignments.outlet_ids,
+            "message": f"Updated outlet assignments for user {user_id}"
+        }
+
+
 # Platform statistics endpoint
 @router.get("/stats/overview", response_model=PlatformStatsResponse)
 def get_platform_stats(
@@ -601,7 +717,8 @@ def list_all_users(
 @router.post("/impersonate/{organization_id}", response_model=Token)
 def impersonate_organization(
     organization_id: int,
-    current_user: dict = Depends(get_current_super_admin)
+    current_user: dict = Depends(get_current_super_admin),
+    request: Request = None
 ):
     """
     Impersonate an organization as an admin user.
@@ -641,6 +758,21 @@ def impersonate_organization(
                 detail="No active admin user found in this organization"
             )
 
+        # Log audit event
+        log_audit(
+            action=AuditAction.IMPERSONATION_STARTED,
+            user_id=current_user["id"],
+            organization_id=organization_id,
+            entity_type=EntityType.ORGANIZATION,
+            entity_id=organization_id,
+            changes={
+                "super_admin": current_user["email"],
+                "organization": org["name"],
+                "impersonated_user": admin_user["email"]
+            },
+            ip_address=request.client.host if request else None
+        )
+
         # Create impersonation token
         # Include both impersonated user info and original super admin ID
         access_token = create_access_token(
@@ -663,7 +795,7 @@ def impersonate_organization(
 
 
 @router.post("/exit-impersonation", response_model=Token)
-def exit_impersonation(current_user: dict = Depends(get_current_user)):
+def exit_impersonation(current_user: dict = Depends(get_current_user), request: Request = None):
     """
     Exit impersonation mode and return to original super admin session.
     Extracts original super admin info from the impersonation token.
@@ -682,6 +814,20 @@ def exit_impersonation(current_user: dict = Depends(get_current_user)):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Original super admin info not found in token"
         )
+
+    # Log audit event
+    log_audit(
+        action=AuditAction.IMPERSONATION_ENDED,
+        user_id=original_super_admin_id,
+        organization_id=current_user.get("organization_id"),
+        entity_type=EntityType.ORGANIZATION,
+        entity_id=current_user.get("organization_id"),
+        changes={
+            "super_admin": original_super_admin_email,
+            "exited_from_user": current_user.get("email")
+        },
+        ip_address=request.client.host if request else None
+    )
 
     # Fetch original super admin user details
     with get_db() as conn:
@@ -715,3 +861,58 @@ def exit_impersonation(current_user: dict = Depends(get_current_user)):
         "access_token": access_token,
         "token_type": "bearer"
     }
+
+
+# Audit logs endpoint
+@router.get("/audit-logs")
+def get_audit_logs(
+    skip: int = 0,
+    limit: int = 100,
+    organization_id: Optional[int] = None,
+    action: Optional[str] = None,
+    current_user: dict = Depends(get_current_super_admin)
+):
+    """Get audit logs with optional filters (super admin only)."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        where_clauses = []
+        params = []
+
+        if organization_id:
+            where_clauses.append("organization_id = %s")
+            params.append(organization_id)
+
+        if action:
+            where_clauses.append("action = %s")
+            params.append(action)
+
+        where_clause = " AND ".join(where_clauses) if where_clauses else "1=1"
+        params.extend([limit, skip])
+
+        cursor.execute(f"""
+            SELECT
+                al.*,
+                u.email as user_email,
+                u.username as user_username,
+                o.name as organization_name
+            FROM audit_logs al
+            LEFT JOIN users u ON u.id = al.user_id
+            LEFT JOIN organizations o ON o.id = al.organization_id
+            WHERE {where_clause}
+            ORDER BY al.created_at DESC
+            LIMIT %s OFFSET %s
+        """, params)
+
+        logs = [dict_from_row(row) for row in cursor.fetchall()]
+
+        # Parse changes JSON back to dict for easier frontend consumption
+        for log in logs:
+            if log.get("changes"):
+                import json
+                try:
+                    log["changes"] = json.loads(log["changes"])
+                except:
+                    pass
+
+        return logs

@@ -11,6 +11,7 @@ import Login from './pages/Login';
 import SuperAdminDashboard from './pages/SuperAdmin/Dashboard';
 import SuperAdminOrganizations from './pages/SuperAdmin/Organizations';
 import SuperAdminOrganizationDetail from './pages/SuperAdmin/OrganizationDetail';
+import SuperAdminAuditLogs from './pages/SuperAdmin/AuditLogs';
 import ImpersonationBanner from './components/ImpersonationBanner';
 import './App.css';
 
@@ -167,6 +168,14 @@ function AppRoutes() {
         element={
           <SuperAdminRoute>
             <SuperAdminOrganizationDetail />
+          </SuperAdminRoute>
+        }
+      />
+      <Route
+        path="/super-admin/audit-logs"
+        element={
+          <SuperAdminRoute>
+            <SuperAdminAuditLogs />
           </SuperAdminRoute>
         }
       />
