@@ -349,8 +349,7 @@ async def parse_recipe_file(
                     'ingredients_count': total_ingredients,
                     'matched_count': ingredients_matched
                 },
-                ip_address=request.client.host if request else None,
-                conn=conn
+                ip_address=request.client.host if request else None
             )
             print(f"[PARSE] Audit logged successfully")
         except Exception as e:
@@ -511,8 +510,7 @@ async def create_recipe_from_parse(
                 'parse_id': data.parse_id,
                 'ingredients_count': len(data.ingredients)
             },
-            ip_address=request.client.host if request else None,
-            conn=conn
+            ip_address=request.client.host if request else None
         )
 
         return CreateRecipeFromParseResponse(

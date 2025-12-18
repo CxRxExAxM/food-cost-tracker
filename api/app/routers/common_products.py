@@ -306,8 +306,7 @@ def quick_create_common_product(
                         'category': product.category,
                         'created_via': 'ai_recipe_parser'
                     },
-                    ip_address=request.client.host if request else None,
-                    conn=conn
+                    ip_address=request.client.host if request else None
                 )
                 print(f"[QUICK-CREATE] Audit logged successfully")
             except Exception as audit_error:

@@ -67,12 +67,15 @@ export default function IngredientMatchRow({ ingredient, onProductSelected }) {
     setCreating(true);
 
     try {
+      console.log('[CREATE] Creating product:', createForm);
       const newProduct = await quickCreateProduct({
         ...createForm,
         organization_id: user.organization_id
       });
+      console.log('[CREATE] Product created successfully:', newProduct);
 
       // Select the newly created product
+      console.log('[CREATE] Auto-selecting newly created product...');
       handleSelectProduct({
         common_product_id: newProduct.common_product_id,
         common_name: newProduct.common_name,
@@ -80,10 +83,13 @@ export default function IngredientMatchRow({ ingredient, onProductSelected }) {
         confidence: 1.0,
         exact_match: true
       });
+      console.log('[CREATE] Product auto-selected');
 
       setShowCreateForm(false);
+      console.log('[CREATE] Create form closed');
     } catch (err) {
-      console.error('Create error:', err);
+      console.error('[CREATE ERROR]:', err);
+      console.error('[CREATE ERROR] Response:', err.response);
       alert(err.response?.data?.detail || 'Error creating product');
     } finally {
       setCreating(false);
