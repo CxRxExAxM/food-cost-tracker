@@ -330,9 +330,12 @@ async def parse_recipe_file(
         print(f"[PARSE] All ingredients processed. Creating response...")
 
         # Get updated usage stats
+        print(f"[PARSE] Fetching updated usage stats...")
         _, updated_usage = check_parse_limit(organization_id, conn)
+        print(f"[PARSE] Usage stats: {updated_usage}")
 
         # Log audit event
+        print(f"[PARSE] Logging audit event...")
         log_audit(
             user_id=user_id,
             organization_id=organization_id,
@@ -348,18 +351,32 @@ async def parse_recipe_file(
             ip_address=request.client.host if request else None,
             conn=conn
         )
+        print(f"[PARSE] Audit logged successfully")
 
-        print(f"[PARSE] Returning successful response to client")
-        return ParseFileResponse(
-            parse_id=parse_id,
-            recipe_name=recipe_data['name'],
-            yield_info=yield_info,
-            description=recipe_data.get('description'),
-            category=recipe_data.get('category'),
-            ingredients=parsed_ingredients,
-            usage=UsageStats(**updated_usage),
-            credits_used=credits_used
-        )
+        print(f"[PARSE] Creating ParseFileResponse object...")
+        print(f"[PARSE] - parse_id: {parse_id}")
+        print(f"[PARSE] - recipe_name: {recipe_data['name']}")
+        print(f"[PARSE] - ingredients count: {len(parsed_ingredients)}")
+
+        try:
+            response = ParseFileResponse(
+                parse_id=parse_id,
+                recipe_name=recipe_data['name'],
+                yield_info=yield_info,
+                description=recipe_data.get('description'),
+                category=recipe_data.get('category'),
+                ingredients=parsed_ingredients,
+                usage=UsageStats(**updated_usage),
+                credits_used=credits_used
+            )
+            print(f"[PARSE] Response object created successfully")
+            print(f"[PARSE] Returning successful response to client")
+            return response
+        except Exception as e:
+            print(f"[PARSE ERROR] Failed to create response object: {type(e).__name__}: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            raise
 
 
 @router.get("/ai-parse/usage-stats", response_model=UsageStatsResponse)
