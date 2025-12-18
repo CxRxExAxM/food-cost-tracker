@@ -41,21 +41,38 @@ export function OutletProvider({ children }) {
       // Restore previously selected outlet from localStorage
       const savedOutletId = localStorage.getItem('selectedOutletId');
 
+      let outletToSelect = null;
+
       if (savedOutletId === 'all') {
         // "All Outlets" selection (for org-wide admins)
-        setCurrentOutlet({ id: 'all', name: 'All Outlets' });
+        outletToSelect = { id: 'all', name: 'All Outlets' };
       } else if (savedOutletId && fetchedOutlets.length > 0) {
         // Find the saved outlet
         const savedOutlet = fetchedOutlets.find(o => o.id === parseInt(savedOutletId));
         if (savedOutlet) {
-          setCurrentOutlet(savedOutlet);
+          outletToSelect = savedOutlet;
         } else {
           // Saved outlet not found, default to first outlet
-          setCurrentOutlet(fetchedOutlets[0]);
+          outletToSelect = fetchedOutlets[0];
         }
       } else if (fetchedOutlets.length > 0) {
         // No saved selection, default to first outlet
-        setCurrentOutlet(fetchedOutlets[0]);
+        outletToSelect = fetchedOutlets[0];
+      }
+
+      // Always set the outlet and persist it
+      if (outletToSelect) {
+        console.log('[OutletContext] Setting current outlet:', outletToSelect);
+        setCurrentOutlet(outletToSelect);
+
+        // Persist to localStorage immediately
+        if (outletToSelect.id === 'all') {
+          localStorage.setItem('selectedOutletId', 'all');
+        } else {
+          localStorage.setItem('selectedOutletId', outletToSelect.id.toString());
+        }
+      } else {
+        console.warn('[OutletContext] No outlets available to select');
       }
 
       setLoading(false);
