@@ -185,8 +185,13 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         return user
     except HTTPException:
         raise
-    except Exception:
-        raise credentials_exception
+    except Exception as e:
+        # Log the actual error for debugging
+        print(f"[AUTH ERROR] get_current_user failed: {type(e).__name__}: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Authentication error: {str(e)}"
+        )
 
 
 async def get_current_super_admin(current_user: dict = Depends(get_current_user)):

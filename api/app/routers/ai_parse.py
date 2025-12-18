@@ -131,6 +131,9 @@ async def parse_recipe_file(
 
     start_time = time.time()
 
+    # Log request details for debugging
+    print(f"[PARSE] Request received - user: {current_user.get('user_id')}, outlet: {outlet_id}, file: {file.filename if file else 'None'}")
+
     # Check permissions
     if current_user['role'] not in ['chef', 'admin']:
         raise HTTPException(
