@@ -242,66 +242,98 @@ def quick_create_common_product(
     Required permissions: Chef or Admin role
     """
 
-    # Check permissions
-    if current_user['role'] not in ['chef', 'admin']:
-        raise HTTPException(
-            status_code=403,
-            detail="Only Chef and Admin roles can create products"
-        )
+    print(f"[QUICK-CREATE] Starting product creation: {product.common_name}")
+    print(f"[QUICK-CREATE] User: {current_user.get('id')}, Org: {current_user.get('organization_id')}")
 
-    organization_id = current_user["organization_id"]
-
-    with get_db() as conn:
-        cursor = conn.cursor()
-
-        # Check if common_name already exists in this organization
-        cursor.execute(
-            "SELECT id FROM common_products WHERE common_name = %s AND organization_id = %s",
-            (product.common_name, organization_id)
-        )
-        existing = cursor.fetchone()
-        if existing:
+    try:
+        # Check permissions
+        if current_user['role'] not in ['chef', 'admin']:
             raise HTTPException(
-                status_code=400,
-                detail=f"Product '{product.common_name}' already exists in your organization"
+                status_code=403,
+                detail="Only Chef and Admin roles can create products"
             )
 
-        # Create with minimal fields (allergens default to 0)
-        cursor.execute("""
-            INSERT INTO common_products (
-                common_name, category, subcategory, organization_id
+        organization_id = current_user["organization_id"]
+
+        with get_db() as conn:
+            cursor = conn.cursor()
+
+            print(f"[QUICK-CREATE] Checking for duplicates...")
+            # Check if common_name already exists in this organization
+            cursor.execute(
+                "SELECT id FROM common_products WHERE common_name = %s AND organization_id = %s",
+                (product.common_name, organization_id)
             )
-            VALUES (%s, %s, %s, %s)
-            RETURNING id, common_name, category
-        """, (
-            product.common_name,
-            product.category,
-            product.subcategory,
-            organization_id
-        ))
+            existing = cursor.fetchone()
+            if existing:
+                print(f"[QUICK-CREATE] Duplicate found: {existing['id']}")
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Product '{product.common_name}' already exists in your organization"
+                )
 
-        result = cursor.fetchone()
-        conn.commit()
+            print(f"[QUICK-CREATE] Inserting into database...")
+            # Create with minimal fields (allergens default to 0)
+            cursor.execute("""
+                INSERT INTO common_products (
+                    common_name, category, subcategory, organization_id
+                )
+                VALUES (%s, %s, %s, %s)
+                RETURNING id, common_name, category
+            """, (
+                product.common_name,
+                product.category,
+                product.subcategory,
+                organization_id
+            ))
 
-        # Log audit event
-        log_audit(
-            user_id=current_user['id'],  # Database column is 'id', not 'user_id'
-            organization_id=organization_id,
-            action='common_product_created',
-            entity_type='common_product',
-            entity_id=result['id'],
-            changes={
-                'common_name': product.common_name,
-                'category': product.category,
-                'created_via': 'ai_recipe_parser'
-            },
-            ip_address=request.client.host if request else None,
-            conn=conn
-        )
+            result = cursor.fetchone()
+            print(f"[QUICK-CREATE] Product created with ID: {result['id']}")
+            conn.commit()
+            print(f"[QUICK-CREATE] Committed to database")
 
-        return QuickCreateProductResponse(
-            common_product_id=result['id'],
-            common_name=result['common_name'],
-            category=result['category'],
-            message=f"Product '{product.common_name}' created successfully"
+            # Log audit event
+            print(f"[QUICK-CREATE] Logging audit event...")
+            try:
+                log_audit(
+                    user_id=current_user['id'],  # Database column is 'id', not 'user_id'
+                    organization_id=organization_id,
+                    action='common_product_created',
+                    entity_type='common_product',
+                    entity_id=result['id'],
+                    changes={
+                        'common_name': product.common_name,
+                        'category': product.category,
+                        'created_via': 'ai_recipe_parser'
+                    },
+                    ip_address=request.client.host if request else None,
+                    conn=conn
+                )
+                print(f"[QUICK-CREATE] Audit logged successfully")
+            except Exception as audit_error:
+                print(f"[QUICK-CREATE ERROR] Audit logging failed: {type(audit_error).__name__}: {str(audit_error)}")
+                import traceback
+                traceback.print_exc()
+                # Continue despite audit failure
+                print(f"[QUICK-CREATE] Continuing despite audit failure...")
+
+            print(f"[QUICK-CREATE] Creating response...")
+            response = QuickCreateProductResponse(
+                common_product_id=result['id'],
+                common_name=result['common_name'],
+                category=result['category'],
+                message=f"Product '{product.common_name}' created successfully"
+            )
+            print(f"[QUICK-CREATE] Success! Returning response")
+            return response
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[QUICK-CREATE ERROR] Unexpected error: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error creating product: {str(e)}"
         )
