@@ -882,4 +882,206 @@ def check_rate_limit(organization_id: int, conn) -> bool:
 
 ---
 
-**Last Updated:** December 17, 2024
+## CRITICAL WORKFLOW DECISION: Optional Product Mapping
+
+**Date:** December 18, 2024
+
+**Status:** Implementing Option C (Quick Fix + Future Refactor)
+
+### Problem Identified
+
+**Current AI Parse Flow Forces Linear Progression:**
+- Requires ALL ingredients to be mapped to common products before saving
+- Blocks recipe creation if products don't exist in catalog
+- Forces workflow: Products → Recipes (can't go Recipes → Products)
+
+**Real-World Scenarios This Breaks:**
+1. **New Organization**: Has 50 recipes in Word docs, wants to digitize first, add products later
+2. **Test Kitchen**: Chef developing new recipes with ingredients they haven't sourced yet
+3. **Incremental Adoption**: "Let me get my recipes in, I'll worry about costing next month"
+4. **Recipe-First Workflow**: Document the food first, figure out purchasing later
+
+### Philosophical Shift
+
+**Old Paradigm:**
+- Recipes depend on Products (hard requirement)
+- Force complete data before progress
+- "On rails" workflow
+
+**New Paradigm:**
+- Recipes and Products are independent concerns that *can* be linked
+- Allow partial data ("progressive enhancement")
+- Recipes unlock features as data improves:
+  - Recipe without products = documentation only
+  - Recipe with products = costing enabled
+  - Recipe with full data = complete analysis
+
+### Implementation Strategy
+
+**Phase 1: Quick Fix (Implementing Now) - Option C**
+1. **Database Schema Addition:**
+```sql
+ALTER TABLE recipe_ingredients
+ADD COLUMN ingredient_name TEXT;  -- For unmapped ingredients
+```
+
+2. **Make common_product_id truly optional** in application logic
+
+3. **AI Parse Review Modal Changes:**
+   - Product mapping becomes "suggested" not "required"
+   - Add "Save Without Mapping" or "Save With Partial Mapping" button
+   - Store ingredient text name for unmapped items
+
+4. **Recipe Display:**
+   - Show text name for unmapped ingredients (gray text, unlinked icon)
+   - Add "🔗 Link Product" button next to unmapped items
+   - Visual indicator for incomplete state
+
+5. **Costing Behavior:**
+   - Skip unmapped ingredients in cost calculations
+   - Show "⚠️ Incomplete Pricing - X ingredients unmapped" banner
+   - Display partial cost with caveat
+   - Enable "Link All Products" workflow
+
+**Phase 2: Full Recipe Builder Refactor (Future)**
+1. **Recipe Editor Like Products Page:**
+   - Inline ingredient adding (type name, quantity, unit)
+   - Optional product linking via search/modal per row
+   - Drag to reorder
+   - Better editing experience
+
+2. **Improved UX:**
+   - Add ingredient → Type text → *Optionally* link product
+   - Consistent pattern across app
+   - Less overwhelming for new users
+
+### Database Schema Changes Required
+
+```sql
+-- Allow ingredient_name for unmapped ingredients
+ALTER TABLE recipe_ingredients
+ADD COLUMN ingredient_name TEXT;
+
+-- Make common_product_id optional (it already is nullable, just needs logic updates)
+-- No schema change needed, just application logic
+
+-- Add index for quick filtering of unmapped ingredients
+CREATE INDEX idx_recipe_ingredients_unmapped
+ON recipe_ingredients(recipe_id)
+WHERE common_product_id IS NULL AND sub_recipe_id IS NULL;
+```
+
+### Validation Rules (Updated)
+
+**Old Rules:**
+- `common_product_id` OR `sub_recipe_id` REQUIRED (one must be set)
+
+**New Rules:**
+- If `common_product_id` is set → use product for costing
+- If `sub_recipe_id` is set → use sub-recipe for costing
+- If both are NULL → `ingredient_name` must be set (text-only ingredient)
+
+**Backend Validation:**
+```python
+# Recipe ingredient must have at least one identifier
+if not common_product_id and not sub_recipe_id and not ingredient_name:
+    raise ValidationError("Ingredient must have product, sub-recipe, or text name")
+
+# If text-only, quantities still required for documentation
+if ingredient_name and not common_product_id:
+    # Valid - documented but not costed
+    pass
+```
+
+### UI States
+
+**Ingredient Row States:**
+
+1. **Linked to Product** (fully mapped):
+```
+✓ Cucumber - 10 LB (sliced)
+[Cucumber ✓] ← Green checkmark, shows cost
+```
+
+2. **Text-Only** (unmapped):
+```
+📝 Greek Yogurt - 2.5 quart
+[🔗 Link Product] ← Gray text, button to link
+```
+
+3. **Sub-Recipe Reference**:
+```
+🔗 Marinara Sauce - 2 quart
+[Sub-Recipe: Marinara ✓] ← Blue icon, linked
+```
+
+### Cost Calculation Logic (Updated)
+
+```python
+def calculate_recipe_cost(recipe_id):
+    total_cost = 0
+    costed_ingredients = 0
+    total_ingredients = 0
+
+    for ingredient in recipe.ingredients:
+        total_ingredients += 1
+
+        if ingredient.common_product_id:
+            # Calculate cost from product
+            cost = get_product_cost(ingredient.common_product_id) * ingredient.quantity
+            total_cost += cost
+            costed_ingredients += 1
+
+        elif ingredient.sub_recipe_id:
+            # Calculate cost from sub-recipe
+            cost = get_recipe_cost(ingredient.sub_recipe_id) * ingredient.quantity
+            total_cost += cost
+            costed_ingredients += 1
+
+        else:
+            # Text-only ingredient - skip, mark incomplete
+            pass
+
+    return {
+        'total_cost': total_cost,
+        'complete': costed_ingredients == total_ingredients,
+        'completion_rate': costed_ingredients / total_ingredients,
+        'unmapped_count': total_ingredients - costed_ingredients
+    }
+```
+
+### Migration Path for Existing Recipes
+
+**No migration needed!**
+- Existing recipes already have products mapped
+- New field `ingredient_name` defaults to NULL
+- Only new recipes can have unmapped ingredients
+
+### Success Metrics
+
+**Track:**
+1. % of recipes created with unmapped ingredients (adoption of new flow)
+2. Average time from recipe creation to full mapping (workflow flexibility)
+3. % of users who add products after recipes (vs. before)
+4. User satisfaction with "draft → complete" workflow
+
+### Benefits
+
+✅ **Unblocks users immediately** - can import recipes without product catalog
+✅ **Natural workflow** - matches how restaurants actually operate
+✅ **Progressive enhancement** - features unlock as data improves
+✅ **Parallel work** - chef documents, purchasing builds catalog simultaneously
+✅ **Less overwhelming** - don't need perfect data to start
+✅ **Future-proof** - sets up better recipe builder architecture
+
+### Trade-Offs
+
+⚠️ **Incomplete costing** - recipes without mapped products won't show costs
+- **Mitigation**: Clear UI indicators, "Link Products" workflows
+
+⚠️ **Potential for orphaned data** - text ingredients never linked to products
+- **Mitigation**: Dashboard widget showing "X unmapped ingredients" with quick-link action
+
+---
+
+**Last Updated:** December 18, 2024
