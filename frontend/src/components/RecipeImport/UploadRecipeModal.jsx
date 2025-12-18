@@ -139,8 +139,17 @@ export default function UploadRecipeModal({ isOpen, onClose, outletId, onParseCo
         setError(err.response.data.detail || 'Upload limit exceeded. Please try again later.');
       } else if (err.response?.status === 400) {
         setError(err.response.data.detail || 'Invalid file or could not extract recipe');
+      } else if (err.response?.status === 500) {
+        // Show actual backend error for 500 errors
+        const backendError = err.response.data.detail || 'Server error occurred';
+        console.error('[500 Error] Backend detail:', backendError);
+        setError(`Server error: ${backendError}`);
+      } else if (err.response?.status === 503) {
+        setError(err.response.data.detail || 'AI service temporarily unavailable. Please try again.');
       } else {
-        setError('Failed to parse recipe. Please try again or contact support.');
+        // Network or other errors
+        const errorMsg = err.response?.data?.detail || err.message || 'Failed to parse recipe';
+        setError(`Error: ${errorMsg}. Please try again or contact support.`);
       }
 
       setProcessing(false);
