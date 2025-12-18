@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse
 
 from ..auth import get_current_user
 from ..database import get_db
-from ..schemas.ai_parse import (
+from ..schemas import (
     ParseFileResponse,
     ParsedIngredient,
     ProductMatch,

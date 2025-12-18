@@ -1,8 +1,7 @@
 from fastapi import APIRouter, HTTPException, Query, Depends, Request
 from typing import Optional
 from ..database import get_db, dicts_from_rows, dict_from_row
-from ..schemas import CommonProduct, CommonProductCreate, CommonProductUpdate
-from ..schemas.ai_parse import QuickCreateProductRequest, QuickCreateProductResponse
+from ..schemas import CommonProduct, CommonProductCreate, CommonProductUpdate, QuickCreateProductRequest, QuickCreateProductResponse
 from ..auth import get_current_user
 from ..audit import log_audit
 
