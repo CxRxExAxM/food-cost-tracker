@@ -55,6 +55,7 @@ async def parse_recipe_with_claude(text: str) -> Dict:
         client = anthropic.Anthropic(api_key=api_key)
 
         # Call Claude API
+        print(f"[CLAUDE] Calling API with {len(text)} chars of text")
         message = client.messages.create(
             model="claude-sonnet-4-5-20250929",
             max_tokens=4000,
@@ -63,12 +64,44 @@ async def parse_recipe_with_claude(text: str) -> Dict:
                 {"role": "user", "content": prompt}
             ]
         )
+        print(f"[CLAUDE] API call successful, stop_reason: {message.stop_reason}")
 
         # Extract response text
+        if not message.content or len(message.content) == 0:
+            raise HTTPException(
+                status_code=500,
+                detail="AI returned empty response"
+            )
+
         response_text = message.content[0].text
 
+        # Log the response for debugging
+        print(f"[CLAUDE] Raw response length: {len(response_text)}")
+        print(f"[CLAUDE] Raw response (first 500 chars): {response_text[:500]}")
+
         # Parse JSON response
-        recipe_data = json.loads(response_text)
+        try:
+            recipe_data = json.loads(response_text)
+        except json.JSONDecodeError as e:
+            # Claude might have wrapped JSON in markdown code blocks
+            if "```json" in response_text or "```" in response_text:
+                # Extract JSON from markdown code block
+                import re
+                json_match = re.search(r'```(?:json)?\s*(\{.*\})\s*```', response_text, re.DOTALL)
+                if json_match:
+                    recipe_data = json.loads(json_match.group(1))
+                else:
+                    print(f"[CLAUDE ERROR] Could not extract JSON from markdown. Full response: {response_text}")
+                    raise HTTPException(
+                        status_code=500,
+                        detail=f"AI returned JSON wrapped in unexpected format"
+                    )
+            else:
+                print(f"[CLAUDE ERROR] Invalid JSON response. Full response: {response_text}")
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"AI returned invalid JSON: {str(e)}"
+                )
 
         # Validate structure
         validate_recipe_data(recipe_data)
