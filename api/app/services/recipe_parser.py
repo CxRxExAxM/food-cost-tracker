@@ -80,28 +80,33 @@ async def parse_recipe_with_claude(text: str) -> Dict:
         print(f"[CLAUDE] Raw response (first 500 chars): {response_text[:500]}")
 
         # Parse JSON response
+        # First, check if Claude wrapped JSON in markdown code blocks (despite instructions not to)
+        if response_text.strip().startswith("```"):
+            print(f"[CLAUDE] Detected markdown code block wrapper, extracting JSON...")
+            # Remove markdown code block markers
+            # Pattern: ```json\n{...}\n``` or ```\n{...}\n```
+            response_text = response_text.strip()
+            # Remove opening ```json or ```
+            if response_text.startswith("```json"):
+                response_text = response_text[7:]  # Remove ```json
+            elif response_text.startswith("```"):
+                response_text = response_text[3:]   # Remove ```
+            # Remove closing ```
+            if response_text.endswith("```"):
+                response_text = response_text[:-3]
+            response_text = response_text.strip()
+            print(f"[CLAUDE] Extracted JSON (first 200 chars): {response_text[:200]}")
+
         try:
             recipe_data = json.loads(response_text)
+            print(f"[CLAUDE] Successfully parsed JSON with {len(recipe_data.get('ingredients', []))} ingredients")
         except json.JSONDecodeError as e:
-            # Claude might have wrapped JSON in markdown code blocks
-            if "```json" in response_text or "```" in response_text:
-                # Extract JSON from markdown code block
-                import re
-                json_match = re.search(r'```(?:json)?\s*(\{.*\})\s*```', response_text, re.DOTALL)
-                if json_match:
-                    recipe_data = json.loads(json_match.group(1))
-                else:
-                    print(f"[CLAUDE ERROR] Could not extract JSON from markdown. Full response: {response_text}")
-                    raise HTTPException(
-                        status_code=500,
-                        detail=f"AI returned JSON wrapped in unexpected format"
-                    )
-            else:
-                print(f"[CLAUDE ERROR] Invalid JSON response. Full response: {response_text}")
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"AI returned invalid JSON: {str(e)}"
-                )
+            print(f"[CLAUDE ERROR] Failed to parse JSON. Error: {str(e)}")
+            print(f"[CLAUDE ERROR] Full response: {response_text}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"AI returned invalid JSON: {str(e)}"
+            )
 
         # Validate structure
         validate_recipe_data(recipe_data)
