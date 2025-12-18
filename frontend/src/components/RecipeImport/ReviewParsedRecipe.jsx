@@ -51,8 +51,14 @@ export default function ReviewParsedRecipe({ parseResult, outletId, onClose }) {
         ingredients
       });
 
-      // Navigate to recipe editor
-      navigate(`/recipes/${response.recipe_id}/edit`);
+      console.log('[REVIEW] Recipe created successfully:', response);
+
+      // Close modal and show success
+      onClose();
+      alert(`Recipe "${recipeName}" created successfully! Recipe ID: ${response.recipe_id}`);
+
+      // Navigate to recipes page to see the new recipe
+      navigate('/recipes');
 
     } catch (err) {
       console.error('Create error:', err);
