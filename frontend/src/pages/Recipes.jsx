@@ -3,6 +3,8 @@ import axios from '../lib/axios';
 import Navigation from '../components/Navigation';
 import { useOutlet } from '../contexts/OutletContext';
 import OutletBadge from '../components/outlets/OutletBadge';
+import UploadRecipeModal from '../components/RecipeImport/UploadRecipeModal';
+import ReviewParsedRecipe from '../components/RecipeImport/ReviewParsedRecipe';
 import './Recipes.css';
 
 const API_URL = import.meta.env.VITE_API_URL ?? '';
@@ -33,6 +35,9 @@ function Recipes() {
   const [expandedFolders, setExpandedFolders] = useState(new Set());
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showFolderModal, setShowFolderModal] = useState(false);
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [parseResult, setParseResult] = useState(null);
   const [editedRecipe, setEditedRecipe] = useState(null);
   const [isDirty, setIsDirty] = useState(false);
   const [contextMenu, setContextMenu] = useState(null);
@@ -198,6 +203,29 @@ function Recipes() {
   const createNewRecipe = () => {
     setPrefilledCategoryPath('');
     setShowCreateModal(true);
+  };
+
+  const handleUploadDocument = () => {
+    // Check if outlet is selected
+    if (!currentOutlet || currentOutlet.id === 'all') {
+      alert('Please select a specific outlet before uploading recipes');
+      return;
+    }
+
+    setShowUploadModal(true);
+  };
+
+  const handleParseComplete = (result) => {
+    setParseResult(result);
+    setShowUploadModal(false);
+    setShowReviewModal(true);
+  };
+
+  const handleReviewClose = () => {
+    setShowReviewModal(false);
+    setParseResult(null);
+    // Refresh recipes list
+    fetchRecipes();
   };
 
   const createNewFolder = () => {
@@ -492,6 +520,14 @@ function Recipes() {
               <button onClick={createNewRecipe} className="btn-new-recipe" title="Create New Recipe">
                 📄+
               </button>
+              <button
+                onClick={handleUploadDocument}
+                className="btn-upload-recipe"
+                title="Upload Recipe Document (AI-powered)"
+                disabled={!currentOutlet || currentOutlet.id === 'all'}
+              >
+                📤
+              </button>
             </div>
           </div>
 
@@ -625,6 +661,25 @@ function Recipes() {
         <FolderCreateModal
           onClose={() => setShowFolderModal(false)}
           onCreate={handleCreateFolder}
+        />
+      )}
+
+      {/* Upload Recipe Modal */}
+      {showUploadModal && (
+        <UploadRecipeModal
+          isOpen={showUploadModal}
+          onClose={() => setShowUploadModal(false)}
+          outletId={currentOutlet?.id}
+          onParseComplete={handleParseComplete}
+        />
+      )}
+
+      {/* Review Parsed Recipe Modal */}
+      {showReviewModal && parseResult && (
+        <ReviewParsedRecipe
+          parseResult={parseResult}
+          outletId={currentOutlet?.id}
+          onClose={handleReviewClose}
         />
       )}
       </div>

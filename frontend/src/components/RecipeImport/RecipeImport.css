@@ -1,0 +1,494 @@
+/* ============================================ */
+/* AI Recipe Import Styling */
+/* ============================================ */
+
+/* Upload Modal */
+.upload-recipe-modal {
+  width: 600px;
+  max-width: 90vw;
+}
+
+/* Dropzone */
+.dropzone {
+  border: 2px dashed #d1d5db;
+  border-radius: 8px;
+  padding: 3rem 2rem;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: #f9fafb;
+  margin-bottom: 1.5rem;
+}
+
+.dropzone:hover {
+  border-color: #3b82f6;
+  background: #eff6ff;
+}
+
+.dropzone.dragging {
+  border-color: #3b82f6;
+  background: #dbeafe;
+  transform: scale(1.02);
+}
+
+.dropzone.has-file {
+  border-color: #10b981;
+  background: #ecfdf5;
+}
+
+.dropzone-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+
+.dropzone-text {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 0.5rem;
+}
+
+.dropzone-subtext {
+  color: #6b7280;
+  margin-bottom: 1rem;
+}
+
+.dropzone-formats {
+  font-size: 0.875rem;
+  color: #9ca3af;
+}
+
+.dropzone-filename {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #059669;
+  margin-bottom: 0.25rem;
+}
+
+.dropzone-filesize {
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin-bottom: 1rem;
+}
+
+.change-file-btn {
+  background: transparent;
+  border: 1px solid #d1d5db;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  color: #6b7280;
+  cursor: pointer;
+  font-size: 0.875rem;
+  transition: all 0.2s;
+}
+
+.change-file-btn:hover {
+  border-color: #9ca3af;
+  color: #1f2937;
+}
+
+/* Usage Stats */
+.usage-stats {
+  background: #f3f4f6;
+  border-radius: 6px;
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.usage-label {
+  font-size: 0.875rem;
+  color: #4b5563;
+  margin-bottom: 0.5rem;
+}
+
+.usage-bar {
+  height: 8px;
+  background: #e5e7eb;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.usage-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #3b82f6, #2563eb);
+  transition: width 0.3s;
+}
+
+.usage-warning {
+  margin-top: 0.5rem;
+  font-size: 0.875rem;
+  color: #f59e0b;
+  font-weight: 500;
+}
+
+/* Processing State */
+.processing-state {
+  text-align: center;
+  padding: 2rem 0;
+}
+
+.spinner {
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 1.5rem;
+  border: 4px solid #e5e7eb;
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.processing-state h3 {
+  margin-bottom: 1.5rem;
+  color: #1f2937;
+}
+
+.progress-steps {
+  max-width: 300px;
+  margin: 0 auto 1rem;
+}
+
+.progress-step {
+  padding: 0.5rem;
+  text-align: left;
+  font-size: 0.875rem;
+  color: #9ca3af;
+  transition: all 0.2s;
+}
+
+.progress-step.active {
+  color: #3b82f6;
+  font-weight: 600;
+}
+
+.progress-step.completed {
+  color: #10b981;
+}
+
+.processing-note {
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin-top: 1rem;
+}
+
+/* Review Modal */
+.review-parsed-recipe {
+  width: 95vw;
+  max-width: 1200px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.review-header {
+  border-bottom: 1px solid #e5e7eb;
+  padding-bottom: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.review-recipe-form {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.yield-inputs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+/* Ingredients List */
+.ingredients-section {
+  flex: 1;
+  overflow-y: auto;
+  margin-bottom: 1.5rem;
+}
+
+.ingredients-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.ingredients-count {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.review-status {
+  font-size: 0.875rem;
+  color: #f59e0b;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Ingredient Row */
+.ingredient-row {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 1rem;
+  margin-bottom: 0.75rem;
+  transition: all 0.2s;
+}
+
+.ingredient-row:hover {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.ingredient-row.needs-review {
+  border-color: #fbbf24;
+  background: #fffbeb;
+}
+
+.ingredient-row.has-match {
+  border-color: #10b981;
+  background: #f0fdf4;
+}
+
+.ingredient-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 0.75rem;
+}
+
+.ingredient-name {
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 0.25rem;
+}
+
+.ingredient-quantity {
+  font-size: 0.875rem;
+  color: #6b7280;
+}
+
+.ingredient-status-badge {
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.ingredient-status-badge.matched {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.ingredient-status-badge.needs-review {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.product-selector {
+  position: relative;
+}
+
+.product-dropdown {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  cursor: pointer;
+  background: white;
+  transition: all 0.2s;
+}
+
+.product-dropdown:hover {
+  border-color: #9ca3af;
+}
+
+.product-dropdown:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.product-dropdown.has-selection {
+  border-color: #10b981;
+  background: #f0fdf4;
+}
+
+.product-options {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  margin-top: 0.25rem;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  max-height: 300px;
+  overflow-y: auto;
+  z-index: 10;
+}
+
+.product-option {
+  padding: 0.75rem;
+  cursor: pointer;
+  transition: background 0.15s;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.product-option:hover {
+  background: #f9fafb;
+}
+
+.product-option.exact-match {
+  background: #f0fdf4;
+}
+
+.product-option-name {
+  font-weight: 500;
+  color: #1f2937;
+  margin-bottom: 0.25rem;
+}
+
+.product-option-meta {
+  font-size: 0.75rem;
+  color: #6b7280;
+  display: flex;
+  justify-content: space-between;
+}
+
+.confidence-score {
+  font-weight: 600;
+}
+
+.confidence-score.high {
+  color: #059669;
+}
+
+.confidence-score.medium {
+  color: #f59e0b;
+}
+
+.create-product-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.75rem;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: all 0.2s;
+  margin-top: 0.5rem;
+}
+
+.create-product-btn:hover {
+  background: #2563eb;
+}
+
+/* Quick Create Form */
+.quick-create-form {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 1rem;
+  margin-top: 0.75rem;
+}
+
+.quick-create-form h4 {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 0.75rem;
+}
+
+.quick-create-form .form-group {
+  margin-bottom: 0.75rem;
+}
+
+.quick-create-form label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #6b7280;
+  margin-bottom: 0.25rem;
+}
+
+.quick-create-form input,
+.quick-create-form select {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 0.875rem;
+}
+
+.quick-create-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.quick-create-actions button {
+  flex: 1;
+  padding: 0.5rem;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.quick-create-actions .cancel-btn {
+  background: white;
+  color: #6b7280;
+  border: 1px solid #d1d5db;
+}
+
+.quick-create-actions .cancel-btn:hover {
+  background: #f9fafb;
+}
+
+.quick-create-actions .create-btn {
+  background: #10b981;
+  color: white;
+  font-weight: 500;
+}
+
+.quick-create-actions .create-btn:hover {
+  background: #059669;
+}
+
+/* Review Actions */
+.review-summary {
+  padding: 1rem;
+  background: #fef3c7;
+  border-radius: 6px;
+  margin-bottom: 1rem;
+}
+
+.review-summary-text {
+  font-size: 0.875rem;
+  color: #92400e;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.modal-actions .btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
