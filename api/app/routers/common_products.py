@@ -285,7 +285,7 @@ def quick_create_common_product(
 
         # Log audit event
         log_audit(
-            user_id=current_user['user_id'],
+            user_id=current_user['id'],  # Database column is 'id', not 'user_id'
             organization_id=organization_id,
             action='common_product_created',
             entity_type='common_product',
