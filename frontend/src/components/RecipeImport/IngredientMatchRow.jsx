@@ -96,6 +96,17 @@ export default function IngredientMatchRow({ ingredient, onProductSelected }) {
     }
   };
 
+  const handleSkipMapping = () => {
+    // Mark as "selected" but with text-only data
+    console.log('[SKIP] Skipping product mapping for:', ingredient.parsed_name);
+    onProductSelected(ingredient.parsed_name, {
+      ingredient_name: ingredient.parsed_name,
+      quantity: ingredient.normalized_quantity,
+      unit_id: ingredient.normalized_unit_id,
+      notes: ingredient.prep_note
+    });
+  };
+
   const getConfidenceColor = (confidence) => {
     if (confidence >= 0.9) return 'high';
     if (confidence >= 0.7) return 'medium';
@@ -108,14 +119,15 @@ export default function IngredientMatchRow({ ingredient, onProductSelected }) {
     <div className={`ingredient-row ${ingredient.needs_review ? 'needs-review' : 'has-match'}`}>
       <div className="ingredient-header">
         <div>
-          <div className="ingredient-name">{ingredient.parsed_name}</div>
+          <div className="ingredient-name">
+            {ingredient.parsed_name}
+            {selectedProduct && <span className="mapped-badge">✓ Mapped</span>}
+            {!selectedProduct && <span className="unmapped-badge">Not mapped</span>}
+          </div>
           <div className="ingredient-quantity">
             {displayQuantity}
             {ingredient.prep_note && <span> - {ingredient.prep_note}</span>}
           </div>
-        </div>
-        <div className={`ingredient-status-badge ${selectedProduct ? 'matched' : 'needs-review'}`}>
-          {selectedProduct ? '✓ Matched' : '⚠️ Needs Review'}
         </div>
       </div>
 
@@ -205,6 +217,19 @@ export default function IngredientMatchRow({ ingredient, onProductSelected }) {
                 + Create New Product
               </div>
             </div>
+
+            {/* Skip mapping option */}
+            <button
+              className="skip-mapping-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleSkipMapping();
+                setShowOptions(false);
+              }}
+              type="button"
+            >
+              Skip - Use "{ingredient.parsed_name}" as text
+            </button>
           </div>
         )}
       </div>

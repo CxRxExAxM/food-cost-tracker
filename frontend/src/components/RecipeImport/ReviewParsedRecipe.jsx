@@ -23,23 +23,33 @@ export default function ReviewParsedRecipe({ parseResult, outletId, onClose }) {
   };
 
   const handleCreateRecipe = async () => {
-    // Validate all ingredients have products selected
-    const unselected = parseResult.ingredients.filter(
-      ing => !ingredientSelections[ing.parsed_name]
-    );
-
-    if (unselected.length > 0) {
-      alert(`Please select products for all ingredients. ${unselected.length} ingredient(s) still need selection.`);
-      return;
-    }
-
     setCreating(true);
 
     try {
-      // Build ingredients array
-      const ingredients = Object.values(ingredientSelections);
+      // Build ingredients array - supports both mapped and text-only ingredients
+      const ingredients = parseResult.ingredients.map(ing => {
+        const selection = ingredientSelections[ing.parsed_name];
 
-      // Create recipe
+        if (selection && selection.common_product_id) {
+          // Mapped to product
+          return {
+            common_product_id: selection.common_product_id,
+            quantity: selection.quantity,
+            unit_id: selection.unit_id,
+            notes: selection.notes
+          };
+        } else {
+          // Text-only ingredient - use parsed name
+          return {
+            ingredient_name: ing.parsed_name,
+            quantity: ing.normalized_quantity,
+            unit_id: ing.normalized_unit_id,
+            notes: ing.prep_note
+          };
+        }
+      });
+
+      // Create recipe with mixed mapped/unmapped ingredients
       const response = await createRecipeFromParse({
         parse_id: parseResult.parse_id,
         name: recipeName,
