@@ -1,8 +1,10 @@
-from fastapi import APIRouter, HTTPException, Query, Depends
+from fastapi import APIRouter, HTTPException, Query, Depends, Request
 from typing import Optional
 from ..database import get_db, dicts_from_rows, dict_from_row
 from ..schemas import CommonProduct, CommonProductCreate, CommonProductUpdate
+from ..schemas.ai_parse import QuickCreateProductRequest, QuickCreateProductResponse
 from ..auth import get_current_user
+from ..audit import log_audit
 
 router = APIRouter(prefix="/common-products", tags=["common-products"])
 
@@ -224,3 +226,83 @@ def get_common_product_products(common_product_id: int, current_user: dict = Dep
         products = dicts_from_rows(cursor.fetchall())
 
         return products
+
+
+@router.post("/quick-create", response_model=QuickCreateProductResponse, status_code=201)
+def quick_create_common_product(
+    product: QuickCreateProductRequest,
+    request: Request = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Quick create common product during AI recipe parsing flow.
+
+    Simplified version of create endpoint with minimal required fields.
+    Used when user needs to create a product inline during review.
+
+    Required permissions: Chef or Admin role
+    """
+
+    # Check permissions
+    if current_user['role'] not in ['chef', 'admin']:
+        raise HTTPException(
+            status_code=403,
+            detail="Only Chef and Admin roles can create products"
+        )
+
+    organization_id = current_user["organization_id"]
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Check if common_name already exists in this organization
+        cursor.execute(
+            "SELECT id FROM common_products WHERE common_name = %s AND organization_id = %s",
+            (product.common_name, organization_id)
+        )
+        existing = cursor.fetchone()
+        if existing:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Product '{product.common_name}' already exists in your organization"
+            )
+
+        # Create with minimal fields (allergens default to 0)
+        cursor.execute("""
+            INSERT INTO common_products (
+                common_name, category, subcategory, organization_id
+            )
+            VALUES (%s, %s, %s, %s)
+            RETURNING id, common_name, category
+        """, (
+            product.common_name,
+            product.category,
+            product.subcategory,
+            organization_id
+        ))
+
+        result = cursor.fetchone()
+        conn.commit()
+
+        # Log audit event
+        log_audit(
+            user_id=current_user['user_id'],
+            organization_id=organization_id,
+            action='common_product_created',
+            entity_type='common_product',
+            entity_id=result['id'],
+            changes={
+                'common_name': product.common_name,
+                'category': product.category,
+                'created_via': 'ai_recipe_parser'
+            },
+            ip_address=request.client.host if request else None,
+            conn=conn
+        )
+
+        return QuickCreateProductResponse(
+            common_product_id=result['id'],
+            common_name=result['common_name'],
+            category=result['category'],
+            message=f"Product '{product.common_name}' created successfully"
+        )
