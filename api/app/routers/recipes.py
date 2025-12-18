@@ -81,9 +81,10 @@ def get_recipe(recipe_id: int, current_user: dict = Depends(get_current_user)):
             if recipe.get('method'):
                 recipe['method'] = json.loads(recipe['method'])
 
-            # Get ingredients (TODO: expand with product/sub-recipe details)
+            # Get ingredients with display names (product, sub-recipe, or text-only)
             cursor.execute("""
                 SELECT ri.*,
+                       ri.ingredient_name,
                        cp.common_name,
                        u.abbreviation as unit_abbreviation,
                        r.name as sub_recipe_name
@@ -366,6 +367,7 @@ def _calculate_ingredient_costs(cursor, recipe_id: int, outlet_id: int, visited:
     # Get all ingredients for this recipe
     cursor.execute("""
         SELECT ri.*,
+               ri.ingredient_name,
                cp.common_name,
                u.abbreviation as unit_abbreviation,
                r.name as sub_recipe_name,
@@ -447,6 +449,11 @@ def _calculate_ingredient_costs(cursor, recipe_id: int, outlet_id: int, visited:
 
                 total_cost += ing_cost
 
+        elif ing.get('ingredient_name') and not ing.get('common_product_id') and not ing.get('sub_recipe_id'):
+            # Text-only ingredient - no cost available
+            has_price = False
+            price_source = "Not mapped to product"
+
         ingredients_with_costs.append({
             **ing,
             'unit_price': round(unit_price, 4) if unit_price else None,
@@ -483,7 +490,7 @@ def _calculate_recipe_allergens(cursor, recipe_id: int, visited: set) -> dict:
 
     # Get all ingredients with their common product allergens
     cursor.execute("""
-        SELECT ri.id, ri.common_product_id, ri.sub_recipe_id,
+        SELECT ri.id, ri.common_product_id, ri.sub_recipe_id, ri.ingredient_name,
                cp.common_name,
                cp.allergen_gluten, cp.allergen_dairy, cp.allergen_egg, cp.allergen_fish,
                cp.allergen_crustation, cp.allergen_mollusk, cp.allergen_tree_nuts,
@@ -601,27 +608,37 @@ def add_ingredient(recipe_id: int, ingredient: dict, current_user: dict = Depend
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Recipe not found or you don't have access to it")
 
-        # Validate: must have exactly one of common_product_id or sub_recipe_id
+        # Validate: must have one of common_product_id, sub_recipe_id, or ingredient_name
         common_product_id = ingredient.get('common_product_id')
         sub_recipe_id = ingredient.get('sub_recipe_id')
+        ingredient_name = ingredient.get('ingredient_name')
 
-        if not common_product_id and not sub_recipe_id:
-            raise HTTPException(status_code=400, detail="Must specify either common_product_id or sub_recipe_id")
-
+        # Cannot have both product and sub-recipe
         if common_product_id and sub_recipe_id:
-            raise HTTPException(status_code=400, detail="Cannot specify both common_product_id and sub_recipe_id")
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot specify both common_product_id and sub_recipe_id"
+            )
+
+        # Must have at least ONE identifier
+        if not common_product_id and not sub_recipe_id and not ingredient_name:
+            raise HTTPException(
+                status_code=400,
+                detail="Must specify either common_product_id, sub_recipe_id, or ingredient_name"
+            )
 
         # Insert ingredient
         cursor.execute("""
             INSERT INTO recipe_ingredients (
-                recipe_id, common_product_id, sub_recipe_id,
+                recipe_id, common_product_id, sub_recipe_id, ingredient_name,
                 quantity, unit_id, yield_percentage, notes
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
         """, (
             recipe_id,
             common_product_id,
             sub_recipe_id,
+            ingredient_name,
             ingredient.get('quantity'),
             ingredient.get('unit_id'),
             ingredient.get('yield_percentage', 100),
@@ -634,6 +651,7 @@ def add_ingredient(recipe_id: int, ingredient: dict, current_user: dict = Depend
         # Return the created ingredient with details
         cursor.execute("""
             SELECT ri.*,
+                   ri.ingredient_name,
                    cp.common_name,
                    u.abbreviation as unit_abbreviation,
                    r.name as sub_recipe_name

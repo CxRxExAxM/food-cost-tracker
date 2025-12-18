@@ -129,8 +129,9 @@ class Unit(BaseModel):
 
 # Recipes
 class RecipeIngredientBase(BaseModel):
-    common_product_id: Optional[int] = None  # Either this...
-    sub_recipe_id: Optional[int] = None      # ...or this
+    common_product_id: Optional[int] = None  # Map to product (for costing)
+    sub_recipe_id: Optional[int] = None      # OR map to sub-recipe
+    ingredient_name: Optional[str] = None    # OR use text-only name (no costing)
     quantity: float
     unit_id: int
     yield_percentage: float = 100.0
@@ -195,6 +196,7 @@ class IngredientWithCost(BaseModel):
     recipe_id: int
     common_product_id: Optional[int] = None
     sub_recipe_id: Optional[int] = None
+    ingredient_name: Optional[str] = None    # Text-only ingredient name
     quantity: float
     unit_id: Optional[int] = None
     yield_percentage: Optional[float] = None
@@ -420,8 +422,9 @@ class ParseFileResponse(BaseModel):
 
 
 class CreateRecipeIngredient(BaseModel):
-    """Ingredient for recipe creation."""
-    common_product_id: int
+    """Ingredient for recipe creation from AI parser."""
+    common_product_id: Optional[int] = None  # Map to product (for costing)
+    ingredient_name: Optional[str] = None     # OR use text-only name
     quantity: float
     unit_id: int
     notes: Optional[str] = None
