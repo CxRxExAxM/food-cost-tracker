@@ -245,24 +245,37 @@ async def parse_recipe_file(
             )
 
         # Process ingredients: match products and normalize units
+        print(f"[PARSE] Processing {len(recipe_data['ingredients'])} ingredients...")
         parsed_ingredients = []
         ingredients_matched = 0
 
-        for ing_data in recipe_data['ingredients']:
+        for idx, ing_data in enumerate(recipe_data['ingredients']):
+            print(f"[PARSE] Processing ingredient {idx + 1}: {ing_data['name']}")
+
             # Match to common products
-            matches = match_products(
-                ing_data['name'],
-                organization_id,
-                conn,
-                max_results=3
-            )
+            try:
+                matches = match_products(
+                    ing_data['name'],
+                    organization_id,
+                    conn,
+                    max_results=3
+                )
+                print(f"[PARSE] Found {len(matches)} product matches")
+            except Exception as e:
+                print(f"[PARSE ERROR] Product matching failed: {e}")
+                raise
 
             # Normalize units
-            normalized_qty, normalized_unit, unit_id = normalize_quantity(
-                ing_data['quantity'],
-                ing_data['unit'],
-                conn
-            )
+            try:
+                normalized_qty, normalized_unit, unit_id = normalize_quantity(
+                    ing_data['quantity'],
+                    ing_data['unit'],
+                    conn
+                )
+                print(f"[PARSE] Normalized {ing_data['quantity']} {ing_data['unit']} -> {normalized_qty} {normalized_unit}")
+            except Exception as e:
+                print(f"[PARSE ERROR] Unit normalization failed: {e}")
+                raise
 
             # Determine if needs review
             needs_review = len(matches) == 0 or (len(matches) > 0 and matches[0]['confidence'] < 0.95)
@@ -270,22 +283,30 @@ async def parse_recipe_file(
             if matches and matches[0]['confidence'] >= 0.95:
                 ingredients_matched += 1
 
-            parsed_ingredients.append(ParsedIngredient(
-                parsed_name=ing_data['name'],
-                quantity=ing_data['quantity'],
-                unit=ing_data['unit'],
-                unit_id=None,  # Original unit might not be in DB
-                normalized_quantity=normalized_qty,
-                normalized_unit=normalized_unit,
-                normalized_unit_id=unit_id,
-                prep_note=ing_data.get('prep_note'),
-                suggested_products=[
-                    ProductMatch(**match) for match in matches
-                ],
-                needs_review=needs_review
-            ))
+            try:
+                parsed_ingredients.append(ParsedIngredient(
+                    parsed_name=ing_data['name'],
+                    quantity=ing_data['quantity'],
+                    unit=ing_data['unit'],
+                    unit_id=None,  # Original unit might not be in DB
+                    normalized_quantity=normalized_qty,
+                    normalized_unit=normalized_unit,
+                    normalized_unit_id=unit_id,
+                    prep_note=ing_data.get('prep_note'),
+                    suggested_products=[
+                        ProductMatch(**match) for match in matches
+                    ],
+                    needs_review=needs_review
+                ))
+                print(f"[PARSE] Added ingredient to list")
+            except Exception as e:
+                print(f"[PARSE ERROR] Failed to create ParsedIngredient: {e}")
+                raise
+
+        print(f"[PARSE] All ingredients processed successfully")
 
         # Process yield
+        print(f"[PARSE] Processing yield...")
         yield_info = None
         if recipe_data.get('yield'):
             yield_data = recipe_data['yield']
@@ -326,9 +347,11 @@ async def parse_recipe_file(
         )
 
         # Get updated usage stats
+        print(f"[PARSE] Getting updated usage stats...")
         _, updated_usage = check_parse_limit(organization_id, conn)
 
         # Log audit event
+        print(f"[PARSE] Logging audit event...")
         log_audit(
             user_id=user_id,
             organization_id=organization_id,
@@ -345,7 +368,8 @@ async def parse_recipe_file(
             conn=conn
         )
 
-        return ParseFileResponse(
+        print(f"[PARSE] Creating response object...")
+        response = ParseFileResponse(
             parse_id=parse_id,
             recipe_name=recipe_data['name'],
             yield_info=yield_info,
@@ -354,6 +378,18 @@ async def parse_recipe_file(
             ingredients=parsed_ingredients,
             usage=UsageStats(**updated_usage),
             credits_used=credits_used
+        )
+        print(f"[PARSE] Successfully created response, returning to client")
+        return response
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[PARSE ERROR] Unexpected error in parse_recipe_file: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unexpected error during parsing: {str(e)}"
         )
 
 
