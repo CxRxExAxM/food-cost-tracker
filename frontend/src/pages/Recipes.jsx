@@ -212,6 +212,14 @@ function Recipes() {
       return;
     }
 
+    // Additional validation: ensure we have a valid numeric outlet ID
+    if (!currentOutlet.id || typeof currentOutlet.id !== 'number') {
+      console.error('Invalid outlet ID:', currentOutlet);
+      alert('Outlet ID is invalid. Please select an outlet from the dropdown and try again.');
+      return;
+    }
+
+    console.log('Opening upload modal with outlet ID:', currentOutlet.id);
     setShowUploadModal(true);
   };
 

@@ -74,6 +74,14 @@ export default function UploadRecipeModal({ isOpen, onClose, outletId, onParseCo
   const handleParseRecipe = async () => {
     if (!file) return;
 
+    console.log('handleParseRecipe called with outletId:', outletId);
+
+    // Validate outlet ID
+    if (!outletId || outletId === 'all') {
+      setError('Please select a specific outlet before uploading');
+      return;
+    }
+
     setProcessing(true);
     setError(null);
 
@@ -84,6 +92,7 @@ export default function UploadRecipeModal({ isOpen, onClose, outletId, onParseCo
       await new Promise(resolve => setTimeout(resolve, 500));
       setProgress('Analyzing document...');
 
+      console.log('Calling parseRecipeFile with outlet ID:', outletId);
       const result = await parseRecipeFile(file, outletId);
 
       setProgress('Extracting ingredients...');
