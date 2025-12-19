@@ -36,7 +36,7 @@ def list_recipes(
             params.append(outlet_id)
 
         if search:
-            query += " AND name LIKE %s"
+            query += " AND name ILIKE %s"
             params.append(f"%{search}%")
 
         if category_path:
