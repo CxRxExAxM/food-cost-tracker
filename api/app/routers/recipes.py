@@ -281,6 +281,56 @@ def delete_recipe(recipe_id: int, current_user: dict = Depends(get_current_user)
         return {"message": "Recipe deleted successfully", "recipe_id": recipe_id}
 
 
+@router.get("/debug/common-product/{common_product_id}/products")
+def debug_common_product_products(common_product_id: int, current_user: dict = Depends(get_current_user)):
+    """
+    Show ALL products mapped to a common product, across all outlets.
+    Helps diagnose outlet assignment issues.
+    """
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Get common product info
+        cursor.execute("SELECT * FROM common_products WHERE id = %s", (common_product_id,))
+        common_product = dict_from_row(cursor.fetchone())
+
+        if not common_product:
+            raise HTTPException(status_code=404, detail="Common product not found")
+
+        # Get ALL products for this common product (any outlet)
+        cursor.execute("""
+            SELECT
+                p.id as product_id,
+                p.name as product_name,
+                p.outlet_id,
+                o.name as outlet_name,
+                p.common_product_id,
+                d.name as distributor_name,
+                ph.unit_price,
+                ph.effective_date
+            FROM products p
+            JOIN outlets o ON o.id = p.outlet_id
+            JOIN distributor_products dp ON dp.product_id = p.id
+            JOIN distributors d ON d.id = dp.distributor_id
+            LEFT JOIN (
+                SELECT distributor_product_id, unit_price, effective_date,
+                       ROW_NUMBER() OVER (PARTITION BY distributor_product_id ORDER BY effective_date DESC) as rn
+                FROM price_history
+            ) ph ON ph.distributor_product_id = dp.id AND ph.rn = 1
+            WHERE p.common_product_id = %s
+            ORDER BY p.outlet_id, ph.unit_price ASC NULLS LAST
+        """, (common_product_id,))
+
+        products = dicts_from_rows(cursor.fetchall())
+
+        return {
+            "common_product_id": common_product_id,
+            "common_product_name": common_product['common_name'],
+            "total_products_found": len(products),
+            "products_by_outlet": products
+        }
+
+
 @router.get("/{recipe_id}/cost/debug")
 def debug_recipe_cost(recipe_id: int, current_user: dict = Depends(get_current_user)):
     """
