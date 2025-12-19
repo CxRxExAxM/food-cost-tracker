@@ -14,7 +14,6 @@ export default function OutletBadge({ outletId, outletName }) {
 
   return (
     <span className="outlet-badge">
-      <span className="outlet-badge-icon">🏢</span>
       <span className="outlet-badge-text">{displayName}</span>
     </span>
   );

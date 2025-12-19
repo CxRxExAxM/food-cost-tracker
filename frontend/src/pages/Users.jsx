@@ -377,35 +377,31 @@ function Users() {
               <h2>Manage Outlets: {selectedUser.username}</h2>
               <button className="modal-close" onClick={() => setShowManageOutletsModal(false)}>×</button>
             </div>
-            <p style={{ marginBottom: '1rem', color: 'var(--text-secondary, #a3a3a3)' }}>
-              Select which outlets this user can access. Admins always have access to all outlets.
-            </p>
             <form onSubmit={handleManageOutlets}>
+              <p className="modal-description">
+                Select which outlets this user can access. Admins always have access to all outlets.
+              </p>
               <div className="form-group">
                 {outlets.length === 0 ? (
-                  <p style={{ color: 'var(--text-secondary, #a3a3a3)', fontStyle: 'italic' }}>
+                  <p className="empty-message">
                     No outlets available. Create outlets first to assign them to users.
                   </p>
                 ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  <div className="outlet-assignment-list">
                     {outlets.map(outlet => (
                       <label
                         key={outlet.id}
-                        className="outlet-assignment-item"
-                        style={{
-                          backgroundColor: selectedOutletIds.includes(outlet.id) ? 'rgba(59, 130, 246, 0.1)' : 'transparent'
-                        }}
+                        className={`outlet-assignment-item ${selectedOutletIds.includes(outlet.id) ? 'selected' : ''}`}
                       >
                         <input
                           type="checkbox"
                           checked={selectedOutletIds.includes(outlet.id)}
                           onChange={() => toggleOutletSelection(outlet.id)}
-                          style={{ cursor: 'pointer' }}
                         />
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontWeight: 500 }}>{outlet.name}</div>
+                        <div className="outlet-info">
+                          <div className="outlet-name">{outlet.name}</div>
                           {outlet.location && (
-                            <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary, #a3a3a3)' }}>
+                            <div className="outlet-location">
                               {outlet.location}
                             </div>
                           )}

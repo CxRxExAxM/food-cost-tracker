@@ -626,6 +626,7 @@
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
+  margin-top: var(--space-6);
   margin-bottom: 1.5rem;
 }
 
