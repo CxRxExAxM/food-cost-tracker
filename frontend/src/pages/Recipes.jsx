@@ -779,7 +779,7 @@ function RecipeMetadata({ recipe, editedRecipe, onFieldChange }) {
           />
           <select
             className="metadata-select"
-            value={currentYieldUnit || ''}
+            value={currentYieldUnit !== null && currentYieldUnit !== undefined ? String(currentYieldUnit) : ''}
             onChange={(e) => onFieldChange('yield_unit_id', e.target.value ? parseInt(e.target.value) : null)}
           >
             <option value="">(select unit)</option>
@@ -813,7 +813,7 @@ function RecipeMetadata({ recipe, editedRecipe, onFieldChange }) {
           />
           <select
             className="metadata-select"
-            value={currentServingUnit || ''}
+            value={currentServingUnit !== null && currentServingUnit !== undefined ? String(currentServingUnit) : ''}
             onChange={(e) => onFieldChange('serving_unit_id', e.target.value ? parseInt(e.target.value) : null)}
           >
             <option value="">portions</option>
