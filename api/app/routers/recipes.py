@@ -704,16 +704,25 @@ def update_ingredient(recipe_id: int, ingredient_id: int, updates: dict, current
                     detail="Cannot specify both common_product_id and ingredient_name"
                 )
 
+        # Determine which fields to auto-clear (to avoid duplicate field errors)
+        auto_clear_ingredient_name = 'common_product_id' in updates and updates.get('common_product_id') is not None
+        auto_clear_common_product_id = 'ingredient_name' in updates and updates.get('ingredient_name') is not None
+
         for field, value in updates.items():
             if field in allowed_fields:
+                # Skip if we're going to auto-clear this field
+                if field == 'ingredient_name' and auto_clear_ingredient_name:
+                    continue
+                if field == 'common_product_id' and auto_clear_common_product_id:
+                    continue
                 update_fields.append(f"{field} = %s")
                 params.append(value)
 
         # Auto-clear opposite field when mapping changes
-        if 'common_product_id' in updates and updates.get('common_product_id') is not None:
+        if auto_clear_ingredient_name:
             # When mapping to product, clear text name
             update_fields.append("ingredient_name = NULL")
-        elif 'ingredient_name' in updates and updates.get('ingredient_name') is not None:
+        if auto_clear_common_product_id:
             # When setting text name, clear product mapping
             update_fields.append("common_product_id = NULL")
 
