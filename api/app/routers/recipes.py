@@ -93,6 +93,7 @@ def get_recipe(recipe_id: int, current_user: dict = Depends(get_current_user)):
                 LEFT JOIN units u ON u.id = ri.unit_id
                 LEFT JOIN recipes r ON r.id = ri.sub_recipe_id
                 WHERE ri.recipe_id = %s
+                ORDER BY ri.id
             """, (recipe_id,))
 
             recipe['ingredients'] = dicts_from_rows(cursor.fetchall())
@@ -378,6 +379,7 @@ def _calculate_ingredient_costs(cursor, recipe_id: int, outlet_id: int, visited:
         LEFT JOIN units u ON u.id = ri.unit_id
         LEFT JOIN recipes r ON r.id = ri.sub_recipe_id
         WHERE ri.recipe_id = %s
+        ORDER BY ri.id
     """, (recipe_id,))
 
     ingredients = dicts_from_rows(cursor.fetchall())
@@ -646,6 +648,14 @@ def add_ingredient(recipe_id: int, ingredient: dict, current_user: dict = Depend
         ))
 
         ingredient_id = cursor.fetchone()["id"]
+
+        # Update parent recipe's updated_at to trigger cost recalculation
+        cursor.execute("""
+            UPDATE recipes
+            SET updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
+        """, (recipe_id,))
+
         conn.commit()
 
         # Return the created ingredient with details
@@ -733,6 +743,14 @@ def update_ingredient(recipe_id: int, ingredient_id: int, updates: dict, current
         query = f"UPDATE recipe_ingredients SET {', '.join(update_fields)} WHERE id = %s"
 
         cursor.execute(query, params)
+
+        # Update parent recipe's updated_at to trigger cost recalculation
+        cursor.execute("""
+            UPDATE recipes
+            SET updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
+        """, (recipe_id,))
+
         conn.commit()
 
         # Return updated ingredient with details
@@ -775,6 +793,13 @@ def remove_ingredient(recipe_id: int, ingredient_id: int, current_user: dict = D
 
         if cursor.rowcount == 0:
             raise HTTPException(status_code=404, detail="Ingredient not found")
+
+        # Update parent recipe's updated_at to trigger cost recalculation
+        cursor.execute("""
+            UPDATE recipes
+            SET updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
+        """, (recipe_id,))
 
         conn.commit()
 

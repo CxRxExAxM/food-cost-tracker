@@ -1663,7 +1663,7 @@ function RecipeCost({ recipe }) {
     if (recipe?.id) {
       fetchCostData();
     }
-  }, [recipe?.id]);
+  }, [recipe?.id, recipe?.updated_at]);
 
   const fetchCostData = async () => {
     try {
