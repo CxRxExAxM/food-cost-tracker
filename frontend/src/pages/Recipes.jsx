@@ -920,6 +920,7 @@ function IngredientMappingCell({ values, onFieldChange, commonProducts, onKeyDow
         value={searchTerm}
         onChange={(e) => handleSearchChange(e.target.value)}
         onKeyDown={handleKeyDown}
+        onFocus={(e) => e.target.select()}
         placeholder="Type to search or add text-only..."
         autoFocus
       />
@@ -1254,6 +1255,7 @@ function RecipeIngredients({ recipe, onIngredientsChange }) {
                           value={values.quantity}
                           onChange={(e) => handleFieldChange('quantity', e.target.value)}
                           onKeyDown={(e) => handleKeyDown(e, 'quantity')}
+                          onFocus={(e) => e.target.select()}
                           step="0.01"
                         />
                       ) : (
@@ -1290,6 +1292,7 @@ function RecipeIngredients({ recipe, onIngredientsChange }) {
                           value={values.yield_percentage}
                           onChange={(e) => handleFieldChange('yield_percentage', e.target.value)}
                           onKeyDown={(e) => handleKeyDown(e, 'yield')}
+                          onFocus={(e) => e.target.select()}
                           min="0"
                           max="100"
                           step="1"
