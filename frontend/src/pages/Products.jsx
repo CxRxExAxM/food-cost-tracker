@@ -3,6 +3,7 @@ import axios from '../lib/axios';
 import Navigation from '../components/Navigation';
 import { useOutlet } from '../contexts/OutletContext';
 import OutletBadge from '../components/outlets/OutletBadge';
+import CommonProductPanel from '../components/CommonProductPanel';
 import './Products.css';
 
 const API_URL = import.meta.env.VITE_API_URL ?? '';
@@ -41,6 +42,7 @@ function Products() {
   const [editingCommonProductId, setEditingCommonProductId] = useState(null);
   const [commonProductEditInput, setCommonProductEditInput] = useState('');
   const [allergenModalProduct, setAllergenModalProduct] = useState(null);
+  const [showCommonProductPanel, setShowCommonProductPanel] = useState(null);
   // Upload state
   const [showUpload, setShowUpload] = useState(false);
   const [distributors, setDistributors] = useState([]);
@@ -328,6 +330,10 @@ function Products() {
     }
   };
 
+  const handleCommonProductClick = (commonProductId) => {
+    setShowCommonProductPanel(commonProductId);
+  };
+
   const handleUpdateAllergens = async (commonProductId, allergenUpdates) => {
     try {
       const response = await axios.patch(`${API_URL}/common-products/${commonProductId}`, allergenUpdates);
@@ -481,6 +487,58 @@ function Products() {
     }
   };
 
+  const handleCellKeyDown = (e, productId, field) => {
+    // Escape - cancel editing
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      cancelCellEdit();
+      return;
+    }
+
+    // Enter - save and move to next row (same column)
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleCellSave(productId, field).then(() => {
+        // Find next product in list
+        const currentIndex = products.findIndex(p => p.id === productId);
+        const nextProduct = products[currentIndex + 1];
+        if (nextProduct) {
+          // Get the current value for the same field in next product
+          let nextValue;
+          if (field === 'unit_id') {
+            nextValue = nextProduct.unit_id;
+          } else {
+            nextValue = nextProduct[field];
+          }
+          startCellEdit(nextProduct.id, field, nextValue);
+        }
+      });
+      return;
+    }
+
+    // Tab - move to next/previous field
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const fields = ['name', 'brand', 'pack', 'size', 'unit_id'];
+      const currentIdx = fields.indexOf(field);
+      const nextIdx = e.shiftKey ? currentIdx - 1 : currentIdx + 1;
+
+      if (nextIdx >= 0 && nextIdx < fields.length) {
+        const nextField = fields[nextIdx];
+        // Save current field, then move to next
+        handleCellSave(productId, field).then(() => {
+          // Get the current value for the next field
+          let nextValue;
+          const product = products.find(p => p.id === productId);
+          if (product) {
+            nextValue = nextField === 'unit_id' ? product.unit_id : product[nextField];
+            startCellEdit(productId, nextField, nextValue);
+          }
+        });
+      }
+    }
+  };
+
   // Sort handler
   const handleSort = (column) => {
     if (sortColumn === column) {
@@ -517,9 +575,8 @@ function Products() {
             value={editValue}
             onChange={(e) => setEditValue(e.target.value)}
             onBlur={() => handleCellSave(product.id, field)}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') cancelCellEdit();
-            }}
+            onKeyDown={(e) => handleCellKeyDown(e, product.id, field)}
+            onFocus={(e) => e.target.select()}
             className="inline-edit-select"
             autoFocus
           >
@@ -537,10 +594,8 @@ function Products() {
           value={editValue}
           onChange={(e) => setEditValue(e.target.value)}
           onBlur={() => handleCellSave(product.id, field)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') handleCellSave(product.id, field);
-            if (e.key === 'Escape') cancelCellEdit();
-          }}
+          onKeyDown={(e) => handleCellKeyDown(e, product.id, field)}
+          onFocus={(e) => e.target.select()}
           className="inline-edit-input"
           autoFocus
           step={field === 'size' ? '0.01' : undefined}
@@ -945,22 +1000,22 @@ function Products() {
                             ) : (
                               <div className="common-product-display">
                                 <span
-                                  className="common-product-badge clickable"
-                                  onClick={() => startEditingCommonProduct(product)}
-                                  title="Click to edit name"
+                                  className="common-product-link"
+                                  onClick={() => handleCommonProductClick(product.common_product_id)}
+                                  title="Click to view all mapped products"
                                 >
                                   {getCommonProductName(product)}
+                                  <div className="allergen-icons">
+                                    {getActiveAllergens(product.common_product_id).slice(0, 4).map(a => (
+                                      <span key={a.key} className="allergen-icon" title={a.label}>
+                                        {a.icon}
+                                      </span>
+                                    ))}
+                                    {getActiveAllergens(product.common_product_id).length > 4 && (
+                                      <span className="allergen-more">+{getActiveAllergens(product.common_product_id).length - 4}</span>
+                                    )}
+                                  </div>
                                 </span>
-                                <div className="allergen-icons">
-                                  {getActiveAllergens(product.common_product_id).slice(0, 4).map(a => (
-                                    <span key={a.key} className="allergen-icon" title={a.label}>
-                                      {a.icon}
-                                    </span>
-                                  ))}
-                                  {getActiveAllergens(product.common_product_id).length > 4 && (
-                                    <span className="allergen-more">+{getActiveAllergens(product.common_product_id).length - 4}</span>
-                                  )}
-                                </div>
                                 <button
                                   onClick={() => openAllergenModal(product.common_product_id)}
                                   className="btn-allergen"
@@ -1002,6 +1057,14 @@ function Products() {
           product={allergenModalProduct}
           onClose={() => setAllergenModalProduct(null)}
           onUpdate={handleUpdateAllergens}
+        />
+      )}
+
+      {/* Common Product Panel */}
+      {showCommonProductPanel && (
+        <CommonProductPanel
+          commonProductId={showCommonProductPanel}
+          onClose={() => setShowCommonProductPanel(null)}
         />
       )}
       </div>

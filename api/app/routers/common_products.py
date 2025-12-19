@@ -227,6 +227,97 @@ def get_common_product_products(common_product_id: int, current_user: dict = Dep
         return products
 
 
+@router.get("/{common_product_id}/mapped-products")
+def get_mapped_products(
+    common_product_id: int,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Get all products mapped to this common product, grouped by outlet.
+    Respects user outlet access for multi-tenancy.
+    """
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Verify common product exists and user has access
+        cursor.execute("""
+            SELECT * FROM common_products
+            WHERE id = %s AND organization_id = %s
+        """, (common_product_id, current_user['organization_id']))
+
+        common_product = dict_from_row(cursor.fetchone())
+        if not common_product:
+            raise HTTPException(status_code=404, detail="Common product not found")
+
+        # Build outlet filter based on user role and outlet assignments
+        outlet_filter = ""
+        outlet_params = []
+
+        # If user is not admin, filter by assigned outlets
+        if current_user.get('role') != 'admin':
+            cursor.execute("""
+                SELECT outlet_id FROM user_outlets WHERE user_id = %s
+            """, (current_user['id'],))
+            user_outlets = [row['outlet_id'] for row in cursor.fetchall()]
+
+            if user_outlets:
+                placeholders = ', '.join(['%s'] * len(user_outlets))
+                outlet_filter = f"AND p.outlet_id IN ({placeholders})"
+                outlet_params = user_outlets
+            else:
+                # User has no outlet access - return empty
+                return {
+                    "common_product": common_product,
+                    "products_by_outlet": {},
+                    "total_count": 0
+                }
+
+        # Get all mapped products with latest prices
+        query = f"""
+            SELECT
+                p.*,
+                o.name as outlet_name,
+                d.name as distributor_name,
+                u.abbreviation as unit_abbreviation,
+                ph.case_price,
+                ph.unit_price,
+                ph.effective_date
+            FROM products p
+            JOIN outlets o ON o.id = p.outlet_id
+            LEFT JOIN distributor_products dp ON dp.product_id = p.id
+            LEFT JOIN distributors d ON d.id = dp.distributor_id
+            LEFT JOIN units u ON u.id = p.unit_id
+            LEFT JOIN (
+                SELECT distributor_product_id, outlet_id, case_price, unit_price, effective_date,
+                       ROW_NUMBER() OVER (PARTITION BY distributor_product_id, outlet_id
+                                          ORDER BY effective_date DESC) as rn
+                FROM price_history
+            ) ph ON ph.distributor_product_id = dp.id AND ph.rn = 1
+            WHERE p.common_product_id = %s
+              AND p.organization_id = %s
+              {outlet_filter}
+            ORDER BY o.name, p.name
+        """
+
+        params = [common_product_id, current_user['organization_id']] + outlet_params
+        cursor.execute(query, params)
+        products = dicts_from_rows(cursor.fetchall())
+
+        # Group by outlet
+        products_by_outlet = {}
+        for product in products:
+            outlet_name = product['outlet_name']
+            if outlet_name not in products_by_outlet:
+                products_by_outlet[outlet_name] = []
+            products_by_outlet[outlet_name].append(product)
+
+        return {
+            "common_product": common_product,
+            "products_by_outlet": products_by_outlet,
+            "total_count": len(products)
+        }
+
+
 @router.post("/quick-create", response_model=QuickCreateProductResponse, status_code=201)
 def quick_create_common_product(
     product: QuickCreateProductRequest,
