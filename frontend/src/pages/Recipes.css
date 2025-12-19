@@ -1591,7 +1591,24 @@
   border-bottom: none;
 }
 
-.product-search-item:hover {
+.product-search-item:hover,
+.product-search-item.selected {
   background: var(--bg-tertiary);
   color: var(--color-yellow);
+}
+
+/* Mapped indicator in autocomplete input */
+.mapped-indicator {
+  position: absolute;
+  right: var(--space-2);
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--color-green-bright);
+  font-size: var(--text-lg);
+  font-weight: bold;
+  pointer-events: none;
+}
+
+.ingredient-mapping-wrapper {
+  position: relative;
 }

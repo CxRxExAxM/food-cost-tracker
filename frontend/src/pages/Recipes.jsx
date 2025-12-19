@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import axios from '../lib/axios';
 import Navigation from '../components/Navigation';
 import { useOutlet } from '../contexts/OutletContext';
@@ -839,13 +839,33 @@ function RecipeMetadata({ recipe, editedRecipe, onFieldChange }) {
   );
 }
 
-function IngredientMappingCell({ values, onFieldChange, commonProducts }) {
-  const [showSearch, setShowSearch] = useState(false);
+function IngredientMappingCell({ values, onFieldChange, commonProducts, onKeyDown }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [filteredProducts, setFilteredProducts] = useState([]);
+  const [selectedIndex, setSelectedIndex] = useState(-1);
+  const inputRef = useRef(null);
+
+  // Update search term when editing a mapped product
+  useEffect(() => {
+    if (values.common_product_id && values.common_name) {
+      setSearchTerm(values.common_name);
+    } else if (values.ingredient_name) {
+      setSearchTerm(values.ingredient_name);
+    } else {
+      setSearchTerm('');
+    }
+  }, [values.common_product_id, values.common_name, values.ingredient_name]);
 
   const handleSearchChange = (term) => {
     setSearchTerm(term);
+    setSelectedIndex(-1);
+
+    // Clear current mapping and set as text-only while typing
+    onFieldChange('ingredient_name', term);
+    onFieldChange('common_product_id', null);
+    onFieldChange('common_name', null);
+
+    // Filter products
     if (term.length >= 2) {
       const filtered = commonProducts.filter(cp =>
         cp.common_name.toLowerCase().includes(term.toLowerCase())
@@ -860,91 +880,71 @@ function IngredientMappingCell({ values, onFieldChange, commonProducts }) {
     onFieldChange('common_product_id', product.id);
     onFieldChange('common_name', product.common_name);
     onFieldChange('ingredient_name', null);
-    setShowSearch(false);
-    setSearchTerm('');
+    setSearchTerm(product.common_name);
     setFilteredProducts([]);
+    setSelectedIndex(-1);
   };
 
-  const handleUnmap = () => {
-    const fallbackName = values.common_name || values.ingredient_name || 'Unnamed';
-    onFieldChange('common_product_id', null);
-    onFieldChange('ingredient_name', fallbackName);
-    onFieldChange('common_name', null);
+  const handleKeyDown = (e) => {
+    // Arrow key navigation in dropdown
+    if (filteredProducts.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSelectedIndex(prev =>
+          prev < filteredProducts.length - 1 ? prev + 1 : prev
+        );
+        return;
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSelectedIndex(prev => prev > 0 ? prev - 1 : -1);
+        return;
+      } else if (e.key === 'Enter' && selectedIndex >= 0) {
+        e.preventDefault();
+        handleSelectProduct(filteredProducts[selectedIndex]);
+        return;
+      }
+    }
+
+    // Pass through to parent for Tab/Enter/Escape handling
+    if (onKeyDown) {
+      onKeyDown(e);
+    }
   };
 
-  // Product search active
-  if (showSearch) {
-    return (
-      <div className="ingredient-mapping-search" onClick={e => e.stopPropagation()}>
-        <input
-          type="text"
-          value={searchTerm}
-          onChange={(e) => handleSearchChange(e.target.value)}
-          placeholder="Search products..."
-          autoFocus
-          style={{ width: '100%', marginBottom: '0.5rem' }}
-        />
-        {filteredProducts.length > 0 && (
-          <div className="product-search-dropdown">
-            {filteredProducts.slice(0, 10).map(p => (
-              <div
-                key={p.id}
-                className="product-search-item"
-                onClick={() => handleSelectProduct(p)}
-              >
-                {p.common_name}
-                {p.category && <span style={{ color: '#6b7280', marginLeft: '0.5rem' }}>({p.category})</span>}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  // Mapped to product
-  if (values.common_product_id) {
-    return (
-      <div className="ingredient-mapping-wrapper">
-        <span className="mapped-product-name">{values.common_name}</span>
-        <button
-          type="button"
-          className="mapping-btn"
-          onClick={() => setShowSearch(true)}
-          title="Remap to different product"
-        >
-          🔄
-        </button>
-        <button
-          type="button"
-          className="mapping-btn"
-          onClick={handleUnmap}
-          title="Unmap from product"
-        >
-          ✕
-        </button>
-      </div>
-    );
-  }
-
-  // Unmapped - text only
   return (
-    <div className="ingredient-mapping-wrapper">
+    <div className="ingredient-mapping-wrapper" onClick={e => e.stopPropagation()}>
       <input
+        ref={inputRef}
         type="text"
-        value={values.ingredient_name || ''}
-        onChange={(e) => onFieldChange('ingredient_name', e.target.value)}
-        placeholder="Ingredient name..."
-        style={{ flex: 1 }}
+        className="inline-edit-input"
+        value={searchTerm}
+        onChange={(e) => handleSearchChange(e.target.value)}
+        onKeyDown={handleKeyDown}
+        placeholder="Type to search or add text-only..."
+        autoFocus
       />
-      <button
-        type="button"
-        className="mapping-btn"
-        onClick={() => setShowSearch(true)}
-        title="Map to product"
-      >
-        🔗 Map
-      </button>
+
+      {/* Autocomplete dropdown */}
+      {filteredProducts.length > 0 && (
+        <div className="product-search-dropdown">
+          {filteredProducts.slice(0, 10).map((p, idx) => (
+            <div
+              key={p.id}
+              className={`product-search-item ${idx === selectedIndex ? 'selected' : ''}`}
+              onClick={() => handleSelectProduct(p)}
+              onMouseEnter={() => setSelectedIndex(idx)}
+            >
+              {p.common_name}
+              {p.category && <span style={{ color: '#6b7280', marginLeft: '0.5rem' }}>({p.category})</span>}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Show mapped indicator */}
+      {values.common_product_id && (
+        <span className="mapped-indicator" title="Mapped to product">✓</span>
+      )}
     </div>
   );
 }
@@ -1141,6 +1141,60 @@ function RecipeIngredients({ recipe, onIngredientsChange }) {
     setEditedValues({});
   };
 
+  const handleKeyDown = (e, field) => {
+    // Escape - cancel editing
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      handleCancel();
+      return;
+    }
+
+    // Enter - save and move to next row (Excel-like behavior)
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSave().then(() => {
+        const currentIndex = recipe.ingredients.findIndex(i => i.id === editingIngredientId);
+        const nextIngredient = recipe.ingredients[currentIndex + 1];
+        if (nextIngredient) {
+          setTimeout(() => handleStartEdit(nextIngredient.id), 100);
+        }
+      }).catch(() => {
+        // Save failed, stay in edit mode
+      });
+      return;
+    }
+
+    // Tab - move to next field (Excel-like behavior)
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const fields = ['ingredient', 'quantity', 'unit', 'yield'];
+      const currentIdx = fields.indexOf(field);
+      const nextIdx = e.shiftKey ? currentIdx - 1 : currentIdx + 1;
+
+      if (nextIdx >= 0 && nextIdx < fields.length) {
+        // Move to next/previous field in same row
+        const nextField = fields[nextIdx];
+        const selector = `.editing [data-field="${nextField}"]`;
+        const nextInput = document.querySelector(selector);
+        if (nextInput) {
+          nextInput.focus();
+          if (nextInput.select) nextInput.select();
+        }
+      } else if (!e.shiftKey && nextIdx >= fields.length) {
+        // Reached end of row, save and move to next row
+        const currentIndex = recipe.ingredients.findIndex(i => i.id === editingIngredientId);
+        const nextIngredient = recipe.ingredients[currentIndex + 1];
+        if (nextIngredient) {
+          handleSave().then(() => {
+            setTimeout(() => handleStartEdit(nextIngredient.id), 100);
+          }).catch(() => {
+            // Save failed, stay in edit mode
+          });
+        }
+      }
+    }
+  };
+
   return (
     <div className="recipe-section">
       <h2>Ingredients</h2>
@@ -1175,11 +1229,14 @@ function RecipeIngredients({ recipe, onIngredientsChange }) {
                     {/* Ingredient Name/Mapping Column */}
                     <td>
                       {isEditing ? (
-                        <IngredientMappingCell
-                          values={values}
-                          onFieldChange={handleFieldChange}
-                          commonProducts={commonProducts}
-                        />
+                        <div data-field="ingredient">
+                          <IngredientMappingCell
+                            values={values}
+                            onFieldChange={handleFieldChange}
+                            commonProducts={commonProducts}
+                            onKeyDown={(e) => handleKeyDown(e, 'ingredient')}
+                          />
+                        </div>
                       ) : (
                         <span onClick={() => handleStartEdit(ing.id)}>
                           {ing.ingredient_name || ing.common_name || 'Unknown'}
@@ -1193,8 +1250,10 @@ function RecipeIngredients({ recipe, onIngredientsChange }) {
                         <input
                           type="number"
                           className="inline-edit-input"
+                          data-field="quantity"
                           value={values.quantity}
                           onChange={(e) => handleFieldChange('quantity', e.target.value)}
+                          onKeyDown={(e) => handleKeyDown(e, 'quantity')}
                           step="0.01"
                         />
                       ) : (
@@ -1207,8 +1266,10 @@ function RecipeIngredients({ recipe, onIngredientsChange }) {
                       {isEditing ? (
                         <select
                           className="inline-edit-select"
+                          data-field="unit"
                           value={values.unit_id}
                           onChange={(e) => handleFieldChange('unit_id', e.target.value)}
+                          onKeyDown={(e) => handleKeyDown(e, 'unit')}
                         >
                           {units.map(u => (
                             <option key={u.id} value={u.id}>{u.abbreviation}</option>
@@ -1225,8 +1286,10 @@ function RecipeIngredients({ recipe, onIngredientsChange }) {
                         <input
                           type="number"
                           className="inline-edit-input"
+                          data-field="yield"
                           value={values.yield_percentage}
                           onChange={(e) => handleFieldChange('yield_percentage', e.target.value)}
+                          onKeyDown={(e) => handleKeyDown(e, 'yield')}
                           min="0"
                           max="100"
                           step="1"
