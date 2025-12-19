@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import IngredientMatchRow from './IngredientMatchRow';
 import { createRecipeFromParse } from '../../services/aiParseService';
 import './RecipeImport.css';
 
@@ -10,46 +9,22 @@ export default function ReviewParsedRecipe({ parseResult, outletId, onClose }) {
   const [category, setCategory] = useState(parseResult.category || '');
   const [yieldQuantity, setYieldQuantity] = useState(parseResult.yield_info?.quantity || '');
   const [yieldUnit, setYieldUnit] = useState(parseResult.yield_info?.unit || '');
-  const [ingredientSelections, setIngredientSelections] = useState({});
   const [creating, setCreating] = useState(false);
 
   const navigate = useNavigate();
-
-  const handleProductSelected = (ingredientName, ingredientData) => {
-    setIngredientSelections(prev => ({
-      ...prev,
-      [ingredientName]: ingredientData
-    }));
-  };
 
   const handleCreateRecipe = async () => {
     setCreating(true);
 
     try {
-      // Build ingredients array - supports both mapped and text-only ingredients
-      const ingredients = parseResult.ingredients.map(ing => {
-        const selection = ingredientSelections[ing.parsed_name];
+      // Create recipe with all ingredients as text-only (unmapped)
+      const ingredients = parseResult.ingredients.map(ing => ({
+        ingredient_name: ing.parsed_name,
+        quantity: ing.normalized_quantity,
+        unit_id: ing.normalized_unit_id,
+        notes: ing.prep_note
+      }));
 
-        if (selection && selection.common_product_id) {
-          // Mapped to product
-          return {
-            common_product_id: selection.common_product_id,
-            quantity: selection.quantity,
-            unit_id: selection.unit_id,
-            notes: selection.notes
-          };
-        } else {
-          // Text-only ingredient - use parsed name
-          return {
-            ingredient_name: ing.parsed_name,
-            quantity: ing.normalized_quantity,
-            unit_id: ing.normalized_unit_id,
-            notes: ing.prep_note
-          };
-        }
-      });
-
-      // Create recipe with mixed mapped/unmapped ingredients
       const response = await createRecipeFromParse({
         parse_id: parseResult.parse_id,
         name: recipeName,
@@ -63,11 +38,9 @@ export default function ReviewParsedRecipe({ parseResult, outletId, onClose }) {
 
       console.log('[REVIEW] Recipe created successfully:', response);
 
-      // Close modal and show success
+      // Close modal and navigate
       onClose();
-      alert(`Recipe "${recipeName}" created successfully! Recipe ID: ${response.recipe_id}`);
-
-      // Navigate to recipes page to see the new recipe
+      alert(`Recipe "${recipeName}" created successfully!`);
       navigate('/recipes');
 
     } catch (err) {
@@ -77,24 +50,50 @@ export default function ReviewParsedRecipe({ parseResult, outletId, onClose }) {
     }
   };
 
-  const selectedCount = Object.keys(ingredientSelections).length;
-  const totalCount = parseResult.ingredients.length;
-  const allSelected = selectedCount === totalCount;
+  const displayQuantity = (ing) => {
+    const qty = `${ing.quantity} ${ing.unit}`;
+    if (ing.quantity !== ing.normalized_quantity) {
+      return `${qty} (${ing.normalized_quantity} ${ing.normalized_unit})`;
+    }
+    return qty;
+  };
 
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content review-parsed-recipe" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header review-header">
           <div>
-            <h2>Review Parsed Recipe</h2>
+            <h2>Review Extracted Recipe</h2>
             <p style={{ fontSize: '0.875rem', color: '#6b7280', marginTop: '0.25rem' }}>
-              Review and confirm ingredient-to-product matches before creating recipe
+              Review the extracted data. Fix any critical errors before saving.
             </p>
           </div>
           <button className="close-btn" onClick={onClose}>&times;</button>
         </div>
 
         <div className="modal-body">
+          {/* Notice */}
+          <div style={{
+            background: '#eff6ff',
+            border: '1px solid #bfdbfe',
+            borderRadius: '6px',
+            padding: '1rem',
+            marginBottom: '1.5rem'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'start', gap: '0.75rem' }}>
+              <span style={{ fontSize: '1.25rem' }}>ℹ️</span>
+              <div>
+                <p style={{ fontSize: '0.875rem', color: '#1e40af', fontWeight: 500, marginBottom: '0.25rem' }}>
+                  Quick Review Only
+                </p>
+                <p style={{ fontSize: '0.875rem', color: '#1e3a8a', lineHeight: '1.4' }}>
+                  This screen is for catching critical errors. Full editing, product mapping, and cost calculation
+                  can be done after saving the recipe.
+                </p>
+              </div>
+            </div>
+          </div>
+
           {/* Recipe Info Form */}
           <div className="review-recipe-form">
             <div>
@@ -191,46 +190,56 @@ export default function ReviewParsedRecipe({ parseResult, outletId, onClose }) {
             </div>
           </div>
 
-          {/* Ingredients Section */}
+          {/* Ingredients Section - Read-only Display */}
           <div className="ingredients-section">
             <div className="ingredients-header">
               <div className="ingredients-count">
-                Ingredients ({totalCount})
+                Ingredients ({parseResult.ingredients.length})
               </div>
-              {!allSelected && (
-                <div className="review-status">
-                  <span>⚠️</span>
-                  <span>{totalCount - selectedCount} ingredient(s) need product selection</span>
-                </div>
-              )}
-              {allSelected && (
-                <div className="review-status" style={{ color: '#10b981' }}>
-                  <span>✓</span>
-                  <span>All ingredients matched</span>
-                </div>
-              )}
+              <div style={{ fontSize: '0.75rem', color: '#6b7280' }}>
+                Product mapping available after saving
+              </div>
             </div>
 
-            {parseResult.ingredients.map((ingredient, idx) => (
-              <IngredientMatchRow
-                key={idx}
-                ingredient={ingredient}
-                onProductSelected={handleProductSelected}
-              />
-            ))}
+            <div style={{
+              background: '#f9fafb',
+              borderRadius: '6px',
+              border: '1px solid #e5e7eb',
+              padding: '1rem'
+            }}>
+              {parseResult.ingredients.map((ingredient, idx) => (
+                <div
+                  key={idx}
+                  style={{
+                    padding: '0.75rem 0',
+                    borderBottom: idx < parseResult.ingredients.length - 1 ? '1px solid #e5e7eb' : 'none',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'start'
+                  }}
+                >
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 500, color: '#1f2937' }}>
+                      {ingredient.parsed_name}
+                    </div>
+                    {ingredient.prep_note && (
+                      <div style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.125rem' }}>
+                        {ingredient.prep_note}
+                      </div>
+                    )}
+                  </div>
+                  <div style={{
+                    fontSize: '0.875rem',
+                    color: '#6b7280',
+                    textAlign: 'right',
+                    marginLeft: '1rem'
+                  }}>
+                    {displayQuantity(ingredient)}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
-
-          {/* Review Summary */}
-          {!allSelected && (
-            <div className="review-summary">
-              <div className="review-summary-text">
-                <span>⚠️</span>
-                <span>
-                  Please select products for all {totalCount - selectedCount} remaining ingredient(s) before creating recipe
-                </span>
-              </div>
-            </div>
-          )}
         </div>
 
         <div className="modal-actions">
@@ -240,9 +249,22 @@ export default function ReviewParsedRecipe({ parseResult, outletId, onClose }) {
           <button
             className="btn-primary"
             onClick={handleCreateRecipe}
-            disabled={!allSelected || !recipeName || creating}
+            disabled={!recipeName || creating}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
           >
-            {creating ? 'Creating Recipe...' : 'Save as Draft →'}
+            {creating ? 'Creating Recipe...' : (
+              <>
+                <span>Save Recipe</span>
+                <span style={{
+                  padding: '0.125rem 0.5rem',
+                  background: 'rgba(255, 255, 255, 0.2)',
+                  borderRadius: '4px',
+                  fontSize: '0.75rem'
+                }}>
+                  Uses 1 ⭐
+                </span>
+              </>
+            )}
           </button>
         </div>
       </div>
