@@ -483,7 +483,8 @@ function Products() {
       cancelCellEdit();
     } catch (error) {
       console.error('Error updating product:', error);
-      alert('Failed to update product');
+      // Re-throw so keyboard navigation can handle it
+      throw error;
     }
   };
 
@@ -525,13 +526,21 @@ function Products() {
 
       if (nextIdx >= 0 && nextIdx < fields.length) {
         const nextField = fields[nextIdx];
-        // Save current field, then move to next
+        // Save current field, then move to next (with error handling)
         handleCellSave(productId, field).then(() => {
           // Get the current value for the next field
           let nextValue;
           const product = products.find(p => p.id === productId);
           if (product) {
             nextValue = nextField === 'unit_id' ? product.unit_id : product[nextField];
+            startCellEdit(productId, nextField, nextValue);
+          }
+        }).catch((error) => {
+          // If save fails, still move to next field
+          console.error('Save failed during tab navigation:', error);
+          const product = products.find(p => p.id === productId);
+          if (product) {
+            const nextValue = nextField === 'unit_id' ? product.unit_id : product[nextField];
             startCellEdit(productId, nextField, nextValue);
           }
         });

@@ -471,7 +471,8 @@
 }
 
 .allergen-modal {
-  max-width: 550px;
+  max-width: 650px;
+  width: 90%;
 }
 
 .modal-header {
