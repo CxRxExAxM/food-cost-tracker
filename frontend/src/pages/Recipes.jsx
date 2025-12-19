@@ -754,14 +754,14 @@ function RecipeMetadata({ recipe, editedRecipe, onFieldChange }) {
   const currentServingUnit = editedRecipe?.serving_unit_id !== undefined ? editedRecipe.serving_unit_id : recipe.serving_unit_id;
   const currentDescription = editedRecipe?.description !== undefined ? editedRecipe.description : recipe.description;
 
-  // Filter to common yield units
+  // Filter to common yield units (case-insensitive)
   const yieldUnits = units.filter(u =>
-    ['ea', 'ct', 'doz', 'lb', 'oz', 'kg', 'g', 'gal', 'qt', 'pt', 'cup', 'L', 'mL'].includes(u.abbreviation)
+    ['ea', 'ct', 'doz', 'lb', 'oz', 'kg', 'g', 'gal', 'qt', 'pt', 'cup', 'l', 'ml'].includes(u.abbreviation.toLowerCase())
   );
 
-  // Serving units - portions (null) plus weight/volume units for serving sizes
+  // Serving units - portions (null) plus weight/volume units for serving sizes (case-insensitive)
   const servingUnits = units.filter(u =>
-    ['oz', 'g', 'cup', 'mL', 'fl oz'].includes(u.abbreviation)
+    ['oz', 'g', 'cup', 'ml', 'fl oz'].includes(u.abbreviation.toLowerCase())
   );
 
   return (
@@ -784,17 +784,17 @@ function RecipeMetadata({ recipe, editedRecipe, onFieldChange }) {
           >
             <option value="">(select unit)</option>
             <optgroup label="Count">
-              {yieldUnits.filter(u => ['ea', 'ct', 'doz'].includes(u.abbreviation)).map(unit => (
+              {yieldUnits.filter(u => ['ea', 'ct', 'doz'].includes(u.abbreviation.toLowerCase())).map(unit => (
                 <option key={unit.id} value={unit.id}>{unit.name} ({unit.abbreviation})</option>
               ))}
             </optgroup>
             <optgroup label="Weight">
-              {yieldUnits.filter(u => ['lb', 'oz', 'kg', 'g'].includes(u.abbreviation)).map(unit => (
+              {yieldUnits.filter(u => ['lb', 'oz', 'kg', 'g'].includes(u.abbreviation.toLowerCase())).map(unit => (
                 <option key={unit.id} value={unit.id}>{unit.name} ({unit.abbreviation})</option>
               ))}
             </optgroup>
             <optgroup label="Volume">
-              {yieldUnits.filter(u => ['gal', 'qt', 'pt', 'cup', 'L', 'mL'].includes(u.abbreviation)).map(unit => (
+              {yieldUnits.filter(u => ['gal', 'qt', 'pt', 'cup', 'l', 'ml'].includes(u.abbreviation.toLowerCase())).map(unit => (
                 <option key={unit.id} value={unit.id}>{unit.name} ({unit.abbreviation})</option>
               ))}
             </optgroup>
