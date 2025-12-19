@@ -318,6 +318,246 @@ def get_mapped_products(
         }
 
 
+# ============================================
+# Unit Conversions Endpoints
+# ============================================
+
+@router.get("/{common_product_id}/conversions")
+def get_conversions(
+    common_product_id: int,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get all unit conversions for a common product."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Verify access
+        cursor.execute("""
+            SELECT id FROM common_products
+            WHERE id = %s AND organization_id = %s
+        """, (common_product_id, current_user['organization_id']))
+
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Common product not found")
+
+        # Get conversions with unit names
+        cursor.execute("""
+            SELECT
+                pc.*,
+                u1.abbreviation as from_unit_name,
+                u2.abbreviation as to_unit_name
+            FROM product_conversions pc
+            JOIN units u1 ON u1.id = pc.from_unit_id
+            JOIN units u2 ON u2.id = pc.to_unit_id
+            WHERE pc.common_product_id = %s
+            ORDER BY u1.abbreviation, u2.abbreviation
+        """, (common_product_id,))
+
+        return dicts_from_rows(cursor.fetchall())
+
+
+@router.post("/{common_product_id}/conversions")
+def create_conversion(
+    common_product_id: int,
+    from_unit_id: int,
+    to_unit_id: int,
+    conversion_factor: float,
+    notes: str = None,
+    create_reverse: bool = False,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Create a unit conversion for a common product.
+
+    Example: 1 ea Banana = 5 oz
+    - from_unit_id: ea (each)
+    - to_unit_id: oz (ounce)
+    - conversion_factor: 5.0
+    - create_reverse: True (also creates oz → ea with factor 1/5)
+    """
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Validate
+        if from_unit_id == to_unit_id:
+            raise HTTPException(status_code=400, detail="Cannot convert unit to itself")
+        if conversion_factor <= 0:
+            raise HTTPException(status_code=400, detail="Conversion factor must be positive")
+
+        # Verify access
+        cursor.execute("""
+            SELECT id FROM common_products
+            WHERE id = %s AND organization_id = %s
+        """, (common_product_id, current_user['organization_id']))
+
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Common product not found")
+
+        # Create forward conversion
+        try:
+            cursor.execute("""
+                INSERT INTO product_conversions
+                (common_product_id, from_unit_id, to_unit_id, conversion_factor, notes, organization_id, created_by)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                RETURNING id
+            """, (
+                common_product_id, from_unit_id, to_unit_id, conversion_factor,
+                notes, current_user['organization_id'], current_user['id']
+            ))
+
+            forward_id = dict_from_row(cursor.fetchone())['id']
+        except Exception as e:
+            if 'uq_product_conversion' in str(e):
+                raise HTTPException(status_code=400, detail="This conversion already exists")
+            raise
+
+        # Create reverse conversion if requested
+        reverse_id = None
+        if create_reverse:
+            try:
+                cursor.execute("""
+                    INSERT INTO product_conversions
+                    (common_product_id, from_unit_id, to_unit_id, conversion_factor, notes, organization_id, created_by)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    RETURNING id
+                """, (
+                    common_product_id, to_unit_id, from_unit_id, 1.0 / conversion_factor,
+                    f"Reverse of: {notes}" if notes else None,
+                    current_user['organization_id'], current_user['id']
+                ))
+                reverse_id = dict_from_row(cursor.fetchone())['id']
+            except Exception as e:
+                # If reverse fails, still commit the forward
+                pass
+
+        conn.commit()
+
+        return {
+            "forward_conversion_id": forward_id,
+            "reverse_conversion_id": reverse_id,
+            "message": f"Conversion created{' (with reverse)' if create_reverse else ''}"
+        }
+
+
+@router.patch("/{common_product_id}/conversions/{conversion_id}")
+def update_conversion(
+    common_product_id: int,
+    conversion_id: int,
+    conversion_factor: float = None,
+    notes: str = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Update conversion factor or notes."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Verify access
+        cursor.execute("""
+            SELECT id FROM product_conversions
+            WHERE id = %s AND common_product_id = %s AND organization_id = %s
+        """, (conversion_id, common_product_id, current_user['organization_id']))
+
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Conversion not found")
+
+        # Build update
+        updates = []
+        params = []
+
+        if conversion_factor is not None:
+            if conversion_factor <= 0:
+                raise HTTPException(status_code=400, detail="Factor must be positive")
+            updates.append("conversion_factor = %s")
+            params.append(conversion_factor)
+
+        if notes is not None:
+            updates.append("notes = %s")
+            params.append(notes)
+
+        if not updates:
+            raise HTTPException(status_code=400, detail="No fields to update")
+
+        updates.append("updated_at = CURRENT_TIMESTAMP")
+        params.append(conversion_id)
+
+        cursor.execute(f"""
+            UPDATE product_conversions
+            SET {', '.join(updates)}
+            WHERE id = %s
+        """, params)
+
+        conn.commit()
+
+        return {"message": "Conversion updated"}
+
+
+@router.delete("/{common_product_id}/conversions/{conversion_id}")
+def delete_conversion(
+    common_product_id: int,
+    conversion_id: int,
+    current_user: dict = Depends(get_current_user)
+):
+    """Delete a unit conversion."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            DELETE FROM product_conversions
+            WHERE id = %s AND common_product_id = %s AND organization_id = %s
+        """, (conversion_id, common_product_id, current_user['organization_id']))
+
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Conversion not found")
+
+        conn.commit()
+
+        return {"message": "Conversion deleted"}
+
+
+@router.post("/{common_product_id}/convert")
+def convert_quantity(
+    common_product_id: int,
+    quantity: float,
+    from_unit_id: int,
+    to_unit_id: int,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Utility endpoint to convert a quantity between units.
+    Returns converted quantity or error if conversion not defined.
+    """
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Find conversion
+        cursor.execute("""
+            SELECT conversion_factor
+            FROM product_conversions
+            WHERE common_product_id = %s
+              AND from_unit_id = %s
+              AND to_unit_id = %s
+              AND organization_id = %s
+        """, (common_product_id, from_unit_id, to_unit_id, current_user['organization_id']))
+
+        conversion = dict_from_row(cursor.fetchone())
+
+        if not conversion:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No conversion defined from unit {from_unit_id} to {to_unit_id}"
+            )
+
+        converted_quantity = quantity * conversion['conversion_factor']
+
+        return {
+            "original_quantity": quantity,
+            "original_unit_id": from_unit_id,
+            "converted_quantity": round(converted_quantity, 4),
+            "converted_unit_id": to_unit_id,
+            "conversion_factor": conversion['conversion_factor']
+        }
+
+
 @router.post("/quick-create", response_model=QuickCreateProductResponse, status_code=201)
 def quick_create_common_product(
     product: QuickCreateProductRequest,

@@ -524,6 +524,7 @@ def _calculate_ingredient_costs(cursor, recipe_id: int, outlet_id: int, visited:
             cursor.execute("""
                 SELECT
                     ph.unit_price,
+                    p.unit_id as product_unit_id,
                     d.name as distributor_name,
                     p.name as product_name,
                     p.pack,
@@ -547,13 +548,46 @@ def _calculate_ingredient_costs(cursor, recipe_id: int, outlet_id: int, visited:
 
             if price_row and price_row.get('unit_price'):
                 unit_price = price_row['unit_price']
-                has_price = True
-                price_source = f"{price_row['distributor_name']}: {price_row['product_name']}"
-
-                # Calculate ingredient cost: quantity * unit_price * (yield_percentage / 100)
+                product_unit_id = price_row['product_unit_id']
+                ingredient_unit_id = ing['unit_id']
                 yield_pct = ing.get('yield_percentage', 100) or 100
-                ing_cost = ing['quantity'] * unit_price * (100 / yield_pct)
-                total_cost += ing_cost
+
+                # Check if units match
+                if product_unit_id == ingredient_unit_id:
+                    # Direct calculation - units match
+                    ing_cost = ing['quantity'] * unit_price * (100 / yield_pct)
+                    has_price = True
+                    price_source = f"{price_row['distributor_name']}: {price_row['product_name']}"
+                    total_cost += ing_cost
+
+                else:
+                    # Units don't match - try to find conversion
+                    cursor.execute("""
+                        SELECT conversion_factor, u1.abbreviation as from_unit, u2.abbreviation as to_unit
+                        FROM product_conversions pc
+                        JOIN units u1 ON u1.id = pc.from_unit_id
+                        JOIN units u2 ON u2.id = pc.to_unit_id
+                        WHERE pc.common_product_id = %s
+                          AND pc.from_unit_id = %s
+                          AND pc.to_unit_id = %s
+                    """, (ing['common_product_id'], ingredient_unit_id, product_unit_id))
+
+                    conversion = dict_from_row(cursor.fetchone())
+
+                    if conversion:
+                        # Apply conversion: ingredient quantity → product quantity
+                        converted_quantity = ing['quantity'] * conversion['conversion_factor']
+                        ing_cost = converted_quantity * unit_price * (100 / yield_pct)
+                        has_price = True
+                        price_source = f"{price_row['distributor_name']}: {price_row['product_name']} (converted {conversion['from_unit']} → {conversion['to_unit']})"
+                        total_cost += ing_cost
+                    else:
+                        # No conversion available - log warning and use direct calc (may be inaccurate)
+                        print(f"[WARN] No conversion from unit {ingredient_unit_id} ({ing.get('unit_abbreviation')}) to {product_unit_id} ({price_row.get('product_unit')}) for common_product {ing['common_product_id']}")
+                        ing_cost = ing['quantity'] * unit_price * (100 / yield_pct)
+                        has_price = True
+                        price_source = f"{price_row['distributor_name']}: {price_row['product_name']} (⚠️ unit mismatch: {ing.get('unit_abbreviation')} vs {price_row.get('product_unit')})"
+                        total_cost += ing_cost
 
         elif ing.get('sub_recipe_id'):
             # Recursively calculate sub-recipe cost - use sub-recipe's outlet_id

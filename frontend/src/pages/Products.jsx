@@ -1074,8 +1074,85 @@ function Products() {
 
 // Allergen Modal Component
 function AllergenModal({ product, onClose, onUpdate }) {
+  const [activeTab, setActiveTab] = useState('allergens');
+  const [conversions, setConversions] = useState([]);
+  const [units, setUnits] = useState([]);
+  const [newConversion, setNewConversion] = useState({
+    from_unit_id: '',
+    to_unit_id: '',
+    conversion_factor: '',
+    notes: '',
+    create_reverse: true
+  });
+
   const allergenAllergens = ALLERGENS.filter(a => !a.dietary);
   const dietaryFlags = ALLERGENS.filter(a => a.dietary);
+
+  useEffect(() => {
+    if (product) {
+      fetchConversions();
+      fetchUnits();
+    }
+  }, [product]);
+
+  const fetchConversions = async () => {
+    try {
+      const response = await axios.get(`${API_URL}/common-products/${product.id}/conversions`);
+      setConversions(response.data);
+    } catch (error) {
+      console.error('Error fetching conversions:', error);
+    }
+  };
+
+  const fetchUnits = async () => {
+    try {
+      const response = await axios.get(`${API_URL}/units`);
+      setUnits(response.data);
+    } catch (error) {
+      console.error('Error fetching units:', error);
+    }
+  };
+
+  const handleCreateConversion = async () => {
+    if (!newConversion.from_unit_id || !newConversion.to_unit_id || !newConversion.conversion_factor) {
+      alert('Please fill in all required fields');
+      return;
+    }
+
+    try {
+      await axios.post(`${API_URL}/common-products/${product.id}/conversions`, {
+        from_unit_id: parseInt(newConversion.from_unit_id),
+        to_unit_id: parseInt(newConversion.to_unit_id),
+        conversion_factor: parseFloat(newConversion.conversion_factor),
+        notes: newConversion.notes || null,
+        create_reverse: newConversion.create_reverse
+      });
+
+      fetchConversions();
+      setNewConversion({
+        from_unit_id: '',
+        to_unit_id: '',
+        conversion_factor: '',
+        notes: '',
+        create_reverse: true
+      });
+    } catch (error) {
+      console.error('Error creating conversion:', error);
+      alert(error.response?.data?.detail || 'Failed to create conversion');
+    }
+  };
+
+  const handleDeleteConversion = async (conversionId) => {
+    if (!confirm('Delete this conversion?')) return;
+
+    try {
+      await axios.delete(`${API_URL}/common-products/${product.id}/conversions/${conversionId}`);
+      fetchConversions();
+    } catch (error) {
+      console.error('Error deleting conversion:', error);
+      alert('Failed to delete conversion');
+    }
+  };
 
   const handleToggle = (allergenKey) => {
     const newValue = !product[allergenKey];
@@ -1086,11 +1163,30 @@ function AllergenModal({ product, onClose, onUpdate }) {
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content allergen-modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h2>Allergens & Dietary</h2>
+          <h2>{product.common_name}</h2>
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
+
+        {/* Tab Navigation */}
+        <div className="modal-tabs">
+          <button
+            className={`modal-tab ${activeTab === 'allergens' ? 'active' : ''}`}
+            onClick={() => setActiveTab('allergens')}
+          >
+            Allergens & Dietary
+          </button>
+          <button
+            className={`modal-tab ${activeTab === 'conversions' ? 'active' : ''}`}
+            onClick={() => setActiveTab('conversions')}
+          >
+            Unit Conversions
+          </button>
+        </div>
+
         <div className="modal-body">
-          <div className="allergen-product-name">{product.common_name}</div>
+          {/* Allergens Tab */}
+          {activeTab === 'allergens' && (
+            <>
 
           <div className="allergen-section">
             <h3>Allergens</h3>
@@ -1127,6 +1223,110 @@ function AllergenModal({ product, onClose, onUpdate }) {
               ))}
             </div>
           </div>
+            </>
+          )}
+
+          {/* Conversions Tab */}
+          {activeTab === 'conversions' && (
+            <div className="conversions-content">
+              <h3>Existing Conversions</h3>
+              <div className="conversions-list">
+                {conversions.length === 0 ? (
+                  <p className="empty-message">No conversions defined for this product yet.</p>
+                ) : (
+                  conversions.map(conv => (
+                    <div key={conv.id} className="conversion-item">
+                      <div className="conversion-display">
+                        <span className="conversion-formula">
+                          1 {conv.from_unit_name} = {conv.conversion_factor} {conv.to_unit_name}
+                        </span>
+                        {conv.notes && <small className="conversion-notes">{conv.notes}</small>}
+                      </div>
+                      <button
+                        className="btn-delete-conversion"
+                        onClick={() => handleDeleteConversion(conv.id)}
+                        title="Delete conversion"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <h3 style={{ marginTop: 'var(--space-6)' }}>Add New Conversion</h3>
+              <div className="conversion-form">
+                <div className="form-row">
+                  <div className="form-field">
+                    <label>From Unit:</label>
+                    <select
+                      value={newConversion.from_unit_id}
+                      onChange={(e) => setNewConversion({...newConversion, from_unit_id: e.target.value})}
+                      className="conversion-select"
+                    >
+                      <option value="">Select unit...</option>
+                      {units.map(u => (
+                        <option key={u.id} value={u.id}>{u.name} ({u.abbreviation})</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="form-field">
+                    <label>To Unit:</label>
+                    <select
+                      value={newConversion.to_unit_id}
+                      onChange={(e) => setNewConversion({...newConversion, to_unit_id: e.target.value})}
+                      className="conversion-select"
+                    >
+                      <option value="">Select unit...</option>
+                      {units.map(u => (
+                        <option key={u.id} value={u.id}>{u.name} ({u.abbreviation})</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="form-field">
+                  <label>Conversion Factor:</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={newConversion.conversion_factor}
+                    onChange={(e) => setNewConversion({...newConversion, conversion_factor: e.target.value})}
+                    placeholder="e.g., 5 (means 1 from unit = 5 to units)"
+                    className="conversion-input"
+                  />
+                  <small className="field-hint">
+                    Example: If 1 ea = 5 oz, enter 5
+                  </small>
+                </div>
+
+                <div className="form-field">
+                  <label>Notes (optional):</label>
+                  <input
+                    type="text"
+                    value={newConversion.notes}
+                    onChange={(e) => setNewConversion({...newConversion, notes: e.target.value})}
+                    placeholder="e.g., Average banana weight"
+                    className="conversion-input"
+                  />
+                </div>
+
+                <label className="checkbox-label-inline">
+                  <input
+                    type="checkbox"
+                    checked={newConversion.create_reverse}
+                    onChange={(e) => setNewConversion({...newConversion, create_reverse: e.target.checked})}
+                  />
+                  Also create reverse conversion (recommended)
+                </label>
+
+                <button className="btn-add-conversion" onClick={handleCreateConversion}>
+                  Add Conversion
+                </button>
+              </div>
+            </div>
+          )}
         </div>
         <div className="modal-footer">
           <button className="btn-done" onClick={onClose}>Done</button>
