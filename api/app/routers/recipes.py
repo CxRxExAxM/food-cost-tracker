@@ -281,6 +281,83 @@ def delete_recipe(recipe_id: int, current_user: dict = Depends(get_current_user)
         return {"message": "Recipe deleted successfully", "recipe_id": recipe_id}
 
 
+@router.get("/{recipe_id}/cost/debug")
+def debug_recipe_cost(recipe_id: int, current_user: dict = Depends(get_current_user)):
+    """
+    Debug endpoint to see why costs aren't calculating.
+    Shows what products/prices exist for each ingredient.
+    """
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Get recipe
+        outlet_filter, outlet_params = build_outlet_filter(current_user, "")
+        query = f"SELECT * FROM recipes WHERE id = %s AND {outlet_filter}"
+        params = [recipe_id] + outlet_params
+        cursor.execute(query, params)
+        recipe = dict_from_row(cursor.fetchone())
+
+        if not recipe:
+            raise HTTPException(status_code=404, detail="Recipe not found")
+
+        # Get ingredients
+        cursor.execute("""
+            SELECT ri.*,
+                   cp.common_name
+            FROM recipe_ingredients ri
+            LEFT JOIN common_products cp ON cp.id = ri.common_product_id
+            WHERE ri.recipe_id = %s
+            ORDER BY ri.id
+        """, (recipe_id,))
+
+        ingredients = dicts_from_rows(cursor.fetchall())
+        debug_info = []
+
+        for ing in ingredients:
+            ing_debug = {
+                "ingredient_id": ing['id'],
+                "name": ing.get('common_name') or ing.get('ingredient_name'),
+                "common_product_id": ing.get('common_product_id'),
+                "quantity": ing['quantity'],
+                "products_found": []
+            }
+
+            if ing.get('common_product_id'):
+                # Check what products exist for this outlet + common product
+                cursor.execute("""
+                    SELECT
+                        p.id as product_id,
+                        p.name as product_name,
+                        p.outlet_id,
+                        d.name as distributor_name,
+                        ph.unit_price,
+                        ph.effective_date
+                    FROM products p
+                    JOIN distributor_products dp ON dp.product_id = p.id
+                    JOIN distributors d ON d.id = dp.distributor_id
+                    LEFT JOIN (
+                        SELECT distributor_product_id, unit_price, effective_date,
+                               ROW_NUMBER() OVER (PARTITION BY distributor_product_id ORDER BY effective_date DESC) as rn
+                        FROM price_history
+                    ) ph ON ph.distributor_product_id = dp.id AND ph.rn = 1
+                    WHERE p.common_product_id = %s AND p.outlet_id = %s
+                    ORDER BY ph.unit_price ASC NULLS LAST
+                """, (ing['common_product_id'], recipe['outlet_id']))
+
+                products = dicts_from_rows(cursor.fetchall())
+                ing_debug["products_found"] = products
+                ing_debug["has_price"] = any(p.get('unit_price') is not None for p in products)
+
+            debug_info.append(ing_debug)
+
+        return {
+            "recipe_id": recipe_id,
+            "recipe_name": recipe['name'],
+            "outlet_id": recipe['outlet_id'],
+            "ingredients": debug_info
+        }
+
+
 @router.get("/{recipe_id}/cost", response_model=RecipeWithCost)
 def calculate_recipe_cost(recipe_id: int, current_user: dict = Depends(get_current_user)):
     """
