@@ -3,7 +3,6 @@ import axios from '../lib/axios';
 import Navigation from '../components/Navigation';
 import { useOutlet } from '../contexts/OutletContext';
 import OutletBadge from '../components/outlets/OutletBadge';
-import CommonProductPanel from '../components/CommonProductPanel';
 import './Products.css';
 
 const API_URL = import.meta.env.VITE_API_URL ?? '';
@@ -42,7 +41,6 @@ function Products() {
   const [editingCommonProductId, setEditingCommonProductId] = useState(null);
   const [commonProductEditInput, setCommonProductEditInput] = useState('');
   const [allergenModalProduct, setAllergenModalProduct] = useState(null);
-  const [showCommonProductPanel, setShowCommonProductPanel] = useState(null);
   // Upload state
   const [showUpload, setShowUpload] = useState(false);
   const [distributors, setDistributors] = useState([]);
@@ -328,10 +326,6 @@ function Products() {
     if (cp) {
       setAllergenModalProduct(cp);
     }
-  };
-
-  const handleCommonProductClick = (commonProductId) => {
-    setShowCommonProductPanel(commonProductId);
   };
 
   const handleUpdateAllergens = async (commonProductId, allergenUpdates) => {
@@ -1010,8 +1004,8 @@ function Products() {
                               <div className="common-product-display">
                                 <span
                                   className="common-product-link"
-                                  onClick={() => handleCommonProductClick(product.common_product_id)}
-                                  title="Click to view all mapped products"
+                                  onClick={() => openAllergenModal(product.common_product_id)}
+                                  title="Click to manage product details"
                                 >
                                   {getCommonProductName(product)}
                                   <div className="allergen-icons">
@@ -1025,13 +1019,6 @@ function Products() {
                                     )}
                                   </div>
                                 </span>
-                                <button
-                                  onClick={() => openAllergenModal(product.common_product_id)}
-                                  className="btn-allergen"
-                                  title="Manage allergens"
-                                >
-                                  🏷️
-                                </button>
                                 <button
                                   onClick={() => handleUnmap(product.id)}
                                   className="btn-unmap"
@@ -1068,14 +1055,6 @@ function Products() {
           onUpdate={handleUpdateAllergens}
         />
       )}
-
-      {/* Common Product Panel */}
-      {showCommonProductPanel && (
-        <CommonProductPanel
-          commonProductId={showCommonProductPanel}
-          onClose={() => setShowCommonProductPanel(null)}
-        />
-      )}
       </div>
     </>
   );
@@ -1093,6 +1072,9 @@ function AllergenModal({ product, onClose, onUpdate }) {
     notes: '',
     create_reverse: true
   });
+  const [mappedProductsData, setMappedProductsData] = useState(null);
+  const [selectedOutlet, setSelectedOutlet] = useState('all');
+  const [loadingMappedProducts, setLoadingMappedProducts] = useState(false);
 
   const allergenAllergens = ALLERGENS.filter(a => !a.dietary);
   const dietaryFlags = ALLERGENS.filter(a => a.dietary);
@@ -1101,8 +1083,11 @@ function AllergenModal({ product, onClose, onUpdate }) {
     if (product) {
       fetchConversions();
       fetchUnits();
+      if (activeTab === 'mapped') {
+        fetchMappedProducts();
+      }
     }
-  }, [product]);
+  }, [product, activeTab]);
 
   const fetchConversions = async () => {
     try {
@@ -1119,6 +1104,29 @@ function AllergenModal({ product, onClose, onUpdate }) {
       setUnits(response.data);
     } catch (error) {
       console.error('Error fetching units:', error);
+    }
+  };
+
+  const fetchMappedProducts = async () => {
+    setLoadingMappedProducts(true);
+    try {
+      const response = await axios.get(`${API_URL}/common-products/${product.id}/mapped-products`);
+      setMappedProductsData(response.data);
+    } catch (error) {
+      console.error('Error fetching mapped products:', error);
+    } finally {
+      setLoadingMappedProducts(false);
+    }
+  };
+
+  const handleUnmapProduct = async (productId) => {
+    if (!confirm('Unmap this product? This will remove the connection to the common product.')) return;
+    try {
+      await axios.patch(`${API_URL}/products/${productId}/unmap`);
+      fetchMappedProducts(); // Refresh the mapped products list
+    } catch (error) {
+      console.error('Error unmapping product:', error);
+      alert('Failed to unmap product');
     }
   };
 
@@ -1189,6 +1197,12 @@ function AllergenModal({ product, onClose, onUpdate }) {
             onClick={() => setActiveTab('conversions')}
           >
             Unit Conversions
+          </button>
+          <button
+            className={`modal-tab ${activeTab === 'mapped' ? 'active' : ''}`}
+            onClick={() => setActiveTab('mapped')}
+          >
+            Mapped Products
           </button>
         </div>
 
@@ -1334,6 +1348,91 @@ function AllergenModal({ product, onClose, onUpdate }) {
                   Add Conversion
                 </button>
               </div>
+            </div>
+          )}
+
+          {/* Mapped Products Tab */}
+          {activeTab === 'mapped' && (
+            <div className="mapped-products-content">
+              {loadingMappedProducts ? (
+                <div className="loading-message">Loading mapped products...</div>
+              ) : !mappedProductsData ? (
+                <div className="empty-message">Failed to load mapped products</div>
+              ) : mappedProductsData.total_count === 0 ? (
+                <div className="empty-state">
+                  <p>No products mapped to this common product yet.</p>
+                  <p className="empty-hint">Map products from the Products page to see them here.</p>
+                </div>
+              ) : (
+                <>
+                  {/* Outlet Filter Tabs */}
+                  {Object.keys(mappedProductsData.products_by_outlet).length > 1 && (
+                    <div className="outlet-filter-tabs">
+                      <button
+                        className={`outlet-filter-btn ${selectedOutlet === 'all' ? 'active' : ''}`}
+                        onClick={() => setSelectedOutlet('all')}
+                      >
+                        All ({mappedProductsData.total_count})
+                      </button>
+                      {Object.entries(mappedProductsData.products_by_outlet).map(([outletName, products]) => (
+                        <button
+                          key={outletName}
+                          className={`outlet-filter-btn ${selectedOutlet === outletName ? 'active' : ''}`}
+                          onClick={() => setSelectedOutlet(outletName)}
+                        >
+                          {outletName} ({products.length})
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Product Cards */}
+                  <div className="mapped-products-list">
+                    {Object.entries(mappedProductsData.products_by_outlet)
+                      .filter(([outletName]) => selectedOutlet === 'all' || selectedOutlet === outletName)
+                      .map(([outletName, products]) => (
+                        <div key={outletName} className="outlet-group">
+                          <h3 className="outlet-group-title">{outletName}</h3>
+                          {products.map(product => (
+                            <div key={product.id} className="mapped-product-card">
+                              <div className="mapped-product-info">
+                                <div className="mapped-product-name">{product.name}</div>
+                                {product.brand && <div className="mapped-product-brand">{product.brand}</div>}
+                                <div className="mapped-product-meta">
+                                  {product.distributor_name && <span>{product.distributor_name}</span>}
+                                  {product.pack && product.size && product.unit_abbreviation && (
+                                    <span> • {product.pack}pk × {product.size}{product.unit_abbreviation}</span>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="mapped-product-pricing">
+                                {product.case_price != null ? (
+                                  <>
+                                    <div className="mapped-price-case">${product.case_price.toFixed(2)}/cs</div>
+                                    {product.unit_price != null && (
+                                      <div className="mapped-price-unit">
+                                        ${product.unit_price.toFixed(2)}/{product.unit_abbreviation || 'unit'}
+                                      </div>
+                                    )}
+                                  </>
+                                ) : (
+                                  <div className="mapped-price-none">No price</div>
+                                )}
+                              </div>
+                              <button
+                                className="btn-unmap-product"
+                                onClick={() => handleUnmapProduct(product.id)}
+                                title="Unmap this product"
+                              >
+                                Unmap
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      ))}
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>
