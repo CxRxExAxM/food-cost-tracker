@@ -3,7 +3,7 @@
 /* ============================================ */
 
 /* Upload Modal */
-.upload-recipe-modal {
+.modal-content.upload-recipe-modal {
   width: 700px;
   max-width: 90vw;
 }
@@ -177,7 +177,7 @@
 }
 
 /* Review Modal */
-.review-parsed-recipe {
+.modal-content.review-parsed-recipe {
   width: 95vw;
   max-width: 1600px;
   max-height: 90vh;
