@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Query, Depends, Request
+from fastapi import APIRouter, HTTPException, Query, Depends, Request, Body
 from typing import Optional
 from ..database import get_db, dicts_from_rows, dict_from_row
 from ..schemas import CommonProduct, CommonProductCreate, CommonProductUpdate, QuickCreateProductRequest, QuickCreateProductResponse
@@ -359,11 +359,11 @@ def get_conversions(
 @router.post("/{common_product_id}/conversions")
 def create_conversion(
     common_product_id: int,
-    from_unit_id: int,
-    to_unit_id: int,
-    conversion_factor: float,
-    notes: str = None,
-    create_reverse: bool = False,
+    from_unit_id: int = Body(...),
+    to_unit_id: int = Body(...),
+    conversion_factor: float = Body(...),
+    notes: str = Body(None),
+    create_reverse: bool = Body(False),
     current_user: dict = Depends(get_current_user)
 ):
     """
@@ -443,8 +443,8 @@ def create_conversion(
 def update_conversion(
     common_product_id: int,
     conversion_id: int,
-    conversion_factor: float = None,
-    notes: str = None,
+    conversion_factor: float = Body(None),
+    notes: str = Body(None),
     current_user: dict = Depends(get_current_user)
 ):
     """Update conversion factor or notes."""
@@ -517,9 +517,9 @@ def delete_conversion(
 @router.post("/{common_product_id}/convert")
 def convert_quantity(
     common_product_id: int,
-    quantity: float,
-    from_unit_id: int,
-    to_unit_id: int,
+    quantity: float = Body(...),
+    from_unit_id: int = Body(...),
+    to_unit_id: int = Body(...),
     current_user: dict = Depends(get_current_user)
 ):
     """
