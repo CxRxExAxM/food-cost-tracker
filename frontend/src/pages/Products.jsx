@@ -424,6 +424,21 @@ function Products() {
     }
   };
 
+  const handleDeleteProduct = async (product) => {
+    const confirmMessage = `Delete product "${product.name}"?\n\nThis will permanently remove the product and all its price history. This action cannot be undone.`;
+    if (!confirm(confirmMessage)) return;
+
+    try {
+      await axios.delete(`${API_URL}/products/${product.id}`);
+
+      // Refresh the products list
+      fetchProducts();
+    } catch (error) {
+      console.error('Error deleting product:', error);
+      alert(error.response?.data?.detail || 'Failed to delete product');
+    }
+  };
+
   // Inline editing functions
   const startCellEdit = (productId, field, currentValue) => {
     setEditingCell({ productId, field });
@@ -815,6 +830,7 @@ function Products() {
                 {renderSortableHeader('case_price', 'Case Price', 'text-right')}
                 {renderSortableHeader('unit_price', 'Unit Price', 'text-right')}
                 {renderSortableHeader('common_product_name', 'Common Product')}
+                <th className="text-center">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -904,6 +920,9 @@ function Products() {
                   </td>
                   <td className="text-center text-muted">-</td>
                   <td>
+                    {/* Common product mapping - empty for new products */}
+                  </td>
+                  <td className="text-center">
                     <button className="btn-save-product" onClick={handleCreateProduct}>
                       Save
                     </button>
@@ -1039,6 +1058,15 @@ function Products() {
                         )}
                       </div>
                     )}
+                  </td>
+                  <td className="text-center">
+                    <button
+                      onClick={() => handleDeleteProduct(product)}
+                      className="btn-delete-product"
+                      title="Delete this product"
+                    >
+                      🗑️
+                    </button>
                   </td>
                 </tr>
               ))}

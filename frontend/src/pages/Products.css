@@ -1480,3 +1480,24 @@
   border-color: var(--color-red);
   color: var(--color-red);
 }
+
+/* Delete Product Button */
+.btn-delete-product {
+  background: none;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  width: 32px;
+  height: 32px;
+  cursor: pointer;
+  font-size: var(--text-base);
+  transition: all var(--transition-base) var(--ease-in-out);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-delete-product:hover {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: var(--color-red);
+  transform: scale(1.1);
+}
