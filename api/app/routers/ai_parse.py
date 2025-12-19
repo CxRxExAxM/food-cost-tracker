@@ -479,11 +479,12 @@ async def create_recipe_from_parse(
         for ingredient in data.ingredients:
             cursor.execute("""
                 INSERT INTO recipe_ingredients (
-                    recipe_id, common_product_id, quantity, unit_id, notes
-                ) VALUES (%s, %s, %s, %s, %s)
+                    recipe_id, common_product_id, ingredient_name, quantity, unit_id, notes
+                ) VALUES (%s, %s, %s, %s, %s, %s)
             """, (
                 recipe_id,
                 ingredient.common_product_id,
+                ingredient.ingredient_name,
                 ingredient.quantity,
                 ingredient.unit_id,
                 ingredient.notes
