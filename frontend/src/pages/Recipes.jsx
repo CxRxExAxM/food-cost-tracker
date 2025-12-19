@@ -839,6 +839,116 @@ function RecipeMetadata({ recipe, editedRecipe, onFieldChange }) {
   );
 }
 
+function IngredientMappingCell({ values, onFieldChange, commonProducts }) {
+  const [showSearch, setShowSearch] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filteredProducts, setFilteredProducts] = useState([]);
+
+  const handleSearchChange = (term) => {
+    setSearchTerm(term);
+    if (term.length >= 2) {
+      const filtered = commonProducts.filter(cp =>
+        cp.common_name.toLowerCase().includes(term.toLowerCase())
+      );
+      setFilteredProducts(filtered);
+    } else {
+      setFilteredProducts([]);
+    }
+  };
+
+  const handleSelectProduct = (product) => {
+    onFieldChange('common_product_id', product.id);
+    onFieldChange('common_name', product.common_name);
+    onFieldChange('ingredient_name', null);
+    setShowSearch(false);
+    setSearchTerm('');
+    setFilteredProducts([]);
+  };
+
+  const handleUnmap = () => {
+    const fallbackName = values.common_name || values.ingredient_name || 'Unnamed';
+    onFieldChange('common_product_id', null);
+    onFieldChange('ingredient_name', fallbackName);
+    onFieldChange('common_name', null);
+  };
+
+  // Product search active
+  if (showSearch) {
+    return (
+      <div className="ingredient-mapping-search" onClick={e => e.stopPropagation()}>
+        <input
+          type="text"
+          value={searchTerm}
+          onChange={(e) => handleSearchChange(e.target.value)}
+          placeholder="Search products..."
+          autoFocus
+          style={{ width: '100%', marginBottom: '0.5rem' }}
+        />
+        {filteredProducts.length > 0 && (
+          <div className="product-search-dropdown">
+            {filteredProducts.slice(0, 10).map(p => (
+              <div
+                key={p.id}
+                className="product-search-item"
+                onClick={() => handleSelectProduct(p)}
+              >
+                {p.common_name}
+                {p.category && <span style={{ color: '#6b7280', marginLeft: '0.5rem' }}>({p.category})</span>}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Mapped to product
+  if (values.common_product_id) {
+    return (
+      <div className="ingredient-mapping-wrapper">
+        <span className="mapped-product-name">{values.common_name}</span>
+        <button
+          type="button"
+          className="mapping-btn"
+          onClick={() => setShowSearch(true)}
+          title="Remap to different product"
+        >
+          🔄
+        </button>
+        <button
+          type="button"
+          className="mapping-btn"
+          onClick={handleUnmap}
+          title="Unmap from product"
+        >
+          ✕
+        </button>
+      </div>
+    );
+  }
+
+  // Unmapped - text only
+  return (
+    <div className="ingredient-mapping-wrapper">
+      <input
+        type="text"
+        value={values.ingredient_name || ''}
+        onChange={(e) => onFieldChange('ingredient_name', e.target.value)}
+        placeholder="Ingredient name..."
+        style={{ flex: 1 }}
+      />
+      <button
+        type="button"
+        className="mapping-btn"
+        onClick={() => setShowSearch(true)}
+        title="Map to product"
+      >
+        🔗 Map
+      </button>
+    </div>
+  );
+}
+
 function RecipeIngredients({ recipe, onIngredientsChange }) {
   const [commonProducts, setCommonProducts] = useState([]);
   const [units, setUnits] = useState([]);
@@ -854,6 +964,8 @@ function RecipeIngredients({ recipe, onIngredientsChange }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [filteredProducts, setFilteredProducts] = useState([]);
   const [showAutocomplete, setShowAutocomplete] = useState(false);
+  const [editingIngredientId, setEditingIngredientId] = useState(null);
+  const [editedValues, setEditedValues] = useState({});
 
   useEffect(() => {
     fetchCommonProducts();
@@ -960,6 +1072,75 @@ function RecipeIngredients({ recipe, onIngredientsChange }) {
     }
   };
 
+  const handleStartEdit = (ingredientId) => {
+    const ingredient = recipe.ingredients.find(i => i.id === ingredientId);
+    setEditingIngredientId(ingredientId);
+    setEditedValues({
+      id: ingredient.id,
+      common_product_id: ingredient.common_product_id,
+      ingredient_name: ingredient.ingredient_name,
+      common_name: ingredient.common_name,
+      quantity: ingredient.quantity,
+      unit_id: ingredient.unit_id,
+      yield_percentage: ingredient.yield_percentage
+    });
+  };
+
+  const handleFieldChange = (field, value) => {
+    setEditedValues(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleSave = async () => {
+    // Validation
+    if (!editedValues.quantity || parseFloat(editedValues.quantity) <= 0) {
+      alert('Quantity must be greater than 0');
+      return;
+    }
+
+    if (!editedValues.unit_id) {
+      alert('Unit is required');
+      return;
+    }
+
+    if (!editedValues.common_product_id && !editedValues.ingredient_name) {
+      alert('Ingredient must be mapped to a product or have a name');
+      return;
+    }
+
+    try {
+      const updates = {
+        quantity: parseFloat(editedValues.quantity),
+        unit_id: parseInt(editedValues.unit_id),
+        yield_percentage: parseFloat(editedValues.yield_percentage)
+      };
+
+      // Include mapping changes
+      if (editedValues.common_product_id !== undefined) {
+        updates.common_product_id = editedValues.common_product_id;
+      }
+      if (editedValues.ingredient_name !== undefined) {
+        updates.ingredient_name = editedValues.ingredient_name;
+      }
+
+      await axios.patch(
+        `${API_URL}/recipes/${recipe.id}/ingredients/${editedValues.id}`,
+        updates
+      );
+
+      onIngredientsChange(); // Refresh data
+      setEditingIngredientId(null);
+      setEditedValues({});
+    } catch (error) {
+      console.error('Error updating ingredient:', error);
+      alert(error.response?.data?.detail || 'Failed to update ingredient');
+    }
+  };
+
+  const handleCancel = () => {
+    setEditingIngredientId(null);
+    setEditedValues({});
+  };
+
   return (
     <div className="recipe-section">
       <h2>Ingredients</h2>
@@ -967,6 +1148,7 @@ function RecipeIngredients({ recipe, onIngredientsChange }) {
         <table className="ingredients-table">
           <thead>
             <tr>
+              <th style={{ width: '60px', textAlign: 'center' }}>Mapped?</th>
               <th>Ingredient</th>
               <th>Quantity</th>
               <th>Unit</th>
@@ -976,38 +1158,112 @@ function RecipeIngredients({ recipe, onIngredientsChange }) {
           </thead>
           <tbody>
             {recipe.ingredients && recipe.ingredients.length > 0 ? (
-              recipe.ingredients.map((ing) => (
-                <tr key={ing.id}>
-                  <td>
-                    {ing.ingredient_name || ing.common_name || ing.sub_recipe_name || 'Unknown'}
-                    {ing.ingredient_name && !ing.common_product_id && (
-                      <span className="unmapped-badge" style={{ marginLeft: '8px', padding: '3px 8px', background: '#fef3c7', color: '#92400e', borderRadius: '4px', fontSize: '11px', fontWeight: '600' }}>
-                        Text only
-                      </span>
-                    )}
-                  </td>
-                  <td>{ing.quantity}</td>
-                  <td>{ing.unit_abbreviation}</td>
-                  <td>{ing.yield_percentage}%</td>
-                  <td>
-                    <button
-                      className="btn-icon-small"
-                      onClick={() => handleRemoveIngredient(ing.id)}
-                      title="Remove ingredient"
-                    >
-                      ×
-                    </button>
-                  </td>
-                </tr>
-              ))
+              recipe.ingredients.map((ing) => {
+                const isEditing = editingIngredientId === ing.id;
+                const values = isEditing ? editedValues : ing;
+
+                return (
+                  <tr key={ing.id} className={isEditing ? 'editing' : ''}>
+                    {/* Mapped Indicator Column */}
+                    <td className="mapped-cell">
+                      {values.common_product_id ?
+                        <span className="mapped-yes">✓</span> :
+                        <span className="mapped-no">×</span>
+                      }
+                    </td>
+
+                    {/* Ingredient Name/Mapping Column */}
+                    <td>
+                      {isEditing ? (
+                        <IngredientMappingCell
+                          values={values}
+                          onFieldChange={handleFieldChange}
+                          commonProducts={commonProducts}
+                        />
+                      ) : (
+                        <span onClick={() => handleStartEdit(ing.id)}>
+                          {ing.ingredient_name || ing.common_name || 'Unknown'}
+                        </span>
+                      )}
+                    </td>
+
+                    {/* Quantity Column */}
+                    <td>
+                      {isEditing ? (
+                        <input
+                          type="number"
+                          className="inline-edit-input"
+                          value={values.quantity}
+                          onChange={(e) => handleFieldChange('quantity', e.target.value)}
+                          step="0.01"
+                        />
+                      ) : (
+                        <span onClick={() => handleStartEdit(ing.id)}>{ing.quantity}</span>
+                      )}
+                    </td>
+
+                    {/* Unit Column */}
+                    <td>
+                      {isEditing ? (
+                        <select
+                          className="inline-edit-select"
+                          value={values.unit_id}
+                          onChange={(e) => handleFieldChange('unit_id', e.target.value)}
+                        >
+                          {units.map(u => (
+                            <option key={u.id} value={u.id}>{u.abbreviation}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span onClick={() => handleStartEdit(ing.id)}>{ing.unit_abbreviation}</span>
+                      )}
+                    </td>
+
+                    {/* Yield % Column */}
+                    <td>
+                      {isEditing ? (
+                        <input
+                          type="number"
+                          className="inline-edit-input"
+                          value={values.yield_percentage}
+                          onChange={(e) => handleFieldChange('yield_percentage', e.target.value)}
+                          min="0"
+                          max="100"
+                          step="1"
+                        />
+                      ) : (
+                        <span onClick={() => handleStartEdit(ing.id)}>{ing.yield_percentage}%</span>
+                      )}
+                    </td>
+
+                    {/* Actions Column */}
+                    <td>
+                      {isEditing ? (
+                        <>
+                          <button className="btn-icon-small" onClick={handleSave} title="Save">✓</button>
+                          <button className="btn-icon-small" onClick={handleCancel} title="Cancel">×</button>
+                        </>
+                      ) : (
+                        <button
+                          className="btn-icon-small"
+                          onClick={() => handleRemoveIngredient(ing.id)}
+                          title="Delete"
+                        >
+                          ×
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })
             ) : (
               <tr>
-                <td colSpan="5" className="empty-cell">No ingredients yet</td>
+                <td colSpan="6" className="empty-cell">No ingredients yet</td>
               </tr>
             )}
             {showAddRow && (
               <tr className="ingredient-add-row">
-                <td colSpan="5">
+                <td colSpan="6">
                   <div style={{ marginBottom: '0.75rem' }}>
                     <div className="add-mode-toggle" style={{ display: 'inline-flex', gap: 0, border: '1px solid #d1d5db', borderRadius: '6px', overflow: 'hidden' }}>
                       <button

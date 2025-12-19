@@ -692,14 +692,30 @@ def update_ingredient(recipe_id: int, ingredient_id: int, updates: dict, current
             raise HTTPException(status_code=404, detail="Ingredient not found")
 
         # Build update query
-        allowed_fields = ['quantity', 'unit_id', 'yield_percentage', 'notes']
+        allowed_fields = ['quantity', 'unit_id', 'yield_percentage', 'notes', 'common_product_id', 'ingredient_name']
         update_fields = []
         params = []
+
+        # Validate mutual exclusivity of product mapping and text name
+        if 'common_product_id' in updates and 'ingredient_name' in updates:
+            if updates.get('common_product_id') and updates.get('ingredient_name'):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Cannot specify both common_product_id and ingredient_name"
+                )
 
         for field, value in updates.items():
             if field in allowed_fields:
                 update_fields.append(f"{field} = %s")
                 params.append(value)
+
+        # Auto-clear opposite field when mapping changes
+        if 'common_product_id' in updates and updates.get('common_product_id') is not None:
+            # When mapping to product, clear text name
+            update_fields.append("ingredient_name = NULL")
+        elif 'ingredient_name' in updates and updates.get('ingredient_name') is not None:
+            # When setting text name, clear product mapping
+            update_fields.append("common_product_id = NULL")
 
         if not update_fields:
             raise HTTPException(status_code=400, detail="No valid fields to update")
