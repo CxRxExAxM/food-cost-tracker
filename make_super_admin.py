@@ -17,9 +17,9 @@ def make_super_admin(email):
     engine = create_engine(database_url)
     
     with engine.connect() as conn:
-        # Update user to be super admin
+        # Update user to be super admin (is_super_admin is integer: 1 = true, 0 = false)
         result = conn.execute(
-            text("UPDATE users SET is_super_admin = true WHERE email = :email"),
+            text("UPDATE users SET is_super_admin = 1 WHERE email = :email"),
             {"email": email}
         )
         conn.commit()
@@ -43,7 +43,7 @@ def make_super_admin(email):
         print(f"  Email: {user[1]}")
         print(f"  Name: {user[2]}")
         print(f"  Role: {user[3]}")
-        print(f"  Super Admin: {user[4]}")
+        print(f"  Super Admin: {bool(user[4])}")
         print(f"  Organization ID: {user[5]}")
 
 if __name__ == "__main__":
