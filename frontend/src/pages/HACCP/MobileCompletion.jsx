@@ -23,7 +23,7 @@ function MobileCompletion() {
 
       // Initialize results object
       const initialResults = {};
-      foundTemplate?.checks.forEach(check => {
+      foundChecklist?.checks.forEach(check => {
         initialResults[check.id] = {
           value: null,
           requiresCorrectiveAction: false,
