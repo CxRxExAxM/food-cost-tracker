@@ -22,7 +22,10 @@ def initialize_database():
         print(f"[db_startup] DEBUG: __file__ = {__file__}")
         print(f"[db_startup] DEBUG: project_root = {project_root}")
         print(f"[db_startup] DEBUG: project_root exists = {project_root.exists()}")
-        print(f"[db_startup] DEBUG: project_root contents = {list(project_root.iterdir())[:10]}")
+        print(f"[db_startup] DEBUG: project_root contents = {sorted([p.name for p in project_root.iterdir()])}")
+
+        alembic_ini = project_root / "alembic.ini"
+        print(f"[db_startup] DEBUG: alembic.ini exists = {alembic_ini.exists()}")
 
         alembic_path = project_root / "alembic"
         print(f"[db_startup] DEBUG: alembic_path = {alembic_path}")

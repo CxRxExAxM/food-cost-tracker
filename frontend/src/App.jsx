@@ -13,8 +13,8 @@ import SuperAdminOrganizations from './pages/SuperAdmin/Organizations';
 import SuperAdminOrganizationDetail from './pages/SuperAdmin/OrganizationDetail';
 import SuperAdminAuditLogs from './pages/SuperAdmin/AuditLogs';
 import HACCPHome from './pages/HACCP/HACCPHome';
-import Templates from './pages/HACCP/Templates';
-import TemplateBuilder from './pages/HACCP/TemplateBuilder';
+import Checklists from './pages/HACCP/Checklists';
+import ChecklistBuilder from './pages/HACCP/ChecklistBuilder';
 import MobileCompletion from './pages/HACCP/MobileCompletion';
 import Reports from './pages/HACCP/Reports';
 import Assignments from './pages/HACCP/Assignments';
@@ -195,26 +195,26 @@ function AppRoutes() {
         }
       />
       <Route
-        path="/haccp/templates"
+        path="/haccp/checklists"
         element={
           <ProtectedRoute>
-            <Templates />
+            <Checklists />
           </ProtectedRoute>
         }
       />
       <Route
-        path="/haccp/templates/new"
+        path="/haccp/checklists/new"
         element={
           <ProtectedRoute>
-            <TemplateBuilder />
+            <ChecklistBuilder />
           </ProtectedRoute>
         }
       />
       <Route
-        path="/haccp/templates/:id/edit"
+        path="/haccp/checklists/:id/edit"
         element={
           <ProtectedRoute>
-            <TemplateBuilder />
+            <ChecklistBuilder />
           </ProtectedRoute>
         }
       />

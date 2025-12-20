@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Navigation from '../../components/Navigation';
-import { mockInstances, mockTemplates, mockSensors } from './mockData';
+import { mockInstances, mockChecklists, mockSensors } from './mockData';
 import './HACCP.css';
 
 function MobileCompletion() {
@@ -9,17 +9,17 @@ function MobileCompletion() {
   const navigate = useNavigate();
 
   const [instance, setInstance] = useState(null);
-  const [template, setTemplate] = useState(null);
+  const [checklist, setChecklist] = useState(null);
   const [currentCheckIndex, setCurrentCheckIndex] = useState(0);
   const [results, setResults] = useState({});
 
-  // Load instance and template data
+  // Load instance and checklist data
   useEffect(() => {
     const foundInstance = mockInstances.find(i => i.id === parseInt(instanceId));
     if (foundInstance) {
       setInstance(foundInstance);
-      const foundTemplate = mockTemplates.find(t => t.id === foundInstance.template_id);
-      setTemplate(foundTemplate);
+      const foundChecklist = mockChecklists.find(t => t.id === foundInstance.checklist_id);
+      setChecklist(foundChecklist);
 
       // Initialize results object
       const initialResults = {};
@@ -34,7 +34,7 @@ function MobileCompletion() {
     }
   }, [instanceId]);
 
-  if (!instance || !template) {
+  if (!instance || !checklist) {
     return (
       <div className="haccp-page">
         <Navigation />
@@ -45,9 +45,9 @@ function MobileCompletion() {
     );
   }
 
-  const currentCheck = template.checks[currentCheckIndex];
+  const currentCheck = checklist.checks[currentCheckIndex];
   const isFirstCheck = currentCheckIndex === 0;
-  const isLastCheck = currentCheckIndex === template.checks.length - 1;
+  const isLastCheck = currentCheckIndex === checklist.checks.length - 1;
 
   // Navigation handlers
   const handleNext = () => {
@@ -100,13 +100,13 @@ function MobileCompletion() {
   const handleSubmit = () => {
     console.log('Submitting checklist completion:', {
       instance_id: instance.id,
-      template_id: template.id,
-      template_name: template.name,
+      checklist_id: checklist.id,
+      checklist_name: checklist.name,
       outlet: instance.outlet_name,
       results: results
     });
 
-    alert(`Checklist completed!\n\nResults logged to console (Demo mode - not persisted)\n\nTemplate: ${template.name}\nOutlet: ${instance.outlet_name}\nChecks completed: ${template.checks.length}`);
+    alert(`Checklist completed!\n\nResults logged to console (Demo mode - not persisted)\n\nTemplate: ${checklist.name}\nOutlet: ${instance.outlet_name}\nChecks completed: ${checklist.checks.length}`);
 
     navigate('/haccp');
   };
@@ -380,11 +380,11 @@ function MobileCompletion() {
       <Navigation />
       <div className="mobile-completion">
         <div className="completion-header">
-          <h1>{template.name}</h1>
+          <h1>{checklist.name}</h1>
           <div className="completion-meta">
             <span className="completion-outlet">{instance.outlet_name}</span>
             <span className="completion-progress">
-              Check {currentCheckIndex + 1} of {template.checks.length}
+              Check {currentCheckIndex + 1} of {checklist.checks.length}
             </span>
           </div>
         </div>

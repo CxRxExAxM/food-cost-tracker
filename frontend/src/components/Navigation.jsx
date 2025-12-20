@@ -98,8 +98,8 @@ function Navigation() {
                 <Link to="/haccp" className={`nav-link ${isActivePath('/haccp') ? 'active' : ''}`}>
                   Dashboard
                 </Link>
-                <Link to="/haccp/templates" className={`nav-link ${isActivePath('/haccp/templates') || location.pathname.includes('/haccp/templates/') ? 'active' : ''}`}>
-                  Templates
+                <Link to="/haccp/checklists" className={`nav-link ${isActivePath('/haccp/checklists') || location.pathname.includes('/haccp/checklists/') ? 'active' : ''}`}>
+                  Checklists
                 </Link>
                 <Link to="/haccp/assignments" className={`nav-link ${isActivePath('/haccp/assignments') ? 'active' : ''}`}>
                   Assignments

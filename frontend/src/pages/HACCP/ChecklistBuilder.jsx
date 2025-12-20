@@ -54,9 +54,9 @@ const CHECK_TYPES = [
   }
 ];
 
-function TemplateBuilder() {
+function ChecklistBuilder() {
   const navigate = useNavigate();
-  const [templateName, setTemplateName] = useState('');
+  const [checklistName, setChecklistName] = useState('');
   const [description, setDescription] = useState('');
   const [checks, setChecks] = useState([]);
   const [draggedCheckType, setDraggedCheckType] = useState(null);
@@ -145,25 +145,25 @@ function TemplateBuilder() {
 
   // Handle save (mock for demo)
   const handleSave = () => {
-    console.log('Saving template:', {
-      name: templateName,
+    console.log('Saving checklist:', {
+      name: checklistName,
       description,
       checks
     });
-    alert('Template saved! (Demo mode - not persisted)');
-    navigate('/haccp/templates');
+    alert('Checklist saved! (Demo mode - not persisted)');
+    navigate('/haccp/checklists');
   };
 
   const handleCancel = () => {
-    navigate('/haccp/templates');
+    navigate('/haccp/checklists');
   };
 
   return (
     <div className="haccp-page">
       <Navigation />
-      <div className="template-builder">
+      <div className="checklist-builder">
         <div className="builder-header">
-          <h1>Template Builder</h1>
+          <h1>Checklist Builder</h1>
           <div className="builder-actions">
             <button className="btn btn-secondary" onClick={handleCancel}>
               Cancel
@@ -171,9 +171,9 @@ function TemplateBuilder() {
             <button
               className="btn btn-primary"
               onClick={handleSave}
-              disabled={!templateName || checks.length === 0}
+              disabled={!checklistName || checks.length === 0}
             >
-              Save Template
+              Save Checklist
             </button>
           </div>
         </div>
@@ -207,13 +207,13 @@ function TemplateBuilder() {
             onDrop={handleCanvasDrop}
             onDragOver={handleCanvasDragOver}
           >
-            <div className="template-form">
+            <div className="checklist-form">
               <input
                 type="text"
-                placeholder="Template Name"
+                placeholder="Checklist Name"
                 className="input-large"
-                value={templateName}
-                onChange={(e) => setTemplateName(e.target.value)}
+                value={checklistName}
+                onChange={(e) => setChecklistName(e.target.value)}
               />
               <textarea
                 placeholder="Description"
@@ -227,7 +227,7 @@ function TemplateBuilder() {
             <div className="checks-list">
               {checks.length === 0 ? (
                 <p className="empty-state">
-                  Drag check types from the library to build your template
+                  Drag check types from the library to build your checklist
                 </p>
               ) : (
                 checks.map((check, index) => (
@@ -269,7 +269,7 @@ function TemplateBuilder() {
               ) : (
                 <div className="preview-content">
                   <div className="preview-header">
-                    <h4>{templateName || 'Untitled Template'}</h4>
+                    <h4>{checklistName || 'Untitled Checklist'}</h4>
                     <span className="preview-progress">Check 1 of {checks.length}</span>
                   </div>
                   <div className="preview-check">
@@ -343,4 +343,4 @@ function TemplateBuilder() {
   );
 }
 
-export default TemplateBuilder;
+export default ChecklistBuilder;

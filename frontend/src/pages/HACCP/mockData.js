@@ -67,7 +67,7 @@ export const mockSensors = [
   }
 ];
 
-export const mockTemplates = [
+export const mockChecklists = [
   {
     id: 1,
     name: "Morning Cooler Temperatures",
@@ -217,8 +217,8 @@ export const mockTemplates = [
 export const mockAssignments = [
   {
     id: 1,
-    template_id: 1,
-    template_name: "Morning Cooler Temperatures",
+    checklist_id: 1,
+    checklist_name: "Morning Cooler Temperatures",
     outlet_id: 1,
     outlet_name: "Downtown Kitchen",
     assigned_to: ["John Smith", "Sarah Chen"],
@@ -230,8 +230,8 @@ export const mockAssignments = [
   },
   {
     id: 2,
-    template_id: 1,
-    template_name: "Morning Cooler Temperatures",
+    checklist_id: 1,
+    checklist_name: "Morning Cooler Temperatures",
     outlet_id: 2,
     outlet_name: "Westside Location",
     assigned_to: ["Mike Johnson"],
@@ -243,8 +243,8 @@ export const mockAssignments = [
   },
   {
     id: 3,
-    template_id: 2,
-    template_name: "Weekly Thermometer Calibration",
+    checklist_id: 2,
+    checklist_name: "Weekly Thermometer Calibration",
     outlet_id: 1,
     outlet_name: "Downtown Kitchen",
     assigned_to: ["Sarah Chen"],
@@ -256,8 +256,8 @@ export const mockAssignments = [
   },
   {
     id: 4,
-    template_id: 2,
-    template_name: "Weekly Thermometer Calibration",
+    checklist_id: 2,
+    checklist_name: "Weekly Thermometer Calibration",
     outlet_id: 2,
     outlet_name: "Westside Location",
     assigned_to: ["Mike Johnson"],
@@ -269,8 +269,8 @@ export const mockAssignments = [
   },
   {
     id: 5,
-    template_id: 3,
-    template_name: "Monthly Kitchen Safety Meeting",
+    checklist_id: 3,
+    checklist_name: "Monthly Kitchen Safety Meeting",
     outlet_id: null, // org-wide
     outlet_name: "All Outlets",
     assigned_to: ["John Smith", "Sarah Chen", "Mike Johnson"],
@@ -282,8 +282,8 @@ export const mockAssignments = [
   },
   {
     id: 6,
-    template_id: 4,
-    template_name: "IoT Monitored Cooler Check",
+    checklist_id: 4,
+    checklist_name: "IoT Monitored Cooler Check",
     outlet_id: 1,
     outlet_name: "Downtown Kitchen",
     assigned_to: ["John Smith", "Sarah Chen"],
@@ -299,8 +299,8 @@ export const mockInstances = [
   {
     id: 1,
     assignment_id: 1,
-    template_id: 1,
-    template_name: "Morning Cooler Temperatures",
+    checklist_id: 1,
+    checklist_name: "Morning Cooler Temperatures",
     outlet_id: 1,
     outlet_name: "Downtown Kitchen",
     due_date: "2024-12-19",
@@ -311,8 +311,8 @@ export const mockInstances = [
   {
     id: 2,
     assignment_id: 2,
-    template_id: 1,
-    template_name: "Morning Cooler Temperatures",
+    checklist_id: 1,
+    checklist_name: "Morning Cooler Temperatures",
     outlet_id: 2,
     outlet_name: "Westside Location",
     due_date: "2024-12-19",
@@ -325,8 +325,8 @@ export const mockInstances = [
   {
     id: 3,
     assignment_id: 1,
-    template_id: 1,
-    template_name: "Morning Cooler Temperatures",
+    checklist_id: 1,
+    checklist_name: "Morning Cooler Temperatures",
     outlet_id: 1,
     outlet_name: "Downtown Kitchen",
     due_date: "2024-12-18",
@@ -340,8 +340,8 @@ export const mockInstances = [
   {
     id: 4,
     assignment_id: 6,
-    template_id: 4,
-    template_name: "IoT Monitored Cooler Check",
+    checklist_id: 4,
+    checklist_name: "IoT Monitored Cooler Check",
     outlet_id: 1,
     outlet_name: "Downtown Kitchen",
     due_date: "2024-12-19",
@@ -468,7 +468,7 @@ export const getResultsForInstance = (instanceId) => {
 
 // Stats for dashboard
 export const mockStats = {
-  totalTemplates: mockTemplates.length,
+  totalChecklists: mockChecklists.length,
   activeAssignments: mockAssignments.length,
   dueToday: getDueInstancesCount(),
   completedThisWeek: getCompletedInstancesCount(7),

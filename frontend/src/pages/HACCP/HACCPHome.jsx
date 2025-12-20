@@ -21,10 +21,10 @@ function HACCPHome() {
           <div className="stat-card">
             <div className="stat-icon">📋</div>
             <div className="stat-content">
-              <div className="stat-value">{stats.totalTemplates}</div>
-              <div className="stat-label">Templates</div>
+              <div className="stat-value">{stats.totalChecklists}</div>
+              <div className="stat-label">Checklists</div>
             </div>
-            <Link to="/haccp/templates" className="stat-action">
+            <Link to="/haccp/checklists" className="stat-action">
               Manage →
             </Link>
           </div>
@@ -67,9 +67,9 @@ function HACCPHome() {
         <div className="quick-actions">
           <h2>Quick Actions</h2>
           <div className="action-buttons">
-            <Link to="/haccp/templates/new" className="btn btn-primary">
+            <Link to="/haccp/checklists/new" className="btn btn-primary">
               <span className="btn-icon">+</span>
-              Create New Template
+              Create New Checklist
             </Link>
             <Link to="/haccp/assignments" className="btn btn-secondary">
               <span className="btn-icon">📌</span>
@@ -86,7 +86,7 @@ function HACCPHome() {
               {pendingInstances.map(instance => (
                 <div key={instance.id} className="checklist-item">
                   <div className="checklist-info">
-                    <h3>{instance.template_name}</h3>
+                    <h3>{instance.checklist_name}</h3>
                     <p>{instance.outlet_name}</p>
                     <div className="assigned-to">
                       Assigned to: {instance.assigned_to.join(', ')}
