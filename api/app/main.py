@@ -6,7 +6,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from .routers import products, common_products, distributors, units, recipes, uploads, auth, organizations, outlets, super_admin, ai_parse
-from .db_startup import initialize_database
 
 app = FastAPI(
     title="RestauranTek API",
@@ -23,8 +22,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize database on startup (PostgreSQL with Alembic migrations)
-initialize_database()
+# Note: Database migrations are handled by the Docker CMD: "alembic upgrade head && uvicorn..."
+# This ensures migrations run before the app starts, with proper working directory context
 
 # Include routers with /api prefix
 app.include_router(auth.router, prefix="/api")
