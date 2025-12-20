@@ -79,6 +79,38 @@ function Navigation() {
             <Link to="/" className={`nav-link ${isActivePath('/') ? 'active' : ''}`}>
               Home
             </Link>
+
+            {/* Food Cost Module Links */}
+            {currentModule === 'Food Cost Tracker' && (
+              <>
+                <Link to="/products" className={`nav-link ${isActivePath('/products') ? 'active' : ''}`}>
+                  Products
+                </Link>
+                <Link to="/recipes" className={`nav-link ${isActivePath('/recipes') ? 'active' : ''}`}>
+                  Recipes
+                </Link>
+              </>
+            )}
+
+            {/* HACCP Module Links */}
+            {currentModule === 'HACCP Compliance' && (
+              <>
+                <Link to="/haccp" className={`nav-link ${isActivePath('/haccp') ? 'active' : ''}`}>
+                  Dashboard
+                </Link>
+                <Link to="/haccp/templates" className={`nav-link ${isActivePath('/haccp/templates') || location.pathname.includes('/haccp/templates/') ? 'active' : ''}`}>
+                  Templates
+                </Link>
+                <Link to="/haccp/assignments" className={`nav-link ${isActivePath('/haccp/assignments') ? 'active' : ''}`}>
+                  Assignments
+                </Link>
+                <Link to="/haccp/reports" className={`nav-link ${isActivePath('/haccp/reports') ? 'active' : ''}`}>
+                  Reports
+                </Link>
+              </>
+            )}
+
+            {/* Global Admin Links */}
             {isAdmin() && (
               <Link to="/users" className={`nav-link ${isActivePath('/users') ? 'active' : ''}`}>
                 Users
