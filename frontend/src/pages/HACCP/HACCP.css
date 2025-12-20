@@ -1388,3 +1388,241 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ==========================================
+   ASSIGNMENTS PAGE
+   ========================================== */
+
+.assignments-content {
+  margin-top: var(--space-6);
+}
+
+.assignments-table-container {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.assignments-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.assignments-table thead {
+  background: var(--bg-tertiary);
+  border-bottom: 2px solid var(--border-default);
+}
+
+.assignments-table th {
+  padding: var(--space-4);
+  text-align: left;
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+  font-size: var(--text-xs);
+}
+
+.assignments-table tbody tr {
+  border-bottom: 1px solid var(--border-subtle);
+  transition: background var(--transition-base);
+}
+
+.assignments-table tbody tr:last-child {
+  border-bottom: none;
+}
+
+.assignments-table tbody tr:hover {
+  background: var(--bg-tertiary);
+}
+
+.assignments-table td {
+  padding: var(--space-4);
+  vertical-align: middle;
+}
+
+.checklist-cell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.checklist-name {
+  font-weight: var(--font-weight-medium);
+  color: var(--text-primary);
+}
+
+.outlet-badge {
+  display: inline-block;
+  padding: var(--space-1) var(--space-3);
+  background: var(--color-blue);
+  color: white;
+  border-radius: var(--radius-md);
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+}
+
+.assigned-users {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.user-tag {
+  display: inline-block;
+  padding: var(--space-1) var(--space-2);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.recurrence-display {
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+}
+
+.assignment-actions {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: flex-end;
+}
+
+.btn-icon {
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  padding: var(--space-2);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-size: var(--text-base);
+  transition: all var(--transition-base);
+  color: var(--text-secondary);
+}
+
+.btn-icon:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--border-default);
+  color: var(--text-primary);
+}
+
+.btn-icon.btn-delete:hover {
+  background: #ff6464;
+  border-color: #ff6464;
+  color: white;
+}
+
+/* Assignment Modal */
+.assignment-modal {
+  max-width: 800px;
+}
+
+.user-checkbox-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.user-checkbox-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background var(--transition-base);
+}
+
+.user-checkbox-item:hover {
+  background: var(--bg-secondary);
+}
+
+.user-checkbox-item input[type="checkbox"] {
+  cursor: pointer;
+  width: 18px;
+  height: 18px;
+}
+
+.user-checkbox-item span {
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+}
+
+.day-selector {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: var(--space-2);
+}
+
+.day-checkbox {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-base);
+}
+
+.day-checkbox:hover {
+  background: var(--bg-secondary);
+  border-color: var(--border-default);
+}
+
+.day-checkbox input[type="checkbox"] {
+  cursor: pointer;
+  width: 18px;
+  height: 18px;
+}
+
+.day-checkbox input[type="checkbox"]:checked + span {
+  color: var(--color-blue);
+  font-weight: var(--font-weight-semibold);
+}
+
+.day-checkbox span {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  font-weight: var(--font-weight-medium);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+}
+
+/* Responsive Assignments Table */
+@media (max-width: 1024px) {
+  .assignments-table {
+    font-size: var(--text-xs);
+  }
+
+  .assignments-table th,
+  .assignments-table td {
+    padding: var(--space-3);
+  }
+}
+
+@media (max-width: 768px) {
+  .assignments-table-container {
+    overflow-x: auto;
+  }
+
+  .assignments-table {
+    min-width: 900px;
+  }
+
+  .day-selector {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
