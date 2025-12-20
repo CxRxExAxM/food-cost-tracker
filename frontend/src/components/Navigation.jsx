@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import OutletSelector from './outlets/OutletSelector';
@@ -36,6 +36,26 @@ function Navigation() {
     return location.pathname === path;
   };
 
+  // Determine current module based on route
+  const currentModule = useMemo(() => {
+    const path = location.pathname;
+
+    // HACCP module routes
+    if (path.startsWith('/haccp')) {
+      return 'HACCP Compliance';
+    }
+
+    // Food Cost module routes (existing features)
+    if (path.startsWith('/food-cost') ||
+        path === '/products' ||
+        path === '/recipes') {
+      return 'Food Cost Tracker';
+    }
+
+    // No module context for home, admin, super-admin, etc.
+    return null;
+  }, [location.pathname]);
+
   // Get organization name from user object
   // Note: We'll need to add organization info to the user object from AuthContext
   const organizationName = user?.organization_name || 'Organization';
@@ -49,19 +69,15 @@ function Navigation() {
           <div className="nav-brand">
             <Link to="/" className="brand-link">
               <div className="brand-name">RestauranTek</div>
-              <div className="brand-module">Food Cost Tracker</div>
+              {currentModule && (
+                <div className="brand-module">{currentModule}</div>
+              )}
             </Link>
           </div>
 
           <div className="nav-links">
             <Link to="/" className={`nav-link ${isActivePath('/') ? 'active' : ''}`}>
               Home
-            </Link>
-            <Link to="/products" className={`nav-link ${isActivePath('/products') ? 'active' : ''}`}>
-              Products
-            </Link>
-            <Link to="/recipes" className={`nav-link ${isActivePath('/recipes') ? 'active' : ''}`}>
-              Recipes
             </Link>
             {isAdmin() && (
               <Link to="/users" className={`nav-link ${isActivePath('/users') ? 'active' : ''}`}>

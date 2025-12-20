@@ -12,6 +12,12 @@ import SuperAdminDashboard from './pages/SuperAdmin/Dashboard';
 import SuperAdminOrganizations from './pages/SuperAdmin/Organizations';
 import SuperAdminOrganizationDetail from './pages/SuperAdmin/OrganizationDetail';
 import SuperAdminAuditLogs from './pages/SuperAdmin/AuditLogs';
+import HACCPHome from './pages/HACCP/HACCPHome';
+import Templates from './pages/HACCP/Templates';
+import TemplateBuilder from './pages/HACCP/TemplateBuilder';
+import MobileCompletion from './pages/HACCP/MobileCompletion';
+import Reports from './pages/HACCP/Reports';
+import Assignments from './pages/HACCP/Assignments';
 import ImpersonationBanner from './components/ImpersonationBanner';
 import './App.css';
 
@@ -177,6 +183,63 @@ function AppRoutes() {
           <SuperAdminRoute>
             <SuperAdminAuditLogs />
           </SuperAdminRoute>
+        }
+      />
+      {/* HACCP Module Routes */}
+      <Route
+        path="/haccp"
+        element={
+          <ProtectedRoute>
+            <HACCPHome />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/haccp/templates"
+        element={
+          <ProtectedRoute>
+            <Templates />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/haccp/templates/new"
+        element={
+          <ProtectedRoute>
+            <TemplateBuilder />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/haccp/templates/:id/edit"
+        element={
+          <ProtectedRoute>
+            <TemplateBuilder />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/haccp/assignments"
+        element={
+          <ProtectedRoute>
+            <Assignments />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/haccp/complete/:instanceId"
+        element={
+          <ProtectedRoute>
+            <MobileCompletion />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/haccp/reports"
+        element={
+          <ProtectedRoute>
+            <Reports />
+          </ProtectedRoute>
         }
       />
     </Routes>
