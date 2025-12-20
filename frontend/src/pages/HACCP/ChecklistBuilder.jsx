@@ -1,6 +1,7 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import Navigation from '../../components/Navigation';
+import { mockChecklists } from './mockData';
 import './HACCP.css';
 
 // Available check types for the library
@@ -56,11 +57,29 @@ const CHECK_TYPES = [
 
 function ChecklistBuilder() {
   const navigate = useNavigate();
+  const { id } = useParams();
   const [checklistName, setChecklistName] = useState('');
   const [description, setDescription] = useState('');
   const [checks, setChecks] = useState([]);
   const [draggedCheckType, setDraggedCheckType] = useState(null);
   const [draggedCheckIndex, setDraggedCheckIndex] = useState(null);
+  const [editingCheck, setEditingCheck] = useState(null);
+  const [editingCheckIndex, setEditingCheckIndex] = useState(null);
+
+  // Load existing checklist data when editing
+  useEffect(() => {
+    if (id) {
+      const checklist = mockChecklists.find(c => c.id === parseInt(id));
+      if (checklist) {
+        setChecklistName(checklist.name);
+        setDescription(checklist.description || '');
+        setChecks(checklist.checks || []);
+      }
+    }
+  }, [id]);
+
+  // Determine if we're in edit mode
+  const isEditMode = !!id;
 
   // Handle dragging a check type from the library
   const handleCheckTypeDragStart = (checkType) => {
@@ -137,6 +156,28 @@ function ChecklistBuilder() {
     setChecks(newChecks);
   };
 
+  // Open edit modal for a check
+  const handleEditCheck = (index) => {
+    setEditingCheckIndex(index);
+    setEditingCheck({ ...checks[index] });
+  };
+
+  // Close edit modal
+  const handleCloseEditModal = () => {
+    setEditingCheck(null);
+    setEditingCheckIndex(null);
+  };
+
+  // Save edited check
+  const handleSaveCheckEdit = () => {
+    if (editingCheckIndex !== null && editingCheck) {
+      const newChecks = [...checks];
+      newChecks[editingCheckIndex] = editingCheck;
+      setChecks(newChecks);
+      handleCloseEditModal();
+    }
+  };
+
   // Get icon for check type
   const getCheckIcon = (checkType) => {
     const type = CHECK_TYPES.find(t => t.type === checkType);
@@ -145,12 +186,13 @@ function ChecklistBuilder() {
 
   // Handle save (mock for demo)
   const handleSave = () => {
-    console.log('Saving checklist:', {
+    console.log(isEditMode ? 'Updating checklist:' : 'Creating new checklist:', {
+      id: id ? parseInt(id) : null,
       name: checklistName,
       description,
       checks
     });
-    alert('Checklist saved! (Demo mode - not persisted)');
+    alert(isEditMode ? 'Checklist updated! (Demo mode - not persisted)' : 'Checklist created! (Demo mode - not persisted)');
     navigate('/haccp/checklists');
   };
 
@@ -163,7 +205,7 @@ function ChecklistBuilder() {
       <Navigation />
       <div className="checklist-builder">
         <div className="builder-header">
-          <h1>Checklist Builder</h1>
+          <h1>{isEditMode ? 'Edit Checklist' : 'Checklist Builder'}</h1>
           <div className="builder-actions">
             <button className="btn btn-secondary" onClick={handleCancel}>
               Cancel
@@ -173,7 +215,7 @@ function ChecklistBuilder() {
               onClick={handleSave}
               disabled={!checklistName || checks.length === 0}
             >
-              Save Checklist
+              {isEditMode ? 'Update Checklist' : 'Save Checklist'}
             </button>
           </div>
         </div>
@@ -245,13 +287,22 @@ function ChecklistBuilder() {
                       <div className="check-name">{check.name}</div>
                       <div className="check-type-label">{check.check_type.replace('_', ' ')}</div>
                     </div>
-                    <button
-                      className="check-remove"
-                      onClick={() => handleRemoveCheck(index)}
-                      title="Remove check"
-                    >
-                      ×
-                    </button>
+                    <div className="check-actions">
+                      <button
+                        className="check-edit"
+                        onClick={() => handleEditCheck(index)}
+                        title="Edit check"
+                      >
+                        ✎
+                      </button>
+                      <button
+                        className="check-remove"
+                        onClick={() => handleRemoveCheck(index)}
+                        title="Remove check"
+                      >
+                        ×
+                      </button>
+                    </div>
                   </div>
                 ))
               )}
@@ -338,6 +389,160 @@ function ChecklistBuilder() {
             </div>
           </div>
         </div>
+
+        {/* Edit Check Modal */}
+        {editingCheck && (
+          <div className="modal-overlay" onClick={handleCloseEditModal}>
+            <div className="modal-content check-edit-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header">
+                <h2>Edit Check</h2>
+                <button className="modal-close" onClick={handleCloseEditModal}>×</button>
+              </div>
+
+              <div className="modal-body">
+                <div className="form-group">
+                  <label>Check Name</label>
+                  <input
+                    type="text"
+                    className="input-large"
+                    value={editingCheck.name}
+                    onChange={(e) => setEditingCheck({ ...editingCheck, name: e.target.value })}
+                    placeholder="e.g., Walk-in Cooler #1"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Description (Optional)</label>
+                  <textarea
+                    className="textarea"
+                    rows={2}
+                    value={editingCheck.description || ''}
+                    onChange={(e) => setEditingCheck({ ...editingCheck, description: e.target.value })}
+                    placeholder="Additional details about this check"
+                  />
+                </div>
+
+                {/* Configuration fields based on check type */}
+                {editingCheck.check_type === 'cooler_temp' && (
+                  <>
+                    <div className="form-group">
+                      <label>Temperature Threshold</label>
+                      <div className="input-group">
+                        <input
+                          type="number"
+                          step="0.1"
+                          value={editingCheck.config.threshold}
+                          onChange={(e) => setEditingCheck({
+                            ...editingCheck,
+                            config: { ...editingCheck.config, threshold: parseFloat(e.target.value) }
+                          })}
+                        />
+                        <select
+                          value={editingCheck.config.unit}
+                          onChange={(e) => setEditingCheck({
+                            ...editingCheck,
+                            config: { ...editingCheck.config, unit: e.target.value }
+                          })}
+                        >
+                          <option value="°F">°F</option>
+                          <option value="°C">°C</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="form-group">
+                      <label>Comparison</label>
+                      <select
+                        className="input-large"
+                        value={editingCheck.config.comparison}
+                        onChange={(e) => setEditingCheck({
+                          ...editingCheck,
+                          config: { ...editingCheck.config, comparison: e.target.value }
+                        })}
+                      >
+                        <option value="less_than">Must be less than</option>
+                        <option value="greater_than">Must be greater than</option>
+                      </select>
+                    </div>
+                  </>
+                )}
+
+                {editingCheck.check_type === 'thermometer_cal' && (
+                  <>
+                    <div className="form-group">
+                      <label>Ice Water Threshold (°F)</label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        className="input-large"
+                        value={editingCheck.config.ice_water_threshold}
+                        onChange={(e) => setEditingCheck({
+                          ...editingCheck,
+                          config: { ...editingCheck.config, ice_water_threshold: parseFloat(e.target.value) }
+                        })}
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label>Boiling Water Threshold (°F)</label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        className="input-large"
+                        value={editingCheck.config.boiling_water_threshold}
+                        onChange={(e) => setEditingCheck({
+                          ...editingCheck,
+                          config: { ...editingCheck.config, boiling_water_threshold: parseFloat(e.target.value) }
+                        })}
+                      />
+                    </div>
+                  </>
+                )}
+
+                {editingCheck.check_type === 'meeting_notes' && (
+                  <>
+                    <div className="form-group">
+                      <label className="checkbox-label">
+                        <input
+                          type="checkbox"
+                          checked={editingCheck.config.requires_file_upload}
+                          onChange={(e) => setEditingCheck({
+                            ...editingCheck,
+                            config: { ...editingCheck.config, requires_file_upload: e.target.checked }
+                          })}
+                        />
+                        <span>Require file upload</span>
+                      </label>
+                    </div>
+
+                    <div className="form-group">
+                      <label className="checkbox-label">
+                        <input
+                          type="checkbox"
+                          checked={editingCheck.config.requires_attendance}
+                          onChange={(e) => setEditingCheck({
+                            ...editingCheck,
+                            config: { ...editingCheck.config, requires_attendance: e.target.checked }
+                          })}
+                        />
+                        <span>Require attendance tracking</span>
+                      </label>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <div className="modal-footer">
+                <button className="btn btn-secondary" onClick={handleCloseEditModal}>
+                  Cancel
+                </button>
+                <button className="btn btn-primary" onClick={handleSaveCheckEdit}>
+                  Save Changes
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
