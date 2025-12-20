@@ -1,5 +1,6 @@
 # Combined Dockerfile for Render deployment
 # Builds frontend and serves via FastAPI
+# Cache bust: 2025-12-19-v2
 
 # Stage 1: Build frontend
 FROM node:20-alpine AS frontend-builder
