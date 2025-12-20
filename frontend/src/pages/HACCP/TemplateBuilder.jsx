@@ -20,6 +20,19 @@ const CHECK_TYPES = [
     defaultConfig: { threshold: 38, unit: '°F', comparison: 'less_than' }
   },
   {
+    type: 'monitored_cooler_temps',
+    name: 'Monitored Cooler Temps',
+    icon: '📡',
+    description: 'IoT sensor readings in table view',
+    defaultConfig: {
+      sensor_ids: [],
+      threshold_min: 32,
+      threshold_max: 38,
+      unit: '°F',
+      verification_mode: 'exception_only'
+    }
+  },
+  {
     type: 'thermometer_cal',
     name: 'Thermometer Calibration',
     icon: '🔧',
@@ -288,6 +301,20 @@ function TemplateBuilder() {
                         <input type="number" placeholder="°F" />
                         <label>Boiling Water Test</label>
                         <input type="number" placeholder="°F" />
+                      </div>
+                    )}
+
+                    {checks[0].check_type === 'monitored_cooler_temps' && (
+                      <div className="preview-input preview-sensor-table">
+                        <div className="preview-sensor-row">
+                          <span>Walk-in #1</span>
+                          <span>36°F ✓</span>
+                        </div>
+                        <div className="preview-sensor-row">
+                          <span>Bar Cooler</span>
+                          <span>41°F ✗</span>
+                        </div>
+                        <div className="preview-hint">2 of 5 coolers shown</div>
                       </div>
                     )}
 

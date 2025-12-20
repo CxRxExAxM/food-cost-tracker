@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Navigation from '../../components/Navigation';
-import { mockInstances, mockTemplates } from './mockData';
+import { mockInstances, mockTemplates, mockSensors } from './mockData';
 import './HACCP.css';
 
 function MobileCompletion() {
@@ -116,6 +116,7 @@ function MobileCompletion() {
     const checkIcon = {
       'task': '✓',
       'cooler_temp': '🌡️',
+      'monitored_cooler_temps': '📡',
       'thermometer_cal': '🔧',
       'meeting_notes': '📝'
     }[currentCheck.check_type] || '✓';
@@ -294,6 +295,79 @@ function MobileCompletion() {
                   });
                 }}
               />
+            </div>
+          )}
+
+          {/* Monitored Cooler Temps - IoT sensor table */}
+          {currentCheck.check_type === 'monitored_cooler_temps' && (
+            <div className="monitored-temps-input">
+              <div className="sensor-sync-info">
+                <span className="sync-time">Last sync: 2 mins ago</span>
+              </div>
+
+              <div className="sensor-table">
+                <div className="sensor-table-header">
+                  <span>Cooler</span>
+                  <span>Temp</span>
+                  <span>Status</span>
+                </div>
+
+                {mockSensors.map((sensor) => (
+                  <div
+                    key={sensor.id}
+                    className={`sensor-table-row ${sensor.status === 'fail' ? 'sensor-fail' : 'sensor-pass'}`}
+                  >
+                    <span className="sensor-location">{sensor.location_name}</span>
+                    <span className="sensor-temp">{sensor.last_reading}°F</span>
+                    <span className="sensor-status">
+                      {sensor.status === 'pass' ? '✓' : '✗'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="sensor-summary">
+                {mockSensors.filter(s => s.status === 'pass').length} of {mockSensors.length} within acceptable range ({currentCheck.config.threshold_min}-{currentCheck.config.threshold_max}°F)
+              </div>
+
+              {mockSensors.some(s => s.status === 'fail') && (
+                <div className="corrective-action-section">
+                  <h4>Failed Sensors Require Action</h4>
+                  {mockSensors.filter(s => s.status === 'fail').map(sensor => (
+                    <div key={sensor.id} className="failed-sensor-action">
+                      <label className="sensor-action-label">
+                        <strong>{sensor.location_name}</strong> ({sensor.last_reading}°F)
+                      </label>
+                      <label className="corrective-action-label">
+                        <input
+                          type="checkbox"
+                          checked={result?.[`sensor_${sensor.id}_action`] || false}
+                          onChange={(e) => updateResult(currentCheck.id, `sensor_${sensor.id}_action`, e.target.checked)}
+                        />
+                        <span>Corrective action taken</span>
+                      </label>
+                      {result?.[`sensor_${sensor.id}_action`] && (
+                        <textarea
+                          placeholder="Describe corrective action taken..."
+                          className="corrective-action-notes"
+                          rows={3}
+                          value={result?.[`sensor_${sensor.id}_notes`] || ''}
+                          onChange={(e) => updateResult(currentCheck.id, `sensor_${sensor.id}_notes`, e.target.value)}
+                        />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <label className="completion-checkbox-large">
+                <input
+                  type="checkbox"
+                  checked={result?.verified || false}
+                  onChange={(e) => updateResult(currentCheck.id, 'verified', e.target.checked)}
+                />
+                <span>All sensor readings verified</span>
+              </label>
             </div>
           )}
         </div>

@@ -3,6 +3,70 @@
  * This provides realistic sample data for the 2-day demo shell
  */
 
+// Mock sensor devices (for monitored temperature demo)
+export const mockSensors = [
+  {
+    id: 1,
+    sensor_id: "SENSOR-WI-001",
+    outlet_id: 1,
+    device_type: "cooler_temp",
+    location_name: "Walk-in Cooler #1",
+    threshold_min: 32,
+    threshold_max: 38,
+    last_reading: 36.2,
+    last_reading_time: "2024-12-19T09:15:00Z",
+    status: "pass"
+  },
+  {
+    id: 2,
+    sensor_id: "SENSOR-WI-002",
+    outlet_id: 1,
+    device_type: "cooler_temp",
+    location_name: "Walk-in Cooler #2",
+    threshold_min: 32,
+    threshold_max: 38,
+    last_reading: 37.1,
+    last_reading_time: "2024-12-19T09:15:00Z",
+    status: "pass"
+  },
+  {
+    id: 3,
+    sensor_id: "SENSOR-PREP-001",
+    outlet_id: 1,
+    device_type: "cooler_temp",
+    location_name: "Prep Station Cooler",
+    threshold_min: 32,
+    threshold_max: 38,
+    last_reading: 35.4,
+    last_reading_time: "2024-12-19T09:15:00Z",
+    status: "pass"
+  },
+  {
+    id: 4,
+    sensor_id: "SENSOR-BAR-001",
+    outlet_id: 1,
+    device_type: "cooler_temp",
+    location_name: "Bar Cooler",
+    threshold_min: 32,
+    threshold_max: 38,
+    last_reading: 41.2,
+    last_reading_time: "2024-12-19T09:15:00Z",
+    status: "fail"
+  },
+  {
+    id: 5,
+    sensor_id: "SENSOR-DES-001",
+    outlet_id: 1,
+    device_type: "cooler_temp",
+    location_name: "Dessert Display Case",
+    threshold_min: 32,
+    threshold_max: 38,
+    last_reading: 33.8,
+    last_reading_time: "2024-12-19T09:15:00Z",
+    status: "pass"
+  }
+];
+
 export const mockTemplates = [
   {
     id: 1,
@@ -123,6 +187,30 @@ export const mockTemplates = [
         }
       }
     ]
+  },
+  {
+    id: 4,
+    name: "IoT Monitored Cooler Check",
+    description: "Verify all IoT-monitored coolers are within safe temperature range",
+    record_tags: ["HACCP", "Daily", "IoT", "Temperature"],
+    created_at: "2024-12-15T08:00:00Z",
+    is_active: true,
+    checks: [
+      {
+        id: 8,
+        check_type: "monitored_cooler_temps",
+        name: "All Monitored Coolers",
+        description: "Review sensor readings and verify all temperatures are within acceptable range",
+        order_index: 1,
+        config: {
+          sensor_ids: [1, 2, 3, 4, 5], // References mockSensors array
+          threshold_min: 32,
+          threshold_max: 38,
+          unit: "°F",
+          verification_mode: "exception_only" // "view_only", "individual_confirmation", or "exception_only"
+        }
+      }
+    ]
   }
 ];
 
@@ -191,6 +279,19 @@ export const mockAssignments = [
     start_date: "2024-12-01",
     end_date: null,
     created_at: "2024-12-01T08:00:00Z"
+  },
+  {
+    id: 6,
+    template_id: 4,
+    template_name: "IoT Monitored Cooler Check",
+    outlet_id: 1,
+    outlet_name: "Downtown Kitchen",
+    assigned_to: ["John Smith", "Sarah Chen"],
+    recurrence: "daily",
+    recurrence_config: { time: "09:30" },
+    start_date: "2024-12-15",
+    end_date: null,
+    created_at: "2024-12-15T08:00:00Z"
   }
 ];
 
@@ -235,6 +336,18 @@ export const mockInstances = [
     assigned_to: ["John Smith", "Sarah Chen"],
     created_at: "2024-12-18T00:00:00Z",
     has_corrective_action: true // Failed temp
+  },
+  {
+    id: 4,
+    assignment_id: 6,
+    template_id: 4,
+    template_name: "IoT Monitored Cooler Check",
+    outlet_id: 1,
+    outlet_name: "Downtown Kitchen",
+    due_date: "2024-12-19",
+    status: "pending",
+    assigned_to: ["John Smith", "Sarah Chen"],
+    created_at: "2024-12-19T00:00:00Z"
   }
 ];
 

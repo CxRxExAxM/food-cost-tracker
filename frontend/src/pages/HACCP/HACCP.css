@@ -1050,6 +1050,141 @@
   cursor: not-allowed;
 }
 
+/* Monitored Cooler Temps - IoT Sensor Table */
+.monitored-temps-input {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.sensor-sync-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-3) var(--space-4);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+}
+
+.sync-time {
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+}
+
+.sensor-table {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.sensor-table-header {
+  display: grid;
+  grid-template-columns: 2fr 1fr 80px;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-subtle);
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.sensor-table-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr 80px;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+  transition: background var(--transition-base);
+}
+
+.sensor-table-row:last-child {
+  border-bottom: none;
+}
+
+.sensor-table-row:hover {
+  background: var(--bg-tertiary);
+}
+
+.sensor-table-row.sensor-pass {
+  border-left: 3px solid var(--color-green);
+}
+
+.sensor-table-row.sensor-fail {
+  border-left: 3px solid #ff6464;
+  background: rgba(255, 100, 100, 0.05);
+}
+
+.sensor-location {
+  font-weight: var(--font-weight-medium);
+  color: var(--text-primary);
+}
+
+.sensor-temp {
+  font-size: var(--text-lg);
+  font-weight: var(--font-weight-semibold);
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+}
+
+.sensor-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-xl);
+}
+
+.sensor-table-row.sensor-pass .sensor-status {
+  color: var(--color-green-bright);
+}
+
+.sensor-table-row.sensor-fail .sensor-status {
+  color: #ff6464;
+}
+
+.sensor-summary {
+  padding: var(--space-4);
+  background: var(--color-green-dim);
+  border: 1px solid var(--color-green);
+  border-radius: var(--radius-md);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-green-bright);
+  text-align: center;
+}
+
+.failed-sensor-action {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: rgba(255, 100, 100, 0.05);
+  border: 1px solid rgba(255, 100, 100, 0.2);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-3);
+}
+
+.sensor-action-label {
+  font-size: var(--text-base);
+  color: var(--text-primary);
+}
+
+.preview-sensor-table {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.preview-sensor-row {
+  display: flex;
+  justify-content: space-between;
+  padding: var(--space-2);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+}
+
 /* Responsive */
 @media (max-width: 1024px) {
   .builder-content {
