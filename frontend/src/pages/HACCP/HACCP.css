@@ -459,12 +459,23 @@
   font-size: var(--text-3xl);
   font-weight: var(--font-weight-bold);
   color: var(--text-primary);
-  margin-bottom: var(--space-2);
+  margin-bottom: var(--space-3);
 }
 
-.progress {
-  font-size: var(--text-base);
+.completion-meta {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-4);
+  font-size: var(--text-sm);
+}
+
+.completion-outlet {
   color: var(--text-secondary);
+}
+
+.completion-progress {
+  color: var(--text-tertiary);
+  font-weight: var(--font-weight-medium);
 }
 
 .completion-content {
@@ -473,6 +484,281 @@
   border-radius: var(--radius-lg);
   padding: var(--space-8);
   min-height: 400px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+/* Check Completion Sections */
+.check-completion {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-6);
+  text-align: center;
+}
+
+.check-completion-icon {
+  font-size: 3rem;
+  line-height: 1;
+}
+
+.check-completion-header h2 {
+  font-family: var(--font-primary);
+  font-size: var(--text-2xl);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+  margin-bottom: var(--space-2);
+}
+
+.check-description {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.check-completion-input {
+  width: 100%;
+  max-width: 400px;
+}
+
+/* Checkbox Inputs */
+.completion-checkbox-large {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--bg-tertiary);
+  border: 2px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-base);
+  font-size: var(--text-lg);
+  font-weight: var(--font-weight-medium);
+}
+
+.completion-checkbox-large:hover {
+  border-color: var(--color-yellow);
+  background: var(--bg-secondary);
+}
+
+.completion-checkbox-large input[type="checkbox"] {
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
+}
+
+/* Temperature Inputs */
+.temperature-input {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.temperature-input label {
+  font-size: var(--text-base);
+  font-weight: var(--font-weight-medium);
+  color: var(--text-primary);
+  text-align: left;
+}
+
+.temp-input-group {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.input-temperature {
+  flex: 1;
+  padding: var(--space-4);
+  background: var(--bg-tertiary);
+  border: 2px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  font-family: var(--font-primary);
+  font-size: var(--text-xl);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+  text-align: center;
+}
+
+.input-temperature:focus {
+  outline: none;
+  border-color: var(--color-yellow);
+}
+
+.temp-unit {
+  font-size: var(--text-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-secondary);
+}
+
+/* Threshold Indicators */
+.threshold-indicator {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+  text-align: center;
+}
+
+.threshold-indicator.pass {
+  background: var(--color-green-dim);
+  color: var(--color-green-bright);
+  border: 1px solid var(--color-green);
+}
+
+.threshold-indicator.fail {
+  background: rgba(255, 100, 100, 0.1);
+  color: #ff6464;
+  border: 1px solid rgba(255, 100, 100, 0.3);
+}
+
+/* Corrective Action */
+.corrective-action-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: rgba(255, 100, 100, 0.05);
+  border: 1px solid rgba(255, 100, 100, 0.2);
+  border-radius: var(--radius-md);
+  margin-top: var(--space-2);
+}
+
+.corrective-action-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--text-primary);
+}
+
+.corrective-action-label input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+.corrective-action-notes {
+  width: 100%;
+  padding: var(--space-3);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  font-family: var(--font-primary);
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  resize: vertical;
+}
+
+.corrective-action-notes:focus {
+  outline: none;
+  border-color: var(--color-yellow);
+}
+
+/* Thermometer Calibration */
+.thermometer-cal-input {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.cal-test {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.cal-test label {
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--text-primary);
+  text-align: left;
+}
+
+/* Meeting Notes */
+.meeting-notes-input {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.file-upload-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.file-upload-section label {
+  font-size: var(--text-base);
+  font-weight: var(--font-weight-medium);
+  color: var(--text-primary);
+  text-align: left;
+}
+
+.upload-btn {
+  padding: var(--space-4) var(--space-6);
+  background: var(--color-yellow-dim);
+  border: 2px solid var(--color-yellow);
+  border-radius: var(--radius-md);
+  font-family: var(--font-primary);
+  font-size: var(--text-base);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-yellow-bright);
+  cursor: pointer;
+  transition: all var(--transition-base);
+}
+
+.upload-btn:hover {
+  background: var(--color-yellow);
+  color: var(--bg-primary);
+}
+
+.upload-hint {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  font-style: italic;
+  margin: 0;
+}
+
+.attendance-section {
+  padding: var(--space-4);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.meeting-notes-textarea {
+  width: 100%;
+  padding: var(--space-4);
+  background: var(--bg-tertiary);
+  border: 2px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  font-family: var(--font-primary);
+  font-size: var(--text-base);
+  color: var(--text-primary);
+  resize: vertical;
+}
+
+.meeting-notes-textarea:focus {
+  outline: none;
+  border-color: var(--color-yellow);
+}
+
+/* Completion Navigation */
+.completion-navigation {
+  display: flex;
+  gap: var(--space-4);
+  margin-top: auto;
+}
+
+.completion-navigation .btn {
+  flex: 1;
+  padding: var(--space-4) var(--space-6);
+  font-size: var(--text-lg);
 }
 
 /* Template Builder - Check Type Library */
