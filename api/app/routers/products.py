@@ -162,7 +162,7 @@ def list_products(
         # else: admin user, show all products (no additional filter)
 
         if search:
-            where_clause += " AND (p.name LIKE %s OR p.brand LIKE %s)"
+            where_clause += " AND (p.name ILIKE %s OR p.brand ILIKE %s)"
             search_term = f"%{search}%"
             params.extend([search_term, search_term])
 
@@ -393,3 +393,30 @@ def update_product(product_id: int, updates: dict, current_user: dict = Depends(
         conn.commit()
 
         return {"message": "Product updated successfully", "product_id": product_id}
+
+
+@router.delete("/{product_id}")
+def delete_product(product_id: int, current_user: dict = Depends(get_current_user)):
+    """Delete a product and all its related data (distributor_products, price_history)."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Check if product exists and user has access
+        outlet_filter, outlet_params = build_outlet_filter(current_user, "")
+        check_query = f"SELECT id, name FROM products WHERE id = %s AND {outlet_filter}"
+        check_params = [product_id] + outlet_params
+        cursor.execute(check_query, check_params)
+
+        product = dict_from_row(cursor.fetchone())
+        if not product:
+            raise HTTPException(status_code=404, detail="Product not found or you don't have access to it")
+
+        # Delete the product (CASCADE will handle related records)
+        cursor.execute("DELETE FROM products WHERE id = %s", (product_id,))
+
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Product not found")
+
+        conn.commit()
+
+        return {"message": f"Product '{product['name']}' deleted successfully", "product_id": product_id}

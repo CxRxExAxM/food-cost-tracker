@@ -1189,6 +1189,30 @@
   box-shadow: var(--shadow-sm);
 }
 
+.btn-upload-recipe {
+  padding: var(--space-2) var(--space-3);
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: var(--text-xs);
+  font-family: var(--font-primary);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+  transition: all var(--transition-base) var(--ease-in-out);
+}
+
+.btn-upload-recipe:hover:not(:disabled) {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.btn-upload-recipe:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* Ingredient Autocomplete */
 .autocomplete-container {
   position: relative;
@@ -1449,4 +1473,142 @@
 
 .recipe-tree:empty {
   min-height: 100px;
+}
+
+/* ============================================ */
+/* Inline Editing - Recipe Ingredients */
+/* ============================================ */
+
+/* Mapped indicator column */
+.mapped-cell {
+  width: 60px;
+  text-align: center;
+  padding: var(--space-3);
+}
+
+.mapped-yes {
+  color: var(--color-green-bright);
+  font-size: var(--text-lg);
+  font-weight: bold;
+}
+
+.mapped-no {
+  color: var(--text-tertiary);
+  font-size: var(--text-lg);
+  opacity: 0.5;
+}
+
+/* Row states */
+.ingredients-table tbody tr:not(.editing):not(.ingredient-add-row):hover {
+  background: var(--bg-secondary);
+  cursor: pointer;
+}
+
+.ingredients-table tbody tr.editing {
+  background: var(--color-yellow-dim);
+  border: 2px solid var(--color-yellow);
+}
+
+/* Inline edit inputs */
+.inline-edit-input,
+.inline-edit-select {
+  width: 100%;
+  padding: var(--space-2);
+  border: 1px solid var(--color-yellow);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+
+.inline-edit-input:focus,
+.inline-edit-select:focus {
+  outline: none;
+  border-color: var(--color-yellow-bright);
+  box-shadow: 0 0 0 2px rgba(234, 179, 8, 0.2);
+}
+
+/* Product mapping UI */
+.ingredient-mapping-wrapper {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.mapped-product-name {
+  flex: 1;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.mapping-btn {
+  padding: var(--space-1) var(--space-2);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: var(--text-xs);
+  transition: all var(--transition-fast);
+}
+
+.mapping-btn:hover {
+  background: var(--bg-secondary);
+  border-color: var(--color-yellow);
+  color: var(--color-yellow);
+}
+
+/* Product search dropdown */
+.ingredient-mapping-search {
+  position: relative;
+  width: 100%;
+}
+
+.product-search-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: var(--bg-elevated);
+  border: 1px solid var(--color-yellow);
+  border-radius: var(--radius-md);
+  max-height: 250px;
+  overflow-y: auto;
+  z-index: 1000;
+  box-shadow: var(--shadow-lg);
+  margin-top: var(--space-1);
+}
+
+.product-search-item {
+  padding: var(--space-3);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.product-search-item:last-child {
+  border-bottom: none;
+}
+
+.product-search-item:hover,
+.product-search-item.selected {
+  background: var(--bg-tertiary);
+  color: var(--color-yellow);
+}
+
+/* Mapped indicator in autocomplete input */
+.mapped-indicator {
+  position: absolute;
+  right: var(--space-2);
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--color-green-bright);
+  font-size: var(--text-lg);
+  font-weight: bold;
+  pointer-events: none;
+}
+
+.ingredient-mapping-wrapper {
+  position: relative;
 }

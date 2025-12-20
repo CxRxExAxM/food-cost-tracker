@@ -129,6 +129,32 @@ docs: Update README with Phase 4 completion status
 
 ## Code Organization
 
+### ⚠️ CRITICAL: Design System Compliance
+
+**BEFORE creating any new component, page, modal, or CSS file:**
+
+1. **READ `DESIGN_SYSTEM.md` FIRST** - This is mandatory, not optional
+2. **Use CSS variables ONLY** - Never hardcode colors, spacing, or borders
+3. **Reference existing patterns** - Check if similar components exist
+4. **Test in dark mode** - All components must work with the dark theme
+
+**CSS Variable Checklist:**
+```css
+/* Always use these, NEVER hardcoded values */
+--bg-primary, --bg-secondary, --bg-tertiary, --bg-elevated
+--text-primary, --text-secondary, --text-tertiary
+--border-subtle, --border-default, --border-strong
+--color-red, --color-yellow, --color-green (+ -dim, -bright)
+--space-1 through --space-20
+--radius-sm, --radius-md, --radius-lg
+```
+
+**If you write hardcoded colors (`#ffffff`, `rgb()`, etc.), it WILL break the theme.**
+
+See `DESIGN_SYSTEM.md` for complete reference.
+
+---
+
 ### Frontend Structure
 
 **Current (Good - Don't Change Yet):**
@@ -346,25 +372,29 @@ Test these regularly:
 
 ### ❌ Don't Do This:
 
-1. **Create new .md files in root** without archiving old ones
-2. **Restructure code** before HACCP development starts
-3. **Force push to main or dev branches**
-4. **Implement features without testing multi-tenancy**
-5. **Skip audit logging for critical actions**
-6. **Modify completed migrations**
-7. **Use `localStorage` directly** (use AuthContext.setToken)
-8. **Add emojis to code** unless explicitly requested
+1. **Use hardcoded colors in CSS** - ALWAYS use CSS variables from DESIGN_SYSTEM.md
+2. **Create new .md files in root** without archiving old ones
+3. **Restructure code** before HACCP development starts
+4. **Force push to main or dev branches**
+5. **Implement features without testing multi-tenancy**
+6. **Skip audit logging for critical actions**
+7. **Modify completed migrations**
+8. **Use `localStorage` directly** (use AuthContext.setToken)
+9. **Add emojis to code** unless explicitly requested
+10. **Create new components without checking DESIGN_SYSTEM.md first**
 
 ### ✅ Do This Instead:
 
-1. **Update existing docs** or archive outdated ones
-2. **Wait for modular restructure** per FUTURE_PLANS.md
-3. **Use normal git workflow** (commits, PRs)
-4. **Test with multiple orgs/outlets**
-5. **Log all subscription, user, impersonation changes**
-6. **Create new migrations** for schema changes
-7. **Use React contexts and hooks** for state management
-8. **Keep code professional** and clean
+1. **Use CSS variables from DESIGN_SYSTEM.md** for all styling
+2. **Check DESIGN_SYSTEM.md BEFORE creating components** - every time
+3. **Update existing docs** or archive outdated ones
+4. **Wait for modular restructure** per FUTURE_PLANS.md
+5. **Use normal git workflow** (commits, PRs)
+6. **Test with multiple orgs/outlets**
+7. **Log all subscription, user, impersonation changes**
+8. **Create new migrations** for schema changes
+9. **Use React contexts and hooks** for state management
+10. **Keep code professional** and clean
 
 ---
 

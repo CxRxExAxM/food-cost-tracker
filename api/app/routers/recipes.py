@@ -36,7 +36,7 @@ def list_recipes(
             params.append(outlet_id)
 
         if search:
-            query += " AND name LIKE %s"
+            query += " AND name ILIKE %s"
             params.append(f"%{search}%")
 
         if category_path:
@@ -81,9 +81,10 @@ def get_recipe(recipe_id: int, current_user: dict = Depends(get_current_user)):
             if recipe.get('method'):
                 recipe['method'] = json.loads(recipe['method'])
 
-            # Get ingredients (TODO: expand with product/sub-recipe details)
+            # Get ingredients with display names (product, sub-recipe, or text-only)
             cursor.execute("""
                 SELECT ri.*,
+                       ri.ingredient_name,
                        cp.common_name,
                        u.abbreviation as unit_abbreviation,
                        r.name as sub_recipe_name
@@ -92,6 +93,7 @@ def get_recipe(recipe_id: int, current_user: dict = Depends(get_current_user)):
                 LEFT JOIN units u ON u.id = ri.unit_id
                 LEFT JOIN recipes r ON r.id = ri.sub_recipe_id
                 WHERE ri.recipe_id = %s
+                ORDER BY ri.id
             """, (recipe_id,))
 
             recipe['ingredients'] = dicts_from_rows(cursor.fetchall())
@@ -279,6 +281,133 @@ def delete_recipe(recipe_id: int, current_user: dict = Depends(get_current_user)
         return {"message": "Recipe deleted successfully", "recipe_id": recipe_id}
 
 
+@router.get("/debug/common-product/{common_product_id}/products")
+def debug_common_product_products(common_product_id: int, current_user: dict = Depends(get_current_user)):
+    """
+    Show ALL products mapped to a common product, across all outlets.
+    Helps diagnose outlet assignment issues.
+    """
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Get common product info
+        cursor.execute("SELECT * FROM common_products WHERE id = %s", (common_product_id,))
+        common_product = dict_from_row(cursor.fetchone())
+
+        if not common_product:
+            raise HTTPException(status_code=404, detail="Common product not found")
+
+        # Get ALL products for this common product (any outlet)
+        cursor.execute("""
+            SELECT
+                p.id as product_id,
+                p.name as product_name,
+                p.outlet_id,
+                o.name as outlet_name,
+                p.common_product_id,
+                d.name as distributor_name,
+                ph.unit_price,
+                ph.effective_date
+            FROM products p
+            JOIN outlets o ON o.id = p.outlet_id
+            JOIN distributor_products dp ON dp.product_id = p.id
+            JOIN distributors d ON d.id = dp.distributor_id
+            LEFT JOIN (
+                SELECT distributor_product_id, unit_price, effective_date,
+                       ROW_NUMBER() OVER (PARTITION BY distributor_product_id ORDER BY effective_date DESC) as rn
+                FROM price_history
+            ) ph ON ph.distributor_product_id = dp.id AND ph.rn = 1
+            WHERE p.common_product_id = %s
+            ORDER BY p.outlet_id, ph.unit_price ASC NULLS LAST
+        """, (common_product_id,))
+
+        products = dicts_from_rows(cursor.fetchall())
+
+        return {
+            "common_product_id": common_product_id,
+            "common_product_name": common_product['common_name'],
+            "total_products_found": len(products),
+            "products_by_outlet": products
+        }
+
+
+@router.get("/{recipe_id}/cost/debug")
+def debug_recipe_cost(recipe_id: int, current_user: dict = Depends(get_current_user)):
+    """
+    Debug endpoint to see why costs aren't calculating.
+    Shows what products/prices exist for each ingredient.
+    """
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Get recipe
+        outlet_filter, outlet_params = build_outlet_filter(current_user, "")
+        query = f"SELECT * FROM recipes WHERE id = %s AND {outlet_filter}"
+        params = [recipe_id] + outlet_params
+        cursor.execute(query, params)
+        recipe = dict_from_row(cursor.fetchone())
+
+        if not recipe:
+            raise HTTPException(status_code=404, detail="Recipe not found")
+
+        # Get ingredients
+        cursor.execute("""
+            SELECT ri.*,
+                   cp.common_name
+            FROM recipe_ingredients ri
+            LEFT JOIN common_products cp ON cp.id = ri.common_product_id
+            WHERE ri.recipe_id = %s
+            ORDER BY ri.id
+        """, (recipe_id,))
+
+        ingredients = dicts_from_rows(cursor.fetchall())
+        debug_info = []
+
+        for ing in ingredients:
+            ing_debug = {
+                "ingredient_id": ing['id'],
+                "name": ing.get('common_name') or ing.get('ingredient_name'),
+                "common_product_id": ing.get('common_product_id'),
+                "quantity": ing['quantity'],
+                "products_found": []
+            }
+
+            if ing.get('common_product_id'):
+                # Check what products exist for this outlet + common product
+                cursor.execute("""
+                    SELECT
+                        p.id as product_id,
+                        p.name as product_name,
+                        p.outlet_id,
+                        d.name as distributor_name,
+                        ph.unit_price,
+                        ph.effective_date
+                    FROM products p
+                    JOIN distributor_products dp ON dp.product_id = p.id
+                    JOIN distributors d ON d.id = dp.distributor_id
+                    LEFT JOIN (
+                        SELECT distributor_product_id, unit_price, effective_date,
+                               ROW_NUMBER() OVER (PARTITION BY distributor_product_id ORDER BY effective_date DESC) as rn
+                        FROM price_history
+                    ) ph ON ph.distributor_product_id = dp.id AND ph.rn = 1
+                    WHERE p.common_product_id = %s AND p.outlet_id = %s
+                    ORDER BY ph.unit_price ASC NULLS LAST
+                """, (ing['common_product_id'], recipe['outlet_id']))
+
+                products = dicts_from_rows(cursor.fetchall())
+                ing_debug["products_found"] = products
+                ing_debug["has_price"] = any(p.get('unit_price') is not None for p in products)
+
+            debug_info.append(ing_debug)
+
+        return {
+            "recipe_id": recipe_id,
+            "recipe_name": recipe['name'],
+            "outlet_id": recipe['outlet_id'],
+            "ingredients": debug_info
+        }
+
+
 @router.get("/{recipe_id}/cost", response_model=RecipeWithCost)
 def calculate_recipe_cost(recipe_id: int, current_user: dict = Depends(get_current_user)):
     """
@@ -366,6 +495,7 @@ def _calculate_ingredient_costs(cursor, recipe_id: int, outlet_id: int, visited:
     # Get all ingredients for this recipe
     cursor.execute("""
         SELECT ri.*,
+               ri.ingredient_name,
                cp.common_name,
                u.abbreviation as unit_abbreviation,
                r.name as sub_recipe_name,
@@ -376,6 +506,7 @@ def _calculate_ingredient_costs(cursor, recipe_id: int, outlet_id: int, visited:
         LEFT JOIN units u ON u.id = ri.unit_id
         LEFT JOIN recipes r ON r.id = ri.sub_recipe_id
         WHERE ri.recipe_id = %s
+        ORDER BY ri.id
     """, (recipe_id,))
 
     ingredients = dicts_from_rows(cursor.fetchall())
@@ -393,6 +524,7 @@ def _calculate_ingredient_costs(cursor, recipe_id: int, outlet_id: int, visited:
             cursor.execute("""
                 SELECT
                     ph.unit_price,
+                    p.unit_id as product_unit_id,
                     d.name as distributor_name,
                     p.name as product_name,
                     p.pack,
@@ -416,13 +548,46 @@ def _calculate_ingredient_costs(cursor, recipe_id: int, outlet_id: int, visited:
 
             if price_row and price_row.get('unit_price'):
                 unit_price = price_row['unit_price']
-                has_price = True
-                price_source = f"{price_row['distributor_name']}: {price_row['product_name']}"
-
-                # Calculate ingredient cost: quantity * unit_price * (yield_percentage / 100)
+                product_unit_id = price_row['product_unit_id']
+                ingredient_unit_id = ing['unit_id']
                 yield_pct = ing.get('yield_percentage', 100) or 100
-                ing_cost = ing['quantity'] * unit_price * (100 / yield_pct)
-                total_cost += ing_cost
+
+                # Check if units match
+                if product_unit_id == ingredient_unit_id:
+                    # Direct calculation - units match
+                    ing_cost = ing['quantity'] * unit_price * (100 / yield_pct)
+                    has_price = True
+                    price_source = f"{price_row['distributor_name']}: {price_row['product_name']}"
+                    total_cost += ing_cost
+
+                else:
+                    # Units don't match - try to find conversion
+                    cursor.execute("""
+                        SELECT conversion_factor, u1.abbreviation as from_unit, u2.abbreviation as to_unit
+                        FROM product_conversions pc
+                        JOIN units u1 ON u1.id = pc.from_unit_id
+                        JOIN units u2 ON u2.id = pc.to_unit_id
+                        WHERE pc.common_product_id = %s
+                          AND pc.from_unit_id = %s
+                          AND pc.to_unit_id = %s
+                    """, (ing['common_product_id'], ingredient_unit_id, product_unit_id))
+
+                    conversion = dict_from_row(cursor.fetchone())
+
+                    if conversion:
+                        # Apply conversion: ingredient quantity → product quantity
+                        converted_quantity = ing['quantity'] * conversion['conversion_factor']
+                        ing_cost = converted_quantity * unit_price * (100 / yield_pct)
+                        has_price = True
+                        price_source = f"{price_row['distributor_name']}: {price_row['product_name']} (converted {conversion['from_unit']} → {conversion['to_unit']})"
+                        total_cost += ing_cost
+                    else:
+                        # No conversion available - log warning and use direct calc (may be inaccurate)
+                        print(f"[WARN] No conversion from unit {ingredient_unit_id} ({ing.get('unit_abbreviation')}) to {product_unit_id} ({price_row.get('product_unit')}) for common_product {ing['common_product_id']}")
+                        ing_cost = ing['quantity'] * unit_price * (100 / yield_pct)
+                        has_price = True
+                        price_source = f"{price_row['distributor_name']}: {price_row['product_name']} (⚠️ unit mismatch: {ing.get('unit_abbreviation')} vs {price_row.get('product_unit')})"
+                        total_cost += ing_cost
 
         elif ing.get('sub_recipe_id'):
             # Recursively calculate sub-recipe cost - use sub-recipe's outlet_id
@@ -446,6 +611,11 @@ def _calculate_ingredient_costs(cursor, recipe_id: int, outlet_id: int, visited:
                     ing_cost = sub_recipe_total * ing['quantity']
 
                 total_cost += ing_cost
+
+        elif ing.get('ingredient_name') and not ing.get('common_product_id') and not ing.get('sub_recipe_id'):
+            # Text-only ingredient - no cost available
+            has_price = False
+            price_source = "Not mapped to product"
 
         ingredients_with_costs.append({
             **ing,
@@ -483,7 +653,7 @@ def _calculate_recipe_allergens(cursor, recipe_id: int, visited: set) -> dict:
 
     # Get all ingredients with their common product allergens
     cursor.execute("""
-        SELECT ri.id, ri.common_product_id, ri.sub_recipe_id,
+        SELECT ri.id, ri.common_product_id, ri.sub_recipe_id, ri.ingredient_name,
                cp.common_name,
                cp.allergen_gluten, cp.allergen_dairy, cp.allergen_egg, cp.allergen_fish,
                cp.allergen_crustation, cp.allergen_mollusk, cp.allergen_tree_nuts,
@@ -601,27 +771,37 @@ def add_ingredient(recipe_id: int, ingredient: dict, current_user: dict = Depend
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Recipe not found or you don't have access to it")
 
-        # Validate: must have exactly one of common_product_id or sub_recipe_id
+        # Validate: must have one of common_product_id, sub_recipe_id, or ingredient_name
         common_product_id = ingredient.get('common_product_id')
         sub_recipe_id = ingredient.get('sub_recipe_id')
+        ingredient_name = ingredient.get('ingredient_name')
 
-        if not common_product_id and not sub_recipe_id:
-            raise HTTPException(status_code=400, detail="Must specify either common_product_id or sub_recipe_id")
-
+        # Cannot have both product and sub-recipe
         if common_product_id and sub_recipe_id:
-            raise HTTPException(status_code=400, detail="Cannot specify both common_product_id and sub_recipe_id")
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot specify both common_product_id and sub_recipe_id"
+            )
+
+        # Must have at least ONE identifier
+        if not common_product_id and not sub_recipe_id and not ingredient_name:
+            raise HTTPException(
+                status_code=400,
+                detail="Must specify either common_product_id, sub_recipe_id, or ingredient_name"
+            )
 
         # Insert ingredient
         cursor.execute("""
             INSERT INTO recipe_ingredients (
-                recipe_id, common_product_id, sub_recipe_id,
+                recipe_id, common_product_id, sub_recipe_id, ingredient_name,
                 quantity, unit_id, yield_percentage, notes
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
         """, (
             recipe_id,
             common_product_id,
             sub_recipe_id,
+            ingredient_name,
             ingredient.get('quantity'),
             ingredient.get('unit_id'),
             ingredient.get('yield_percentage', 100),
@@ -629,11 +809,20 @@ def add_ingredient(recipe_id: int, ingredient: dict, current_user: dict = Depend
         ))
 
         ingredient_id = cursor.fetchone()["id"]
+
+        # Update parent recipe's updated_at to trigger cost recalculation
+        cursor.execute("""
+            UPDATE recipes
+            SET updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
+        """, (recipe_id,))
+
         conn.commit()
 
         # Return the created ingredient with details
         cursor.execute("""
             SELECT ri.*,
+                   ri.ingredient_name,
                    cp.common_name,
                    u.abbreviation as unit_abbreviation,
                    r.name as sub_recipe_name
@@ -674,14 +863,39 @@ def update_ingredient(recipe_id: int, ingredient_id: int, updates: dict, current
             raise HTTPException(status_code=404, detail="Ingredient not found")
 
         # Build update query
-        allowed_fields = ['quantity', 'unit_id', 'yield_percentage', 'notes']
+        allowed_fields = ['quantity', 'unit_id', 'yield_percentage', 'notes', 'common_product_id', 'ingredient_name']
         update_fields = []
         params = []
 
+        # Validate mutual exclusivity of product mapping and text name
+        if 'common_product_id' in updates and 'ingredient_name' in updates:
+            if updates.get('common_product_id') and updates.get('ingredient_name'):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Cannot specify both common_product_id and ingredient_name"
+                )
+
+        # Determine which fields to auto-clear (to avoid duplicate field errors)
+        auto_clear_ingredient_name = 'common_product_id' in updates and updates.get('common_product_id') is not None
+        auto_clear_common_product_id = 'ingredient_name' in updates and updates.get('ingredient_name') is not None
+
         for field, value in updates.items():
             if field in allowed_fields:
+                # Skip if we're going to auto-clear this field
+                if field == 'ingredient_name' and auto_clear_ingredient_name:
+                    continue
+                if field == 'common_product_id' and auto_clear_common_product_id:
+                    continue
                 update_fields.append(f"{field} = %s")
                 params.append(value)
+
+        # Auto-clear opposite field when mapping changes
+        if auto_clear_ingredient_name:
+            # When mapping to product, clear text name
+            update_fields.append("ingredient_name = NULL")
+        if auto_clear_common_product_id:
+            # When setting text name, clear product mapping
+            update_fields.append("common_product_id = NULL")
 
         if not update_fields:
             raise HTTPException(status_code=400, detail="No valid fields to update")
@@ -690,6 +904,14 @@ def update_ingredient(recipe_id: int, ingredient_id: int, updates: dict, current
         query = f"UPDATE recipe_ingredients SET {', '.join(update_fields)} WHERE id = %s"
 
         cursor.execute(query, params)
+
+        # Update parent recipe's updated_at to trigger cost recalculation
+        cursor.execute("""
+            UPDATE recipes
+            SET updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
+        """, (recipe_id,))
+
         conn.commit()
 
         # Return updated ingredient with details
@@ -732,6 +954,13 @@ def remove_ingredient(recipe_id: int, ingredient_id: int, current_user: dict = D
 
         if cursor.rowcount == 0:
             raise HTTPException(status_code=404, detail="Ingredient not found")
+
+        # Update parent recipe's updated_at to trigger cost recalculation
+        cursor.execute("""
+            UPDATE recipes
+            SET updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
+        """, (recipe_id,))
 
         conn.commit()
 

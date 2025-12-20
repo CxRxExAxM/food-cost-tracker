@@ -9,7 +9,7 @@ A comprehensive multi-tenant SaaS platform for F&B operations to manage food cos
 
 ## Current Status (December 2024)
 
-**Food Cost Tracking MVP:** ✅ **COMPLETE**
+**Food Cost Tracking MVP:** ✅ **COMPLETE** + Enhanced Recipe Editor
 
 All core features implemented and production-ready:
 - ✅ Multi-tenancy & organization management
@@ -19,6 +19,9 @@ All core features implemented and production-ready:
 - ✅ Audit logging and compliance tracking
 - ✅ Recipe costing with real-time price updates
 - ✅ Multi-distributor price tracking
+- 🔥 **NEW:** Excel-like recipe ingredient editing with autocomplete
+
+**Latest Update (Dec 18, 2024):** Recipe editor overhaul with inline editing, keyboard navigation, and autocomplete product mapping. See [CHANGELOG.md](CHANGELOG.md) for details.
 
 **Next Steps:** See [FUTURE_PLANS.md](FUTURE_PLANS.md) for post-MVP roadmap (HACCP module, AI recipe parser, advanced features).
 
@@ -26,6 +29,7 @@ All core features implemented and production-ready:
 
 ## Quick Links
 
+- **📝 Changelog:** [CHANGELOG.md](CHANGELOG.md) - Recent updates and release notes
 - **📖 Future Roadmap:** [FUTURE_PLANS.md](FUTURE_PLANS.md) - Multi-module platform architecture, HACCP plans
 - **🎨 Design Guidelines:** [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md) - UI/UX patterns and styling
 - **💻 Developer Guide:** [DEVELOPMENT.md](DEVELOPMENT.md) - Local setup, git workflow, deployment
@@ -67,7 +71,11 @@ All core features implemented and production-ready:
 - Product-to-common-product mapping for consistency
 - Catch weight support for variable-weight items
 
-**Recipe Management**
+**Recipe Management** 🔥 *NEW: Excel-like Editing*
+- **Inline editing** - Click any cell to edit directly in table
+- **Autocomplete product search** - Type to find and map products instantly
+- **Keyboard navigation** - Tab, Enter, Escape for rapid data entry
+- **Visual mapping indicators** - ✓/× shows ingredient mapping status
 - Folder/category organization with nested structure
 - Live cost calculation with automatic price updates
 - Yield percentage support for prep waste calculation

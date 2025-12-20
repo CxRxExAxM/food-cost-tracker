@@ -1,8 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import axios from '../lib/axios';
 import Navigation from '../components/Navigation';
 import { useOutlet } from '../contexts/OutletContext';
 import OutletBadge from '../components/outlets/OutletBadge';
+import UploadRecipeModal from '../components/RecipeImport/UploadRecipeModal';
+import ReviewParsedRecipe from '../components/RecipeImport/ReviewParsedRecipe';
 import './Recipes.css';
 
 const API_URL = import.meta.env.VITE_API_URL ?? '';
@@ -33,6 +35,9 @@ function Recipes() {
   const [expandedFolders, setExpandedFolders] = useState(new Set());
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showFolderModal, setShowFolderModal] = useState(false);
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [parseResult, setParseResult] = useState(null);
   const [editedRecipe, setEditedRecipe] = useState(null);
   const [isDirty, setIsDirty] = useState(false);
   const [contextMenu, setContextMenu] = useState(null);
@@ -198,6 +203,37 @@ function Recipes() {
   const createNewRecipe = () => {
     setPrefilledCategoryPath('');
     setShowCreateModal(true);
+  };
+
+  const handleUploadDocument = () => {
+    // Check if outlet is selected
+    if (!currentOutlet || currentOutlet.id === 'all') {
+      alert('Please select a specific outlet before uploading recipes');
+      return;
+    }
+
+    // Additional validation: ensure we have a valid numeric outlet ID
+    if (!currentOutlet.id || typeof currentOutlet.id !== 'number') {
+      console.error('Invalid outlet ID:', currentOutlet);
+      alert('Outlet ID is invalid. Please select an outlet from the dropdown and try again.');
+      return;
+    }
+
+    console.log('Opening upload modal with outlet ID:', currentOutlet.id);
+    setShowUploadModal(true);
+  };
+
+  const handleParseComplete = (result) => {
+    setParseResult(result);
+    setShowUploadModal(false);
+    setShowReviewModal(true);
+  };
+
+  const handleReviewClose = () => {
+    setShowReviewModal(false);
+    setParseResult(null);
+    // Refresh recipes list
+    fetchRecipes();
   };
 
   const createNewFolder = () => {
@@ -492,6 +528,14 @@ function Recipes() {
               <button onClick={createNewRecipe} className="btn-new-recipe" title="Create New Recipe">
                 📄+
               </button>
+              <button
+                onClick={handleUploadDocument}
+                className="btn-upload-recipe"
+                title="Upload Recipe Document (AI-powered)"
+                disabled={!currentOutlet || currentOutlet.id === 'all'}
+              >
+                📤
+              </button>
             </div>
           </div>
 
@@ -627,6 +671,25 @@ function Recipes() {
           onCreate={handleCreateFolder}
         />
       )}
+
+      {/* Upload Recipe Modal */}
+      {showUploadModal && (
+        <UploadRecipeModal
+          isOpen={showUploadModal}
+          onClose={() => setShowUploadModal(false)}
+          outletId={currentOutlet?.id}
+          onParseComplete={handleParseComplete}
+        />
+      )}
+
+      {/* Review Parsed Recipe Modal */}
+      {showReviewModal && parseResult && (
+        <ReviewParsedRecipe
+          parseResult={parseResult}
+          outletId={currentOutlet?.id}
+          onClose={handleReviewClose}
+        />
+      )}
       </div>
     </>
   );
@@ -691,14 +754,14 @@ function RecipeMetadata({ recipe, editedRecipe, onFieldChange }) {
   const currentServingUnit = editedRecipe?.serving_unit_id !== undefined ? editedRecipe.serving_unit_id : recipe.serving_unit_id;
   const currentDescription = editedRecipe?.description !== undefined ? editedRecipe.description : recipe.description;
 
-  // Filter to common yield units
+  // Filter to common yield units (case-insensitive)
   const yieldUnits = units.filter(u =>
-    ['ea', 'ct', 'doz', 'lb', 'oz', 'kg', 'g', 'gal', 'qt', 'pt', 'cup', 'L', 'mL'].includes(u.abbreviation)
+    ['ea', 'ct', 'doz', 'lb', 'oz', 'kg', 'g', 'gal', 'qt', 'pt', 'cup', 'l', 'ml'].includes(u.abbreviation.toLowerCase())
   );
 
-  // Serving units - portions (null) plus weight/volume units for serving sizes
+  // Serving units - portions (null) plus weight/volume units for serving sizes (case-insensitive)
   const servingUnits = units.filter(u =>
-    ['oz', 'g', 'cup', 'mL', 'fl oz'].includes(u.abbreviation)
+    ['oz', 'g', 'cup', 'ml', 'fl oz'].includes(u.abbreviation.toLowerCase())
   );
 
   return (
@@ -716,22 +779,22 @@ function RecipeMetadata({ recipe, editedRecipe, onFieldChange }) {
           />
           <select
             className="metadata-select"
-            value={currentYieldUnit || ''}
+            value={currentYieldUnit !== null && currentYieldUnit !== undefined ? String(currentYieldUnit) : ''}
             onChange={(e) => onFieldChange('yield_unit_id', e.target.value ? parseInt(e.target.value) : null)}
           >
             <option value="">(select unit)</option>
             <optgroup label="Count">
-              {yieldUnits.filter(u => ['ea', 'ct', 'doz'].includes(u.abbreviation)).map(unit => (
+              {yieldUnits.filter(u => ['ea', 'ct', 'doz'].includes(u.abbreviation.toLowerCase())).map(unit => (
                 <option key={unit.id} value={unit.id}>{unit.name} ({unit.abbreviation})</option>
               ))}
             </optgroup>
             <optgroup label="Weight">
-              {yieldUnits.filter(u => ['lb', 'oz', 'kg', 'g'].includes(u.abbreviation)).map(unit => (
+              {yieldUnits.filter(u => ['lb', 'oz', 'kg', 'g'].includes(u.abbreviation.toLowerCase())).map(unit => (
                 <option key={unit.id} value={unit.id}>{unit.name} ({unit.abbreviation})</option>
               ))}
             </optgroup>
             <optgroup label="Volume">
-              {yieldUnits.filter(u => ['gal', 'qt', 'pt', 'cup', 'L', 'mL'].includes(u.abbreviation)).map(unit => (
+              {yieldUnits.filter(u => ['gal', 'qt', 'pt', 'cup', 'l', 'ml'].includes(u.abbreviation.toLowerCase())).map(unit => (
                 <option key={unit.id} value={unit.id}>{unit.name} ({unit.abbreviation})</option>
               ))}
             </optgroup>
@@ -750,7 +813,7 @@ function RecipeMetadata({ recipe, editedRecipe, onFieldChange }) {
           />
           <select
             className="metadata-select"
-            value={currentServingUnit || ''}
+            value={currentServingUnit !== null && currentServingUnit !== undefined ? String(currentServingUnit) : ''}
             onChange={(e) => onFieldChange('serving_unit_id', e.target.value ? parseInt(e.target.value) : null)}
           >
             <option value="">portions</option>
@@ -776,12 +839,125 @@ function RecipeMetadata({ recipe, editedRecipe, onFieldChange }) {
   );
 }
 
+function IngredientMappingCell({ values, onFieldChange, commonProducts, onKeyDown }) {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filteredProducts, setFilteredProducts] = useState([]);
+  const [selectedIndex, setSelectedIndex] = useState(-1);
+  const inputRef = useRef(null);
+
+  // Update search term when editing a mapped product
+  useEffect(() => {
+    if (values.common_product_id && values.common_name) {
+      setSearchTerm(values.common_name);
+    } else if (values.ingredient_name) {
+      setSearchTerm(values.ingredient_name);
+    } else {
+      setSearchTerm('');
+    }
+  }, [values.common_product_id, values.common_name, values.ingredient_name]);
+
+  const handleSearchChange = (term) => {
+    setSearchTerm(term);
+    setSelectedIndex(-1);
+
+    // Clear current mapping and set as text-only while typing
+    onFieldChange('ingredient_name', term);
+    onFieldChange('common_product_id', null);
+    onFieldChange('common_name', null);
+
+    // Filter products
+    if (term.length >= 2) {
+      const filtered = commonProducts.filter(cp =>
+        cp.common_name.toLowerCase().includes(term.toLowerCase())
+      );
+      setFilteredProducts(filtered);
+    } else {
+      setFilteredProducts([]);
+    }
+  };
+
+  const handleSelectProduct = (product) => {
+    onFieldChange('common_product_id', product.id);
+    onFieldChange('common_name', product.common_name);
+    onFieldChange('ingredient_name', null);
+    setSearchTerm(product.common_name);
+    setFilteredProducts([]);
+    setSelectedIndex(-1);
+  };
+
+  const handleKeyDown = (e) => {
+    // Arrow key navigation in dropdown
+    if (filteredProducts.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSelectedIndex(prev =>
+          prev < filteredProducts.length - 1 ? prev + 1 : prev
+        );
+        return;
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSelectedIndex(prev => prev > 0 ? prev - 1 : -1);
+        return;
+      } else if (e.key === 'Enter' && selectedIndex >= 0) {
+        e.preventDefault();
+        handleSelectProduct(filteredProducts[selectedIndex]);
+        return;
+      }
+    }
+
+    // Pass through to parent for Tab/Enter/Escape handling
+    if (onKeyDown) {
+      onKeyDown(e);
+    }
+  };
+
+  return (
+    <div className="ingredient-mapping-wrapper" onClick={e => e.stopPropagation()}>
+      <input
+        ref={inputRef}
+        type="text"
+        className="inline-edit-input"
+        value={searchTerm}
+        onChange={(e) => handleSearchChange(e.target.value)}
+        onKeyDown={handleKeyDown}
+        onFocus={(e) => e.target.select()}
+        placeholder="Type to search or add text-only..."
+        autoFocus
+      />
+
+      {/* Autocomplete dropdown */}
+      {filteredProducts.length > 0 && (
+        <div className="product-search-dropdown">
+          {filteredProducts.slice(0, 10).map((p, idx) => (
+            <div
+              key={p.id}
+              className={`product-search-item ${idx === selectedIndex ? 'selected' : ''}`}
+              onClick={() => handleSelectProduct(p)}
+              onMouseEnter={() => setSelectedIndex(idx)}
+            >
+              {p.common_name}
+              {p.category && <span style={{ color: '#6b7280', marginLeft: '0.5rem' }}>({p.category})</span>}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Show mapped indicator */}
+      {values.common_product_id && (
+        <span className="mapped-indicator" title="Mapped to product">✓</span>
+      )}
+    </div>
+  );
+}
+
 function RecipeIngredients({ recipe, onIngredientsChange }) {
   const [commonProducts, setCommonProducts] = useState([]);
   const [units, setUnits] = useState([]);
   const [showAddRow, setShowAddRow] = useState(false);
+  const [addMode, setAddMode] = useState('map'); // 'map' or 'text'
   const [newIngredient, setNewIngredient] = useState({
     common_product_id: '',
+    ingredient_name: '',
     quantity: '',
     unit_id: '',
     yield_percentage: 100
@@ -789,6 +965,8 @@ function RecipeIngredients({ recipe, onIngredientsChange }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [filteredProducts, setFilteredProducts] = useState([]);
   const [showAutocomplete, setShowAutocomplete] = useState(false);
+  const [editingIngredientId, setEditingIngredientId] = useState(null);
+  const [editedValues, setEditedValues] = useState({});
 
   useEffect(() => {
     fetchCommonProducts();
@@ -834,18 +1012,35 @@ function RecipeIngredients({ recipe, onIngredientsChange }) {
   };
 
   const handleAddIngredient = async () => {
-    if (!newIngredient.common_product_id || !newIngredient.quantity || !newIngredient.unit_id) {
-      alert('Please fill in all required fields');
-      return;
+    // Validate based on mode
+    if (addMode === 'map') {
+      if (!newIngredient.common_product_id || !newIngredient.quantity || !newIngredient.unit_id) {
+        alert('Please fill in all required fields');
+        return;
+      }
+    } else {
+      if (!newIngredient.ingredient_name || !newIngredient.quantity || !newIngredient.unit_id) {
+        alert('Please fill in all required fields');
+        return;
+      }
     }
 
     try {
-      await axios.post(`${API_URL}/recipes/${recipe.id}/ingredients`, {
-        common_product_id: parseInt(newIngredient.common_product_id),
-        quantity: parseFloat(newIngredient.quantity),
-        unit_id: parseInt(newIngredient.unit_id),
-        yield_percentage: parseFloat(newIngredient.yield_percentage)
-      });
+      const ingredientData = addMode === 'map'
+        ? {
+            common_product_id: parseInt(newIngredient.common_product_id),
+            quantity: parseFloat(newIngredient.quantity),
+            unit_id: parseInt(newIngredient.unit_id),
+            yield_percentage: parseFloat(newIngredient.yield_percentage)
+          }
+        : {
+            ingredient_name: newIngredient.ingredient_name,
+            quantity: parseFloat(newIngredient.quantity),
+            unit_id: parseInt(newIngredient.unit_id),
+            yield_percentage: parseFloat(newIngredient.yield_percentage)
+          };
+
+      await axios.post(`${API_URL}/recipes/${recipe.id}/ingredients`, ingredientData);
 
       // Refresh recipe to get updated ingredients
       onIngredientsChange();
@@ -853,6 +1048,7 @@ function RecipeIngredients({ recipe, onIngredientsChange }) {
       // Reset form
       setNewIngredient({
         common_product_id: '',
+        ingredient_name: '',
         quantity: '',
         unit_id: '',
         yield_percentage: 100
@@ -877,6 +1073,129 @@ function RecipeIngredients({ recipe, onIngredientsChange }) {
     }
   };
 
+  const handleStartEdit = (ingredientId) => {
+    const ingredient = recipe.ingredients.find(i => i.id === ingredientId);
+    setEditingIngredientId(ingredientId);
+    setEditedValues({
+      id: ingredient.id,
+      common_product_id: ingredient.common_product_id,
+      ingredient_name: ingredient.ingredient_name,
+      common_name: ingredient.common_name,
+      quantity: ingredient.quantity,
+      unit_id: ingredient.unit_id,
+      yield_percentage: ingredient.yield_percentage
+    });
+  };
+
+  const handleFieldChange = (field, value) => {
+    setEditedValues(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleSave = async () => {
+    // Validation
+    if (!editedValues.quantity || parseFloat(editedValues.quantity) <= 0) {
+      alert('Quantity must be greater than 0');
+      return;
+    }
+
+    if (!editedValues.unit_id) {
+      alert('Unit is required');
+      return;
+    }
+
+    if (!editedValues.common_product_id && !editedValues.ingredient_name) {
+      alert('Ingredient must be mapped to a product or have a name');
+      return;
+    }
+
+    try {
+      const updates = {
+        quantity: parseFloat(editedValues.quantity),
+        unit_id: parseInt(editedValues.unit_id),
+        yield_percentage: parseFloat(editedValues.yield_percentage)
+      };
+
+      // Include mapping changes
+      if (editedValues.common_product_id !== undefined) {
+        updates.common_product_id = editedValues.common_product_id;
+      }
+      if (editedValues.ingredient_name !== undefined) {
+        updates.ingredient_name = editedValues.ingredient_name;
+      }
+
+      await axios.patch(
+        `${API_URL}/recipes/${recipe.id}/ingredients/${editedValues.id}`,
+        updates
+      );
+
+      onIngredientsChange(); // Refresh data
+      setEditingIngredientId(null);
+      setEditedValues({});
+    } catch (error) {
+      console.error('Error updating ingredient:', error);
+      alert(error.response?.data?.detail || 'Failed to update ingredient');
+    }
+  };
+
+  const handleCancel = () => {
+    setEditingIngredientId(null);
+    setEditedValues({});
+  };
+
+  const handleKeyDown = (e, field) => {
+    // Escape - cancel editing
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      handleCancel();
+      return;
+    }
+
+    // Enter - save and move to next row (Excel-like behavior)
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSave().then(() => {
+        const currentIndex = recipe.ingredients.findIndex(i => i.id === editingIngredientId);
+        const nextIngredient = recipe.ingredients[currentIndex + 1];
+        if (nextIngredient) {
+          setTimeout(() => handleStartEdit(nextIngredient.id), 100);
+        }
+      }).catch(() => {
+        // Save failed, stay in edit mode
+      });
+      return;
+    }
+
+    // Tab - move to next field (Excel-like behavior)
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const fields = ['ingredient', 'quantity', 'unit', 'yield'];
+      const currentIdx = fields.indexOf(field);
+      const nextIdx = e.shiftKey ? currentIdx - 1 : currentIdx + 1;
+
+      if (nextIdx >= 0 && nextIdx < fields.length) {
+        // Move to next/previous field in same row
+        const nextField = fields[nextIdx];
+        const selector = `.editing [data-field="${nextField}"]`;
+        const nextInput = document.querySelector(selector);
+        if (nextInput) {
+          nextInput.focus();
+          if (nextInput.select) nextInput.select();
+        }
+      } else if (!e.shiftKey && nextIdx >= fields.length) {
+        // Reached end of row, save and move to next row
+        const currentIndex = recipe.ingredients.findIndex(i => i.id === editingIngredientId);
+        const nextIngredient = recipe.ingredients[currentIndex + 1];
+        if (nextIngredient) {
+          handleSave().then(() => {
+            setTimeout(() => handleStartEdit(nextIngredient.id), 100);
+          }).catch(() => {
+            // Save failed, stay in edit mode
+          });
+        }
+      }
+    }
+  };
+
   return (
     <div className="recipe-section">
       <h2>Ingredients</h2>
@@ -884,6 +1203,7 @@ function RecipeIngredients({ recipe, onIngredientsChange }) {
         <table className="ingredients-table">
           <thead>
             <tr>
+              <th style={{ width: '60px', textAlign: 'center' }}>Mapped?</th>
               <th>Ingredient</th>
               <th>Quantity</th>
               <th>Unit</th>
@@ -893,114 +1213,267 @@ function RecipeIngredients({ recipe, onIngredientsChange }) {
           </thead>
           <tbody>
             {recipe.ingredients && recipe.ingredients.length > 0 ? (
-              recipe.ingredients.map((ing) => (
-                <tr key={ing.id}>
-                  <td>{ing.common_name || ing.sub_recipe_name || 'Unknown'}</td>
-                  <td>{ing.quantity}</td>
-                  <td>{ing.unit_abbreviation}</td>
-                  <td>{ing.yield_percentage}%</td>
-                  <td>
-                    <button
-                      className="btn-icon-small"
-                      onClick={() => handleRemoveIngredient(ing.id)}
-                      title="Remove ingredient"
-                    >
-                      ×
-                    </button>
-                  </td>
-                </tr>
-              ))
+              recipe.ingredients.map((ing) => {
+                const isEditing = editingIngredientId === ing.id;
+                const values = isEditing ? editedValues : ing;
+
+                return (
+                  <tr key={ing.id} className={isEditing ? 'editing' : ''}>
+                    {/* Mapped Indicator Column */}
+                    <td className="mapped-cell">
+                      {values.common_product_id ?
+                        <span className="mapped-yes">✓</span> :
+                        <span className="mapped-no">×</span>
+                      }
+                    </td>
+
+                    {/* Ingredient Name/Mapping Column */}
+                    <td>
+                      {isEditing ? (
+                        <div data-field="ingredient">
+                          <IngredientMappingCell
+                            values={values}
+                            onFieldChange={handleFieldChange}
+                            commonProducts={commonProducts}
+                            onKeyDown={(e) => handleKeyDown(e, 'ingredient')}
+                          />
+                        </div>
+                      ) : (
+                        <span onClick={() => handleStartEdit(ing.id)}>
+                          {ing.ingredient_name || ing.common_name || 'Unknown'}
+                        </span>
+                      )}
+                    </td>
+
+                    {/* Quantity Column */}
+                    <td>
+                      {isEditing ? (
+                        <input
+                          type="number"
+                          className="inline-edit-input"
+                          data-field="quantity"
+                          value={values.quantity}
+                          onChange={(e) => handleFieldChange('quantity', e.target.value)}
+                          onKeyDown={(e) => handleKeyDown(e, 'quantity')}
+                          onFocus={(e) => e.target.select()}
+                          step="0.01"
+                        />
+                      ) : (
+                        <span onClick={() => handleStartEdit(ing.id)}>{ing.quantity}</span>
+                      )}
+                    </td>
+
+                    {/* Unit Column */}
+                    <td>
+                      {isEditing ? (
+                        <select
+                          className="inline-edit-select"
+                          data-field="unit"
+                          value={values.unit_id}
+                          onChange={(e) => handleFieldChange('unit_id', e.target.value)}
+                          onKeyDown={(e) => handleKeyDown(e, 'unit')}
+                        >
+                          {units.map(u => (
+                            <option key={u.id} value={u.id}>{u.abbreviation}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span onClick={() => handleStartEdit(ing.id)}>{ing.unit_abbreviation}</span>
+                      )}
+                    </td>
+
+                    {/* Yield % Column */}
+                    <td>
+                      {isEditing ? (
+                        <input
+                          type="number"
+                          className="inline-edit-input"
+                          data-field="yield"
+                          value={values.yield_percentage}
+                          onChange={(e) => handleFieldChange('yield_percentage', e.target.value)}
+                          onKeyDown={(e) => handleKeyDown(e, 'yield')}
+                          onFocus={(e) => e.target.select()}
+                          min="0"
+                          max="100"
+                          step="1"
+                        />
+                      ) : (
+                        <span onClick={() => handleStartEdit(ing.id)}>{ing.yield_percentage}%</span>
+                      )}
+                    </td>
+
+                    {/* Actions Column */}
+                    <td>
+                      {isEditing ? (
+                        <>
+                          <button className="btn-icon-small" onClick={handleSave} title="Save">✓</button>
+                          <button className="btn-icon-small" onClick={handleCancel} title="Cancel">×</button>
+                        </>
+                      ) : (
+                        <button
+                          className="btn-icon-small"
+                          onClick={() => handleRemoveIngredient(ing.id)}
+                          title="Delete"
+                        >
+                          ×
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })
             ) : (
               <tr>
-                <td colSpan="5" className="empty-cell">No ingredients yet</td>
+                <td colSpan="6" className="empty-cell">No ingredients yet</td>
               </tr>
             )}
             {showAddRow && (
               <tr className="ingredient-add-row">
-                <td>
-                  <div className="autocomplete-container">
-                    <input
-                      type="text"
-                      className="ingredient-input"
-                      value={searchTerm}
-                      onChange={(e) => handleSearchChange(e.target.value)}
-                      placeholder="Search common products..."
-                      autoFocus
-                    />
-                    {showAutocomplete && filteredProducts.length > 0 && (
-                      <div className="autocomplete-dropdown">
-                        {filteredProducts.slice(0, 10).map(product => (
-                          <div
-                            key={product.id}
-                            className="autocomplete-item"
-                            onClick={() => selectProduct(product)}
-                          >
-                            {product.common_name}
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                <td colSpan="6">
+                  <div style={{ marginBottom: '0.75rem' }}>
+                    <div className="add-mode-toggle" style={{ display: 'inline-flex', gap: 0, border: '1px solid #d1d5db', borderRadius: '6px', overflow: 'hidden' }}>
+                      <button
+                        type="button"
+                        style={{
+                          padding: '0.5rem 1rem',
+                          background: addMode === 'map' ? '#3b82f6' : '#fff',
+                          color: addMode === 'map' ? 'white' : '#6b7280',
+                          border: 'none',
+                          fontWeight: '500',
+                          cursor: 'pointer'
+                        }}
+                        onClick={() => setAddMode('map')}
+                      >
+                        Map to Product
+                      </button>
+                      <button
+                        type="button"
+                        style={{
+                          padding: '0.5rem 1rem',
+                          background: addMode === 'text' ? '#3b82f6' : '#fff',
+                          color: addMode === 'text' ? 'white' : '#6b7280',
+                          border: 'none',
+                          fontWeight: '500',
+                          cursor: 'pointer'
+                        }}
+                        onClick={() => setAddMode('text')}
+                      >
+                        Quick Add Text
+                      </button>
+                    </div>
                   </div>
-                </td>
-                <td>
-                  <input
-                    type="number"
-                    className="ingredient-input"
-                    value={newIngredient.quantity}
-                    onChange={(e) => setNewIngredient({ ...newIngredient, quantity: e.target.value })}
-                    placeholder="0"
-                    step="0.01"
-                  />
-                </td>
-                <td>
-                  <select
-                    className="ingredient-input"
-                    value={newIngredient.unit_id}
-                    onChange={(e) => setNewIngredient({ ...newIngredient, unit_id: e.target.value })}
-                  >
-                    <option value="">Select unit</option>
-                    {units.map(unit => (
-                      <option key={unit.id} value={unit.id}>
-                        {unit.abbreviation}
-                      </option>
-                    ))}
-                  </select>
-                </td>
-                <td>
-                  <input
-                    type="number"
-                    className="ingredient-input"
-                    value={newIngredient.yield_percentage}
-                    onChange={(e) => setNewIngredient({ ...newIngredient, yield_percentage: e.target.value })}
-                    step="1"
-                    min="0"
-                    max="100"
-                  />
-                </td>
-                <td>
-                  <button
-                    className="btn-icon-small btn-save-ingredient"
-                    onClick={handleAddIngredient}
-                    title="Save ingredient"
-                  >
-                    ✓
-                  </button>
-                  <button
-                    className="btn-icon-small"
-                    onClick={() => {
-                      setShowAddRow(false);
-                      setSearchTerm('');
-                      setNewIngredient({
-                        common_product_id: '',
-                        quantity: '',
-                        unit_id: '',
-                        yield_percentage: 100
-                      });
-                    }}
-                    title="Cancel"
-                  >
-                    ×
-                  </button>
+
+                  {addMode === 'map' ? (
+                    <div className="autocomplete-container">
+                      <input
+                        type="text"
+                        className="ingredient-input"
+                        value={searchTerm}
+                        onChange={(e) => handleSearchChange(e.target.value)}
+                        placeholder="Search common products..."
+                        autoFocus
+                        style={{ width: '100%', marginBottom: '0.5rem' }}
+                      />
+                      {showAutocomplete && filteredProducts.length > 0 && (
+                        <div className="autocomplete-dropdown">
+                          {filteredProducts.slice(0, 10).map(product => (
+                            <div
+                              key={product.id}
+                              className="autocomplete-item"
+                              onClick={() => selectProduct(product)}
+                            >
+                              {product.common_name}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div style={{ marginBottom: '0.5rem' }}>
+                      <input
+                        type="text"
+                        className="ingredient-input"
+                        value={newIngredient.ingredient_name}
+                        onChange={(e) => setNewIngredient({ ...newIngredient, ingredient_name: e.target.value })}
+                        placeholder="Ingredient name (e.g., 'Fresh basil, chopped')"
+                        autoFocus
+                        style={{ width: '100%' }}
+                      />
+                      <small style={{ display: 'block', marginTop: '0.25rem', color: '#6b7280', fontSize: '0.75rem' }}>
+                        Text-only ingredients won't have cost tracking
+                      </small>
+                    </div>
+                  )}
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto', gap: '0.5rem' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.75rem', color: '#6b7280', marginBottom: '0.25rem' }}>Quantity</label>
+                      <input
+                        type="number"
+                        className="ingredient-input"
+                        value={newIngredient.quantity}
+                        onChange={(e) => setNewIngredient({ ...newIngredient, quantity: e.target.value })}
+                        placeholder="0"
+                        step="0.01"
+                        style={{ width: '100%' }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.75rem', color: '#6b7280', marginBottom: '0.25rem' }}>Unit</label>
+                      <select
+                        className="ingredient-input"
+                        value={newIngredient.unit_id}
+                        onChange={(e) => setNewIngredient({ ...newIngredient, unit_id: e.target.value })}
+                        style={{ width: '100%' }}
+                      >
+                        <option value="">Select unit</option>
+                        {units.map(unit => (
+                          <option key={unit.id} value={unit.id}>
+                            {unit.abbreviation}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.75rem', color: '#6b7280', marginBottom: '0.25rem' }}>Yield %</label>
+                      <input
+                        type="number"
+                        className="ingredient-input"
+                        value={newIngredient.yield_percentage}
+                        onChange={(e) => setNewIngredient({ ...newIngredient, yield_percentage: e.target.value })}
+                        step="1"
+                        min="0"
+                        max="100"
+                        style={{ width: '100%' }}
+                      />
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.25rem', alignSelf: 'end' }}>
+                      <button
+                        className="btn-icon-small btn-save-ingredient"
+                        onClick={handleAddIngredient}
+                        title="Save ingredient"
+                      >
+                        ✓
+                      </button>
+                      <button
+                        className="btn-icon-small"
+                        onClick={() => {
+                          setShowAddRow(false);
+                          setSearchTerm('');
+                          setNewIngredient({
+                            common_product_id: '',
+                            ingredient_name: '',
+                            quantity: '',
+                            unit_id: '',
+                            yield_percentage: 100
+                          });
+                        }}
+                        title="Cancel"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  </div>
                 </td>
               </tr>
             )}
@@ -1190,7 +1663,7 @@ function RecipeCost({ recipe }) {
     if (recipe?.id) {
       fetchCostData();
     }
-  }, [recipe?.id]);
+  }, [recipe?.id, recipe?.updated_at]);
 
   const fetchCostData = async () => {
     try {

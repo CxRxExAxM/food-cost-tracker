@@ -1,7 +1,40 @@
 # Food Cost Tracker - Design System
 
-**Last Updated:** November 29, 2024  
+**Last Updated:** December 19, 2024
 **Design Philosophy:** Professional cyberpunk-influenced dark UI with sharp geometric lines, clear visual hierarchy, and terminal aesthetics
+
+---
+
+## ⚠️ CRITICAL: MANDATORY FOR ALL NEW COMPONENTS
+
+**This design system is NOT optional.**
+
+When creating ANY new component, page, modal, or CSS file:
+
+1. **ALWAYS use CSS variables** - NEVER use hardcoded colors (`#ffffff`, `rgb()`, etc.)
+2. **Reference this file FIRST** - Check existing patterns before writing custom CSS
+3. **Use existing component classes** - Don't reinvent buttons, inputs, cards, badges
+4. **Follow the spacing system** - Use `var(--space-*)` tokens, not arbitrary values
+5. **Test in dark mode** - All components must work with the dark theme
+
+### CSS Variable Reference Quick List
+```css
+/* Backgrounds */
+--bg-primary, --bg-secondary, --bg-tertiary, --bg-elevated
+
+/* Text */
+--text-primary, --text-secondary, --text-tertiary
+
+/* Borders */
+--border-subtle, --border-default, --border-strong
+
+/* Colors */
+--color-red, --color-yellow, --color-green (+ -dim, -bright variants)
+```
+
+**If you add hardcoded colors, it WILL break the theme.**
+
+---
 
 ## Design Principles
 

@@ -424,6 +424,21 @@ function Products() {
     }
   };
 
+  const handleDeleteProduct = async (product) => {
+    const confirmMessage = `Delete product "${product.name}"?\n\nThis will permanently remove the product and all its price history. This action cannot be undone.`;
+    if (!confirm(confirmMessage)) return;
+
+    try {
+      await axios.delete(`${API_URL}/products/${product.id}`);
+
+      // Refresh the products list
+      fetchProducts();
+    } catch (error) {
+      console.error('Error deleting product:', error);
+      alert(error.response?.data?.detail || 'Failed to delete product');
+    }
+  };
+
   // Inline editing functions
   const startCellEdit = (productId, field, currentValue) => {
     setEditingCell({ productId, field });
@@ -477,7 +492,68 @@ function Products() {
       cancelCellEdit();
     } catch (error) {
       console.error('Error updating product:', error);
-      alert('Failed to update product');
+      // Re-throw so keyboard navigation can handle it
+      throw error;
+    }
+  };
+
+  const handleCellKeyDown = (e, productId, field) => {
+    // Escape - cancel editing
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      cancelCellEdit();
+      return;
+    }
+
+    // Enter - save and move to next row (same column)
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleCellSave(productId, field).then(() => {
+        // Find next product in list
+        const currentIndex = products.findIndex(p => p.id === productId);
+        const nextProduct = products[currentIndex + 1];
+        if (nextProduct) {
+          // Get the current value for the same field in next product
+          let nextValue;
+          if (field === 'unit_id') {
+            nextValue = nextProduct.unit_id;
+          } else {
+            nextValue = nextProduct[field];
+          }
+          startCellEdit(nextProduct.id, field, nextValue);
+        }
+      });
+      return;
+    }
+
+    // Tab - move to next/previous field
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const fields = ['name', 'brand', 'pack', 'size', 'unit_id'];
+      const currentIdx = fields.indexOf(field);
+      const nextIdx = e.shiftKey ? currentIdx - 1 : currentIdx + 1;
+
+      if (nextIdx >= 0 && nextIdx < fields.length) {
+        const nextField = fields[nextIdx];
+        // Save current field, then move to next (with error handling)
+        handleCellSave(productId, field).then(() => {
+          // Get the current value for the next field
+          let nextValue;
+          const product = products.find(p => p.id === productId);
+          if (product) {
+            nextValue = nextField === 'unit_id' ? product.unit_id : product[nextField];
+            startCellEdit(productId, nextField, nextValue);
+          }
+        }).catch((error) => {
+          // If save fails, still move to next field
+          console.error('Save failed during tab navigation:', error);
+          const product = products.find(p => p.id === productId);
+          if (product) {
+            const nextValue = nextField === 'unit_id' ? product.unit_id : product[nextField];
+            startCellEdit(productId, nextField, nextValue);
+          }
+        });
+      }
     }
   };
 
@@ -517,9 +593,8 @@ function Products() {
             value={editValue}
             onChange={(e) => setEditValue(e.target.value)}
             onBlur={() => handleCellSave(product.id, field)}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') cancelCellEdit();
-            }}
+            onKeyDown={(e) => handleCellKeyDown(e, product.id, field)}
+            onFocus={(e) => e.target.select()}
             className="inline-edit-select"
             autoFocus
           >
@@ -537,10 +612,8 @@ function Products() {
           value={editValue}
           onChange={(e) => setEditValue(e.target.value)}
           onBlur={() => handleCellSave(product.id, field)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') handleCellSave(product.id, field);
-            if (e.key === 'Escape') cancelCellEdit();
-          }}
+          onKeyDown={(e) => handleCellKeyDown(e, product.id, field)}
+          onFocus={(e) => e.target.select()}
           className="inline-edit-input"
           autoFocus
           step={field === 'size' ? '0.01' : undefined}
@@ -757,6 +830,7 @@ function Products() {
                 {renderSortableHeader('case_price', 'Case Price', 'text-right')}
                 {renderSortableHeader('unit_price', 'Unit Price', 'text-right')}
                 {renderSortableHeader('common_product_name', 'Common Product')}
+                <th className="text-center">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -846,6 +920,9 @@ function Products() {
                   </td>
                   <td className="text-center text-muted">-</td>
                   <td>
+                    {/* Common product mapping - empty for new products */}
+                  </td>
+                  <td className="text-center">
                     <button className="btn-save-product" onClick={handleCreateProduct}>
                       Save
                     </button>
@@ -945,29 +1022,22 @@ function Products() {
                             ) : (
                               <div className="common-product-display">
                                 <span
-                                  className="common-product-badge clickable"
-                                  onClick={() => startEditingCommonProduct(product)}
-                                  title="Click to edit name"
+                                  className="common-product-link"
+                                  onClick={() => openAllergenModal(product.common_product_id)}
+                                  title="Click to manage product details"
                                 >
                                   {getCommonProductName(product)}
+                                  <div className="allergen-icons">
+                                    {getActiveAllergens(product.common_product_id).slice(0, 4).map(a => (
+                                      <span key={a.key} className="allergen-icon" title={a.label}>
+                                        {a.icon}
+                                      </span>
+                                    ))}
+                                    {getActiveAllergens(product.common_product_id).length > 4 && (
+                                      <span className="allergen-more">+{getActiveAllergens(product.common_product_id).length - 4}</span>
+                                    )}
+                                  </div>
                                 </span>
-                                <div className="allergen-icons">
-                                  {getActiveAllergens(product.common_product_id).slice(0, 4).map(a => (
-                                    <span key={a.key} className="allergen-icon" title={a.label}>
-                                      {a.icon}
-                                    </span>
-                                  ))}
-                                  {getActiveAllergens(product.common_product_id).length > 4 && (
-                                    <span className="allergen-more">+{getActiveAllergens(product.common_product_id).length - 4}</span>
-                                  )}
-                                </div>
-                                <button
-                                  onClick={() => openAllergenModal(product.common_product_id)}
-                                  className="btn-allergen"
-                                  title="Manage allergens"
-                                >
-                                  🏷️
-                                </button>
                                 <button
                                   onClick={() => handleUnmap(product.id)}
                                   className="btn-unmap"
@@ -988,6 +1058,15 @@ function Products() {
                         )}
                       </div>
                     )}
+                  </td>
+                  <td className="text-center">
+                    <button
+                      onClick={() => handleDeleteProduct(product)}
+                      className="btn-delete-product"
+                      title="Delete this product"
+                    >
+                      🗑️
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -1011,8 +1090,114 @@ function Products() {
 
 // Allergen Modal Component
 function AllergenModal({ product, onClose, onUpdate }) {
+  const [activeTab, setActiveTab] = useState('allergens');
+  const [conversions, setConversions] = useState([]);
+  const [units, setUnits] = useState([]);
+  const [newConversion, setNewConversion] = useState({
+    from_unit_id: '',
+    to_unit_id: '',
+    conversion_factor: '',
+    notes: '',
+    create_reverse: true
+  });
+  const [mappedProductsData, setMappedProductsData] = useState(null);
+  const [selectedOutlet, setSelectedOutlet] = useState('all');
+  const [loadingMappedProducts, setLoadingMappedProducts] = useState(false);
+
   const allergenAllergens = ALLERGENS.filter(a => !a.dietary);
   const dietaryFlags = ALLERGENS.filter(a => a.dietary);
+
+  useEffect(() => {
+    if (product) {
+      fetchConversions();
+      fetchUnits();
+      if (activeTab === 'mapped') {
+        fetchMappedProducts();
+      }
+    }
+  }, [product, activeTab]);
+
+  const fetchConversions = async () => {
+    try {
+      const response = await axios.get(`${API_URL}/common-products/${product.id}/conversions`);
+      setConversions(response.data);
+    } catch (error) {
+      console.error('Error fetching conversions:', error);
+    }
+  };
+
+  const fetchUnits = async () => {
+    try {
+      const response = await axios.get(`${API_URL}/units`);
+      setUnits(response.data);
+    } catch (error) {
+      console.error('Error fetching units:', error);
+    }
+  };
+
+  const fetchMappedProducts = async () => {
+    setLoadingMappedProducts(true);
+    try {
+      const response = await axios.get(`${API_URL}/common-products/${product.id}/mapped-products`);
+      setMappedProductsData(response.data);
+    } catch (error) {
+      console.error('Error fetching mapped products:', error);
+    } finally {
+      setLoadingMappedProducts(false);
+    }
+  };
+
+  const handleUnmapProduct = async (productId) => {
+    if (!confirm('Unmap this product? This will remove the connection to the common product.')) return;
+    try {
+      await axios.patch(`${API_URL}/products/${productId}/unmap`);
+      fetchMappedProducts(); // Refresh the mapped products list
+    } catch (error) {
+      console.error('Error unmapping product:', error);
+      alert('Failed to unmap product');
+    }
+  };
+
+  const handleCreateConversion = async () => {
+    if (!newConversion.from_unit_id || !newConversion.to_unit_id || !newConversion.conversion_factor) {
+      alert('Please fill in all required fields');
+      return;
+    }
+
+    try {
+      await axios.post(`${API_URL}/common-products/${product.id}/conversions`, {
+        from_unit_id: parseInt(newConversion.from_unit_id),
+        to_unit_id: parseInt(newConversion.to_unit_id),
+        conversion_factor: parseFloat(newConversion.conversion_factor),
+        notes: newConversion.notes || null,
+        create_reverse: newConversion.create_reverse
+      });
+
+      fetchConversions();
+      setNewConversion({
+        from_unit_id: '',
+        to_unit_id: '',
+        conversion_factor: '',
+        notes: '',
+        create_reverse: true
+      });
+    } catch (error) {
+      console.error('Error creating conversion:', error);
+      alert(error.response?.data?.detail || 'Failed to create conversion');
+    }
+  };
+
+  const handleDeleteConversion = async (conversionId) => {
+    if (!confirm('Delete this conversion?')) return;
+
+    try {
+      await axios.delete(`${API_URL}/common-products/${product.id}/conversions/${conversionId}`);
+      fetchConversions();
+    } catch (error) {
+      console.error('Error deleting conversion:', error);
+      alert('Failed to delete conversion');
+    }
+  };
 
   const handleToggle = (allergenKey) => {
     const newValue = !product[allergenKey];
@@ -1023,11 +1208,36 @@ function AllergenModal({ product, onClose, onUpdate }) {
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content allergen-modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h2>Allergens & Dietary</h2>
+          <h2>{product.common_name}</h2>
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
+
+        {/* Tab Navigation */}
+        <div className="modal-tabs">
+          <button
+            className={`modal-tab ${activeTab === 'allergens' ? 'active' : ''}`}
+            onClick={() => setActiveTab('allergens')}
+          >
+            Allergens & Dietary
+          </button>
+          <button
+            className={`modal-tab ${activeTab === 'conversions' ? 'active' : ''}`}
+            onClick={() => setActiveTab('conversions')}
+          >
+            Unit Conversions
+          </button>
+          <button
+            className={`modal-tab ${activeTab === 'mapped' ? 'active' : ''}`}
+            onClick={() => setActiveTab('mapped')}
+          >
+            Mapped Products
+          </button>
+        </div>
+
         <div className="modal-body">
-          <div className="allergen-product-name">{product.common_name}</div>
+          {/* Allergens Tab */}
+          {activeTab === 'allergens' && (
+            <>
 
           <div className="allergen-section">
             <h3>Allergens</h3>
@@ -1064,6 +1274,195 @@ function AllergenModal({ product, onClose, onUpdate }) {
               ))}
             </div>
           </div>
+            </>
+          )}
+
+          {/* Conversions Tab */}
+          {activeTab === 'conversions' && (
+            <div className="conversions-content">
+              <h3>Existing Conversions</h3>
+              <div className="conversions-list">
+                {conversions.length === 0 ? (
+                  <p className="empty-message">No conversions defined for this product yet.</p>
+                ) : (
+                  conversions.map(conv => (
+                    <div key={conv.id} className="conversion-item">
+                      <div className="conversion-display">
+                        <span className="conversion-formula">
+                          1 {conv.from_unit_name} = {conv.conversion_factor} {conv.to_unit_name}
+                        </span>
+                        {conv.notes && <small className="conversion-notes">{conv.notes}</small>}
+                      </div>
+                      <button
+                        className="btn-delete-conversion"
+                        onClick={() => handleDeleteConversion(conv.id)}
+                        title="Delete conversion"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <h3 style={{ marginTop: 'var(--space-6)' }}>Add New Conversion</h3>
+              <div className="conversion-form">
+                <div className="form-row">
+                  <div className="form-field">
+                    <label>From Unit:</label>
+                    <select
+                      value={newConversion.from_unit_id}
+                      onChange={(e) => setNewConversion({...newConversion, from_unit_id: e.target.value})}
+                      className="conversion-select"
+                    >
+                      <option value="">Select unit...</option>
+                      {units.map(u => (
+                        <option key={u.id} value={u.id}>{u.name} ({u.abbreviation})</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="form-field">
+                    <label>To Unit:</label>
+                    <select
+                      value={newConversion.to_unit_id}
+                      onChange={(e) => setNewConversion({...newConversion, to_unit_id: e.target.value})}
+                      className="conversion-select"
+                    >
+                      <option value="">Select unit...</option>
+                      {units.map(u => (
+                        <option key={u.id} value={u.id}>{u.name} ({u.abbreviation})</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="form-field">
+                  <label>Conversion Factor:</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={newConversion.conversion_factor}
+                    onChange={(e) => setNewConversion({...newConversion, conversion_factor: e.target.value})}
+                    placeholder="e.g., 5 (means 1 from unit = 5 to units)"
+                    className="conversion-input"
+                  />
+                  <small className="field-hint">
+                    Example: If 1 ea = 5 oz, enter 5
+                  </small>
+                </div>
+
+                <div className="form-field">
+                  <label>Notes (optional):</label>
+                  <input
+                    type="text"
+                    value={newConversion.notes}
+                    onChange={(e) => setNewConversion({...newConversion, notes: e.target.value})}
+                    placeholder="e.g., Average banana weight"
+                    className="conversion-input"
+                  />
+                </div>
+
+                <label className="checkbox-label-inline">
+                  <input
+                    type="checkbox"
+                    checked={newConversion.create_reverse}
+                    onChange={(e) => setNewConversion({...newConversion, create_reverse: e.target.checked})}
+                  />
+                  Also create reverse conversion (recommended)
+                </label>
+
+                <button className="btn-add-conversion" onClick={handleCreateConversion}>
+                  Add Conversion
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Mapped Products Tab */}
+          {activeTab === 'mapped' && (
+            <div className="mapped-products-content">
+              {loadingMappedProducts ? (
+                <div className="loading-message">Loading mapped products...</div>
+              ) : !mappedProductsData ? (
+                <div className="empty-message">Failed to load mapped products</div>
+              ) : mappedProductsData.total_count === 0 ? (
+                <div className="empty-state">
+                  <p>No products mapped to this common product yet.</p>
+                  <p className="empty-hint">Map products from the Products page to see them here.</p>
+                </div>
+              ) : (
+                <>
+                  {/* Outlet Filter Tabs */}
+                  {Object.keys(mappedProductsData.products_by_outlet).length > 1 && (
+                    <div className="outlet-filter-tabs">
+                      <button
+                        className={`outlet-filter-btn ${selectedOutlet === 'all' ? 'active' : ''}`}
+                        onClick={() => setSelectedOutlet('all')}
+                      >
+                        All ({mappedProductsData.total_count})
+                      </button>
+                      {Object.entries(mappedProductsData.products_by_outlet).map(([outletName, products]) => (
+                        <button
+                          key={outletName}
+                          className={`outlet-filter-btn ${selectedOutlet === outletName ? 'active' : ''}`}
+                          onClick={() => setSelectedOutlet(outletName)}
+                        >
+                          {outletName} ({products.length})
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Product Cards */}
+                  <div className="mapped-products-list">
+                    {Object.entries(mappedProductsData.products_by_outlet)
+                      .filter(([outletName]) => selectedOutlet === 'all' || selectedOutlet === outletName)
+                      .map(([outletName, products]) => (
+                        <div key={outletName} className="outlet-group">
+                          <h3 className="outlet-group-title">{outletName}</h3>
+                          {products.map(product => (
+                            <div key={product.id} className="mapped-product-card">
+                              <div className="mapped-product-info">
+                                <div className="mapped-product-name">{product.name}</div>
+                                {product.brand && <div className="mapped-product-brand">{product.brand}</div>}
+                                <div className="mapped-product-meta">
+                                  {product.distributor_name && <span>{product.distributor_name}</span>}
+                                  {product.pack && product.size && product.unit_abbreviation && (
+                                    <span> • {product.pack}pk × {product.size}{product.unit_abbreviation}</span>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="mapped-product-pricing">
+                                {product.case_price != null ? (
+                                  <>
+                                    <div className="mapped-price-case">${product.case_price.toFixed(2)}/cs</div>
+                                    {product.unit_price != null && (
+                                      <div className="mapped-price-unit">
+                                        ${product.unit_price.toFixed(2)}/{product.unit_abbreviation || 'unit'}
+                                      </div>
+                                    )}
+                                  </>
+                                ) : (
+                                  <div className="mapped-price-none">No price</div>
+                                )}
+                              </div>
+                              <button
+                                className="btn-unmap-product"
+                                onClick={() => handleUnmapProduct(product.id)}
+                                title="Unmap this product"
+                              >
+                                Unmap
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      ))}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
         </div>
         <div className="modal-footer">
           <button className="btn-done" onClick={onClose}>Done</button>
