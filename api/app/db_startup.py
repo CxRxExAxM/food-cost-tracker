@@ -19,19 +19,31 @@ def initialize_database():
         current_file = Path(__file__)
         project_root = current_file.parent.parent.parent  # api/app/db_startup.py -> project root
 
+        print(f"[db_startup] DEBUG: __file__ = {__file__}")
+        print(f"[db_startup] DEBUG: project_root = {project_root}")
+        print(f"[db_startup] DEBUG: project_root exists = {project_root.exists()}")
+        print(f"[db_startup] DEBUG: project_root contents = {list(project_root.iterdir())[:10]}")
+
+        alembic_path = project_root / "alembic"
+        print(f"[db_startup] DEBUG: alembic_path = {alembic_path}")
+        print(f"[db_startup] DEBUG: alembic_path exists = {alembic_path.exists()}")
+
+        if alembic_path.exists():
+            print(f"[db_startup] DEBUG: alembic contents = {list(alembic_path.iterdir())}")
+
         # Import and run alembic directly
         from alembic.config import Config
         from alembic import command
 
         # Create config programmatically (more robust than parsing ini file in Docker)
         alembic_cfg = Config()
-        alembic_cfg.set_main_option("script_location", str(project_root / "alembic"))
+        alembic_cfg.set_main_option("script_location", str(alembic_path))
         alembic_cfg.set_main_option("sqlalchemy.url", database_url)
 
         # Set the alembic directory as the base for version locations
         alembic_cfg.config_file_name = str(project_root / "alembic.ini")
 
-        print(f"[db_startup] Running migrations from {project_root / 'alembic'}")
+        print(f"[db_startup] Running migrations from {alembic_path}")
         command.upgrade(alembic_cfg, "head")
         print("[db_startup] Migrations completed successfully")
 
