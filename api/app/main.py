@@ -5,7 +5,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from .routers import products, common_products, distributors, units, recipes, uploads, auth, organizations, outlets, super_admin, ai_parse
+from .routers import products, common_products, distributors, units, recipes, uploads, auth, organizations, outlets, super_admin, ai_parse, banquet_menus
 from .db_startup import initialize_database
 
 app = FastAPI(
@@ -37,6 +37,7 @@ app.include_router(units.router, prefix="/api")
 app.include_router(recipes.router, prefix="/api")
 app.include_router(uploads.router, prefix="/api")
 app.include_router(super_admin.router, prefix="/api")
+app.include_router(banquet_menus.router, prefix="/api")
 app.include_router(ai_parse.router)
 
 

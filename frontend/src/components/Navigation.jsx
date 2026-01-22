@@ -63,6 +63,9 @@ function Navigation() {
             <Link to="/recipes" className={`nav-link ${isActivePath('/recipes') ? 'active' : ''}`}>
               Recipes
             </Link>
+            <Link to="/banquet-menus" className={`nav-link ${isActivePath('/banquet-menus') ? 'active' : ''}`}>
+              Banquet Menus
+            </Link>
             {isAdmin() && (
               <Link to="/users" className={`nav-link ${isActivePath('/users') ? 'active' : ''}`}>
                 Users
