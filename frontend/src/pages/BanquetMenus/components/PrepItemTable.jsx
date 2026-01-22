@@ -1,11 +1,9 @@
 import { useState } from 'react';
-import axios from 'axios';
+import axios from '../../../lib/axios';
 import { Edit2, Trash2, Link } from 'lucide-react';
 import AddPrepItemModal from './AddPrepItemModal';
 import EditPrepItemModal from './EditPrepItemModal';
 import LinkPrepItemModal from './LinkPrepItemModal';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 function PrepItemTable({ menuItemId, prepItems, itemCosts, guestCount, onPrepItemsChanged }) {
   const [showAddModal, setShowAddModal] = useState(false);
@@ -42,9 +40,7 @@ function PrepItemTable({ menuItemId, prepItems, itemCosts, guestCount, onPrepIte
     }
 
     try {
-      await axios.delete(`${API_URL}/api/banquet-menus/prep/${prepId}`, {
-        withCredentials: true
-      });
+      await axios.delete(`/banquet-menus/prep/${prepId}`);
       onPrepItemsChanged();
     } catch (err) {
       console.error('Error deleting prep item:', err);

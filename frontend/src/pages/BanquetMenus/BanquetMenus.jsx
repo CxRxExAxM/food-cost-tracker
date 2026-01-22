@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import axios from 'axios';
+import axios from '../../lib/axios';
 import Navigation from '../../components/Navigation';
 import { useOutlet } from '../../contexts/OutletContext';
 import MenuDashboard from './components/MenuDashboard';
@@ -7,8 +7,6 @@ import MenuItemList from './components/MenuItemList';
 import NewMenuModal from './components/NewMenuModal';
 import EditMenuModal from './components/EditMenuModal';
 import './BanquetMenus.css';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 function BanquetMenus() {
   const { selectedOutlet } = useOutlet();
@@ -84,13 +82,9 @@ function BanquetMenus() {
 
   const fetchMealPeriods = async () => {
     try {
-      const response = await axios.get(
-        `${API_URL}/api/banquet-menus/meal-periods`,
-        {
-          params: { outlet_id: selectedOutlet.id },
-          withCredentials: true
-        }
-      );
+      const response = await axios.get('/banquet-menus/meal-periods', {
+        params: { outlet_id: selectedOutlet.id }
+      });
       setMealPeriods(response.data.meal_periods || []);
     } catch (err) {
       console.error('Error fetching meal periods:', err);
@@ -100,16 +94,12 @@ function BanquetMenus() {
 
   const fetchServiceTypes = async () => {
     try {
-      const response = await axios.get(
-        `${API_URL}/api/banquet-menus/service-types`,
-        {
-          params: {
-            outlet_id: selectedOutlet.id,
-            meal_period: selectedMealPeriod
-          },
-          withCredentials: true
+      const response = await axios.get('/banquet-menus/service-types', {
+        params: {
+          outlet_id: selectedOutlet.id,
+          meal_period: selectedMealPeriod
         }
-      );
+      });
       setServiceTypes(response.data.service_types || []);
     } catch (err) {
       console.error('Error fetching service types:', err);
@@ -119,17 +109,13 @@ function BanquetMenus() {
 
   const fetchMenus = async () => {
     try {
-      const response = await axios.get(
-        `${API_URL}/api/banquet-menus`,
-        {
-          params: {
-            outlet_id: selectedOutlet.id,
-            meal_period: selectedMealPeriod,
-            service_type: selectedServiceType
-          },
-          withCredentials: true
+      const response = await axios.get('/banquet-menus', {
+        params: {
+          outlet_id: selectedOutlet.id,
+          meal_period: selectedMealPeriod,
+          service_type: selectedServiceType
         }
-      );
+      });
       setMenus(response.data.menus || []);
     } catch (err) {
       console.error('Error fetching menus:', err);
@@ -141,10 +127,7 @@ function BanquetMenus() {
     setLoading(true);
     setError(null);
     try {
-      const response = await axios.get(
-        `${API_URL}/api/banquet-menus/${selectedMenuId}`,
-        { withCredentials: true }
-      );
+      const response = await axios.get(`/banquet-menus/${selectedMenuId}`);
       setCurrentMenu(response.data);
       // Also fetch cost data
       fetchMenuCost();
@@ -161,13 +144,9 @@ function BanquetMenus() {
     if (!selectedMenuId || guestCount < 1) return;
 
     try {
-      const response = await axios.get(
-        `${API_URL}/api/banquet-menus/${selectedMenuId}/cost`,
-        {
-          params: { guests: guestCount },
-          withCredentials: true
-        }
-      );
+      const response = await axios.get(`/banquet-menus/${selectedMenuId}/cost`, {
+        params: { guests: guestCount }
+      });
       setMenuCost(response.data);
     } catch (err) {
       console.error('Error fetching menu cost:', err);

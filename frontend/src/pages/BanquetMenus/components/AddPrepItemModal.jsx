@@ -1,7 +1,5 @@
 import { useState } from 'react';
-import axios from 'axios';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+import axios from '../../../lib/axios';
 
 function AddPrepItemModal({ menuItemId, onClose, onPrepItemAdded }) {
   const [formData, setFormData] = useState({
@@ -38,9 +36,7 @@ function AddPrepItemModal({ menuItemId, onClose, onPrepItemAdded }) {
         responsibility: formData.responsibility || null
       };
 
-      await axios.post(`${API_URL}/api/banquet-menus/items/${menuItemId}/prep`, payload, {
-        withCredentials: true
-      });
+      await axios.post(`/banquet-menus/items/${menuItemId}/prep`, payload);
 
       onPrepItemAdded();
     } catch (err) {

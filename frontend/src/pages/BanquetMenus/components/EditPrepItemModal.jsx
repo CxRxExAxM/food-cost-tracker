@@ -1,7 +1,5 @@
 import { useState } from 'react';
-import axios from 'axios';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+import axios from '../../../lib/axios';
 
 function EditPrepItemModal({ prepItem, onClose, onPrepItemUpdated }) {
   const [formData, setFormData] = useState({
@@ -38,9 +36,7 @@ function EditPrepItemModal({ prepItem, onClose, onPrepItemUpdated }) {
         responsibility: formData.responsibility || null
       };
 
-      await axios.put(`${API_URL}/api/banquet-menus/prep/${prepItem.id}`, payload, {
-        withCredentials: true
-      });
+      await axios.put(`/banquet-menus/prep/${prepItem.id}`, payload);
 
       onPrepItemUpdated();
     } catch (err) {

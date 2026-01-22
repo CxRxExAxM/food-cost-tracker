@@ -1,11 +1,9 @@
 import { useState } from 'react';
-import axios from 'axios';
+import axios from '../../../lib/axios';
 import { ChevronRight, Edit2, Trash2 } from 'lucide-react';
 import PrepItemTable from './PrepItemTable';
 import AddItemModal from './AddItemModal';
 import EditItemModal from './EditItemModal';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 function MenuItemList({ menuId, menuItems, itemCosts, guestCount, onItemsChanged }) {
   const [expandedItems, setExpandedItems] = useState(new Set());
@@ -34,9 +32,7 @@ function MenuItemList({ menuId, menuItems, itemCosts, guestCount, onItemsChanged
     }
 
     try {
-      await axios.delete(`${API_URL}/api/banquet-menus/items/${itemId}`, {
-        withCredentials: true
-      });
+      await axios.delete(`/banquet-menus/items/${itemId}`);
       onItemsChanged();
     } catch (err) {
       console.error('Error deleting menu item:', err);

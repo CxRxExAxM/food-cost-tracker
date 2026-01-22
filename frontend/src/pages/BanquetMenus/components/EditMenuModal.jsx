@@ -1,7 +1,5 @@
 import { useState } from 'react';
-import axios from 'axios';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+import axios from '../../../lib/axios';
 
 function EditMenuModal({ menu, onClose, onMenuUpdated, onMenuDeleted }) {
   const [formData, setFormData] = useState({
@@ -43,9 +41,7 @@ function EditMenuModal({ menu, onClose, onMenuUpdated, onMenuDeleted }) {
         target_food_cost_pct: formData.target_food_cost_pct ? parseFloat(formData.target_food_cost_pct) : null
       };
 
-      await axios.put(`${API_URL}/api/banquet-menus/${menu.id}`, payload, {
-        withCredentials: true
-      });
+      await axios.put(`/banquet-menus/${menu.id}`, payload);
 
       onMenuUpdated();
     } catch (err) {
@@ -63,9 +59,7 @@ function EditMenuModal({ menu, onClose, onMenuUpdated, onMenuDeleted }) {
 
     setDeleting(true);
     try {
-      await axios.delete(`${API_URL}/api/banquet-menus/${menu.id}`, {
-        withCredentials: true
-      });
+      await axios.delete(`/banquet-menus/${menu.id}`);
       onMenuDeleted();
     } catch (err) {
       console.error('Error deleting menu:', err);

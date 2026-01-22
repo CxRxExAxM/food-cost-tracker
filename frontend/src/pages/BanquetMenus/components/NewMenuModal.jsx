@@ -1,7 +1,5 @@
 import { useState } from 'react';
-import axios from 'axios';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+import axios from '../../../lib/axios';
 
 function NewMenuModal({ outletId, onClose, onMenuCreated }) {
   const [formData, setFormData] = useState({
@@ -43,9 +41,7 @@ function NewMenuModal({ outletId, onClose, onMenuCreated }) {
         target_food_cost_pct: formData.target_food_cost_pct ? parseFloat(formData.target_food_cost_pct) : null
       };
 
-      const response = await axios.post(`${API_URL}/api/banquet-menus`, payload, {
-        withCredentials: true
-      });
+      const response = await axios.post('/banquet-menus', payload);
 
       onMenuCreated({
         id: response.data.menu_id,

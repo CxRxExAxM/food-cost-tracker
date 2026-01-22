@@ -1,8 +1,6 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
+import axios from '../../../lib/axios';
 import { Search, Package, ChefHat, X } from 'lucide-react';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 function LinkPrepItemModal({ prepItem, onClose, onLinked }) {
   const [linkType, setLinkType] = useState(prepItem.product_id ? 'product' : prepItem.recipe_id ? 'recipe' : 'product');
@@ -33,15 +31,13 @@ function LinkPrepItemModal({ prepItem, onClose, onLinked }) {
     setSearching(true);
     try {
       if (linkType === 'product') {
-        const response = await axios.get(`${API_URL}/api/products`, {
-          params: { search: searchTerm, limit: 20 },
-          withCredentials: true
+        const response = await axios.get('/products', {
+          params: { search: searchTerm, limit: 20 }
         });
         setSearchResults(response.data.products || []);
       } else {
-        const response = await axios.get(`${API_URL}/api/recipes`, {
-          params: { search: searchTerm, limit: 20 },
-          withCredentials: true
+        const response = await axios.get('/recipes', {
+          params: { search: searchTerm, limit: 20 }
         });
         setSearchResults(response.data.recipes || []);
       }
@@ -62,9 +58,7 @@ function LinkPrepItemModal({ prepItem, onClose, onLinked }) {
         ? { product_id: item.id, recipe_id: null }
         : { recipe_id: item.id, product_id: null };
 
-      await axios.put(`${API_URL}/api/banquet-menus/prep/${prepItem.id}`, payload, {
-        withCredentials: true
-      });
+      await axios.put(`/banquet-menus/prep/${prepItem.id}`, payload);
 
       onLinked();
     } catch (err) {
@@ -79,11 +73,9 @@ function LinkPrepItemModal({ prepItem, onClose, onLinked }) {
     setError(null);
 
     try {
-      await axios.put(`${API_URL}/api/banquet-menus/prep/${prepItem.id}`, {
+      await axios.put(`/banquet-menus/prep/${prepItem.id}`, {
         product_id: null,
         recipe_id: null
-      }, {
-        withCredentials: true
       });
 
       onLinked();

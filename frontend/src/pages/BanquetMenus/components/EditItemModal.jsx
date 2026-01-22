@@ -1,7 +1,5 @@
 import { useState } from 'react';
-import axios from 'axios';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+import axios from '../../../lib/axios';
 
 function EditItemModal({ item, onClose, onItemUpdated }) {
   const [formData, setFormData] = useState({
@@ -37,9 +35,7 @@ function EditItemModal({ item, onClose, onItemUpdated }) {
         additional_price: formData.additional_price ? parseFloat(formData.additional_price) : null
       };
 
-      await axios.put(`${API_URL}/api/banquet-menus/items/${item.id}`, payload, {
-        withCredentials: true
-      });
+      await axios.put(`/banquet-menus/items/${item.id}`, payload);
 
       onItemUpdated();
     } catch (err) {
