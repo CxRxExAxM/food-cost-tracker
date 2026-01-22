@@ -9,7 +9,7 @@ import EditMenuModal from './components/EditMenuModal';
 import './BanquetMenus.css';
 
 function BanquetMenus() {
-  const { selectedOutlet } = useOutlet();
+  const { currentOutlet: selectedOutlet } = useOutlet();
 
   console.log('[BanquetMenus] Component rendered, selectedOutlet:', selectedOutlet?.id);
 
