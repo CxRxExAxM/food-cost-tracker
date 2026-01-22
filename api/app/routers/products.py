@@ -162,7 +162,7 @@ def list_products(
         # else: admin user, show all products (no additional filter)
 
         if search:
-            where_clause += " AND (p.name ILIKE %s OR p.brand ILIKE %s OR cp.name ILIKE %s)"
+            where_clause += " AND (p.name ILIKE %s OR p.brand ILIKE %s OR cp.common_name ILIKE %s)"
             search_term = f"%{search}%"
             params.extend([search_term, search_term, search_term])
 
