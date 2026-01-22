@@ -11,6 +11,8 @@ import './BanquetMenus.css';
 function BanquetMenus() {
   const { selectedOutlet } = useOutlet();
 
+  console.log('[BanquetMenus] Component rendered, selectedOutlet:', selectedOutlet?.id);
+
   // Dropdown options
   const [mealPeriods, setMealPeriods] = useState([]);
   const [serviceTypes, setServiceTypes] = useState([]);
@@ -34,6 +36,7 @@ function BanquetMenus() {
 
   // Fetch meal periods when outlet changes
   useEffect(() => {
+    console.log('[BanquetMenus] useEffect triggered, selectedOutlet?.id:', selectedOutlet?.id);
     if (selectedOutlet?.id) {
       fetchMealPeriods();
       // Reset selections when outlet changes
@@ -81,10 +84,12 @@ function BanquetMenus() {
   }, [guestCount, selectedMenuId]);
 
   const fetchMealPeriods = async () => {
+    console.log('[BanquetMenus] fetchMealPeriods called for outlet:', selectedOutlet?.id);
     try {
       const response = await axios.get('/banquet-menus/meal-periods', {
         params: { outlet_id: selectedOutlet.id }
       });
+      console.log('[BanquetMenus] meal periods response:', response.data);
       setMealPeriods(response.data.meal_periods || []);
     } catch (err) {
       console.error('Error fetching meal periods:', err);
