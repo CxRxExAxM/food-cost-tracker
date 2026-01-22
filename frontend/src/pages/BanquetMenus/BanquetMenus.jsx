@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import axios from '../../lib/axios';
 import Navigation from '../../components/Navigation';
 import { useOutlet } from '../../contexts/OutletContext';
@@ -8,20 +8,48 @@ import NewMenuModal from './components/NewMenuModal';
 import EditMenuModal from './components/EditMenuModal';
 import './BanquetMenus.css';
 
+// localStorage keys for persisting selection
+const STORAGE_KEYS = {
+  mealPeriod: 'banquetMenus_mealPeriod',
+  serviceType: 'banquetMenus_serviceType',
+  menuId: 'banquetMenus_menuId',
+  outletId: 'banquetMenus_outletId'
+};
+
 function BanquetMenus() {
   const { currentOutlet: selectedOutlet } = useOutlet();
-
-  console.log('[BanquetMenus] Component rendered, selectedOutlet:', selectedOutlet?.id);
 
   // Dropdown options
   const [mealPeriods, setMealPeriods] = useState([]);
   const [serviceTypes, setServiceTypes] = useState([]);
   const [menus, setMenus] = useState([]);
 
-  // Selected values
-  const [selectedMealPeriod, setSelectedMealPeriod] = useState('');
-  const [selectedServiceType, setSelectedServiceType] = useState('');
-  const [selectedMenuId, setSelectedMenuId] = useState(null);
+  // Selected values - initialize from localStorage
+  const [selectedMealPeriod, setSelectedMealPeriod] = useState(() => {
+    const savedOutletId = localStorage.getItem(STORAGE_KEYS.outletId);
+    if (savedOutletId === String(selectedOutlet?.id)) {
+      return localStorage.getItem(STORAGE_KEYS.mealPeriod) || '';
+    }
+    return '';
+  });
+  const [selectedServiceType, setSelectedServiceType] = useState(() => {
+    const savedOutletId = localStorage.getItem(STORAGE_KEYS.outletId);
+    if (savedOutletId === String(selectedOutlet?.id)) {
+      return localStorage.getItem(STORAGE_KEYS.serviceType) || '';
+    }
+    return '';
+  });
+  const [selectedMenuId, setSelectedMenuId] = useState(() => {
+    const savedOutletId = localStorage.getItem(STORAGE_KEYS.outletId);
+    if (savedOutletId === String(selectedOutlet?.id)) {
+      const saved = localStorage.getItem(STORAGE_KEYS.menuId);
+      return saved ? parseInt(saved, 10) : null;
+    }
+    return null;
+  });
+
+  // Track if this is initial load to restore selections
+  const isInitialLoadRef = useRef(true);
 
   // Current menu data
   const [currentMenu, setCurrentMenu] = useState(null);
@@ -34,17 +62,52 @@ function BanquetMenus() {
   const [showNewMenuModal, setShowNewMenuModal] = useState(false);
   const [showEditMenuModal, setShowEditMenuModal] = useState(false);
 
+  // Save selections to localStorage when they change
+  useEffect(() => {
+    if (selectedOutlet?.id) {
+      localStorage.setItem(STORAGE_KEYS.outletId, String(selectedOutlet.id));
+    }
+  }, [selectedOutlet?.id]);
+
+  useEffect(() => {
+    if (selectedMealPeriod) {
+      localStorage.setItem(STORAGE_KEYS.mealPeriod, selectedMealPeriod);
+    }
+  }, [selectedMealPeriod]);
+
+  useEffect(() => {
+    if (selectedServiceType) {
+      localStorage.setItem(STORAGE_KEYS.serviceType, selectedServiceType);
+    }
+  }, [selectedServiceType]);
+
+  useEffect(() => {
+    if (selectedMenuId) {
+      localStorage.setItem(STORAGE_KEYS.menuId, String(selectedMenuId));
+    }
+  }, [selectedMenuId]);
+
   // Fetch meal periods when outlet changes
   useEffect(() => {
-    console.log('[BanquetMenus] useEffect triggered, selectedOutlet?.id:', selectedOutlet?.id);
     if (selectedOutlet?.id) {
+      const savedOutletId = localStorage.getItem(STORAGE_KEYS.outletId);
+      const outletChanged = savedOutletId !== String(selectedOutlet.id);
+
       fetchMealPeriods();
-      // Reset selections when outlet changes
-      setSelectedMealPeriod('');
-      setSelectedServiceType('');
-      setSelectedMenuId(null);
-      setCurrentMenu(null);
-      setMenuCost(null);
+
+      // Only reset selections if outlet actually changed
+      if (outletChanged && !isInitialLoadRef.current) {
+        setSelectedMealPeriod('');
+        setSelectedServiceType('');
+        setSelectedMenuId(null);
+        setCurrentMenu(null);
+        setMenuCost(null);
+        localStorage.setItem(STORAGE_KEYS.outletId, String(selectedOutlet.id));
+      }
+      // Mark initial load complete after a brief delay to allow cascades
+      setTimeout(() => {
+        isInitialLoadRef.current = false;
+      }, 500);
     }
   }, [selectedOutlet?.id]);
 
@@ -52,10 +115,13 @@ function BanquetMenus() {
   useEffect(() => {
     if (selectedOutlet?.id && selectedMealPeriod) {
       fetchServiceTypes();
-      setSelectedServiceType('');
-      setSelectedMenuId(null);
-      setCurrentMenu(null);
-      setMenuCost(null);
+      // Only reset downstream if user changed the selection (not on initial restore)
+      if (!isInitialLoadRef.current) {
+        setSelectedServiceType('');
+        setSelectedMenuId(null);
+        setCurrentMenu(null);
+        setMenuCost(null);
+      }
     }
   }, [selectedMealPeriod]);
 
@@ -63,9 +129,12 @@ function BanquetMenus() {
   useEffect(() => {
     if (selectedOutlet?.id && selectedMealPeriod && selectedServiceType) {
       fetchMenus();
-      setSelectedMenuId(null);
-      setCurrentMenu(null);
-      setMenuCost(null);
+      // Only reset if user changed the selection (not on initial restore)
+      if (!isInitialLoadRef.current) {
+        setSelectedMenuId(null);
+        setCurrentMenu(null);
+        setMenuCost(null);
+      }
     }
   }, [selectedServiceType]);
 
@@ -84,12 +153,12 @@ function BanquetMenus() {
   }, [guestCount, selectedMenuId]);
 
   const fetchMealPeriods = async () => {
-    console.log('[BanquetMenus] fetchMealPeriods called for outlet:', selectedOutlet?.id);
+    // console.log('[BanquetMenus] fetchMealPeriods called for outlet:', selectedOutlet?.id);
     try {
       const response = await axios.get('/banquet-menus/meal-periods', {
         params: { outlet_id: selectedOutlet.id }
       });
-      console.log('[BanquetMenus] meal periods response:', response.data);
+      // console.log('[BanquetMenus] meal periods response:', response.data);
       setMealPeriods(response.data.meal_periods || []);
     } catch (err) {
       console.error('Error fetching meal periods:', err);
