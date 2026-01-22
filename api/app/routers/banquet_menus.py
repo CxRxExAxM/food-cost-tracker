@@ -250,9 +250,7 @@ def get_banquet_menu(menu_id: int, current_user: dict = Depends(get_current_user
                         WHERE dp.product_id = bp.product_id
                         ORDER BY ph.effective_date DESC
                         LIMIT 1
-                    ) as product_unit_cost,
-                    -- Get recipe cost per serving
-                    r.cost_per_serving as recipe_unit_cost
+                    ) as product_unit_cost
                 FROM banquet_prep_items bp
                 LEFT JOIN products p ON p.id = bp.product_id
                 LEFT JOIN units u ON u.id = p.unit_id
@@ -313,10 +311,8 @@ def calculate_menu_cost(
                         WHERE dp.product_id = bp.product_id
                         ORDER BY ph.effective_date DESC
                         LIMIT 1
-                    ) as product_unit_cost,
-                    r.cost_per_serving as recipe_unit_cost
+                    ) as product_unit_cost
                 FROM banquet_prep_items bp
-                LEFT JOIN recipes r ON r.id = bp.recipe_id
                 WHERE bp.banquet_menu_item_id = %s
             """, (item["id"],))
 
@@ -326,8 +322,7 @@ def calculate_menu_cost(
                 unit_cost = Decimal("0")
                 if prep.get("product_unit_cost"):
                     unit_cost = Decimal(str(prep["product_unit_cost"]))
-                elif prep.get("recipe_unit_cost"):
-                    unit_cost = Decimal(str(prep["recipe_unit_cost"]))
+                # TODO: Add recipe cost calculation when recipes are linked
 
                 amount = Decimal(str(prep.get("amount_per_guest") or 0))
                 prep_total = unit_cost * amount * guests
