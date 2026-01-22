@@ -402,6 +402,8 @@ frontend/src/components/Navigation.jsx  # Add nav link
 
 4. **Bulk import**: User mentioned import is for dev, not users
    - **Skip for now**, can add later if needed
+   - **When importing**: Use SCP organization + Banquets outlet
+   - CSV source: `~/Documents/devprojects/bqtmenucost/menuimport.csv`
 
 5. **Print/export**: PDF menu costing sheet?
    - **Future feature**
