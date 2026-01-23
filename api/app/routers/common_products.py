@@ -31,7 +31,7 @@ def list_common_products(
         params = [current_user["organization_id"]]
 
         if search:
-            query += " AND common_name LIKE %s"
+            query += " AND common_name ILIKE %s"
             params.append(f"%{search}%")
 
         if category:
