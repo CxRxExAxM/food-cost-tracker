@@ -21,10 +21,13 @@ function PrepItemTable({ menuItemId, prepItems, itemCosts, guestCount, onPrepIte
   };
 
   const isLinked = (prepItem) => {
-    return prepItem.product_id || prepItem.recipe_id;
+    return prepItem.product_id || prepItem.recipe_id || prepItem.common_product_id;
   };
 
   const getLinkInfo = (prepItem) => {
+    if (prepItem.common_product_id) {
+      return { type: 'product', name: prepItem.common_product_name || 'Product' };
+    }
     if (prepItem.product_id) {
       return { type: 'product', name: prepItem.product_name || 'Product' };
     }

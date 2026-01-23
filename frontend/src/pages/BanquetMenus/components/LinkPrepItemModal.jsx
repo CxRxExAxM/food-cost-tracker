@@ -3,17 +3,21 @@ import axios from '../../../lib/axios';
 import { Search, Package, ChefHat, X } from 'lucide-react';
 
 function LinkPrepItemModal({ prepItem, onClose, onLinked }) {
-  const [linkType, setLinkType] = useState(prepItem.product_id ? 'product' : prepItem.recipe_id ? 'recipe' : 'product');
+  const [linkType, setLinkType] = useState(
+    (prepItem.common_product_id || prepItem.product_id) ? 'product' : prepItem.recipe_id ? 'recipe' : 'product'
+  );
   const [searchTerm, setSearchTerm] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
-  const currentLink = prepItem.product_id
-    ? { type: 'product', id: prepItem.product_id, name: prepItem.product_name }
+  const currentLink = prepItem.common_product_id
+    ? { type: 'product', id: prepItem.common_product_id, name: prepItem.common_product_name || 'Product' }
+    : prepItem.product_id
+    ? { type: 'product', id: prepItem.product_id, name: prepItem.product_name || 'Product' }
     : prepItem.recipe_id
-    ? { type: 'recipe', id: prepItem.recipe_id, name: prepItem.recipe_name }
+    ? { type: 'recipe', id: prepItem.recipe_id, name: prepItem.recipe_name || 'Recipe' }
     : null;
 
   useEffect(() => {
@@ -31,10 +35,11 @@ function LinkPrepItemModal({ prepItem, onClose, onLinked }) {
     setSearching(true);
     try {
       if (linkType === 'product') {
-        const response = await axios.get('/products', {
+        // Search common products instead of individual products
+        const response = await axios.get('/common-products', {
           params: { search: searchTerm, limit: 20 }
         });
-        setSearchResults(response.data.products || []);
+        setSearchResults(response.data.common_products || response.data || []);
       } else {
         const response = await axios.get('/recipes', {
           params: { search: searchTerm, limit: 20 }
@@ -55,8 +60,8 @@ function LinkPrepItemModal({ prepItem, onClose, onLinked }) {
 
     try {
       const payload = linkType === 'product'
-        ? { product_id: item.id, recipe_id: null }
-        : { recipe_id: item.id, product_id: null };
+        ? { common_product_id: item.id, recipe_id: null, product_id: null }
+        : { recipe_id: item.id, common_product_id: null, product_id: null };
 
       await axios.put(`/banquet-menus/prep/${prepItem.id}`, payload);
 
@@ -75,7 +80,8 @@ function LinkPrepItemModal({ prepItem, onClose, onLinked }) {
     try {
       await axios.put(`/banquet-menus/prep/${prepItem.id}`, {
         product_id: null,
-        recipe_id: null
+        recipe_id: null,
+        common_product_id: null
       });
 
       onLinked();
@@ -247,21 +253,16 @@ function LinkPrepItemModal({ prepItem, onClose, onLinked }) {
                 onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
               >
                 <div style={{ fontWeight: 500, color: 'var(--text-primary)' }}>
-                  {item.name}
+                  {linkType === 'product' ? item.common_name : item.name}
                 </div>
-                {linkType === 'product' && item.brand && (
+                {linkType === 'product' && item.category && (
                   <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-yellow)', marginTop: 'var(--space-1)' }}>
-                    {item.brand}
+                    {item.category}{item.subcategory ? ` / ${item.subcategory}` : ''}
                   </div>
                 )}
-                {linkType === 'recipe' && item.cost_per_serving && (
+                {linkType === 'recipe' && item.category && (
                   <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', marginTop: 'var(--space-1)' }}>
-                    Cost per serving: ${parseFloat(item.cost_per_serving).toFixed(2)}
-                  </div>
-                )}
-                {linkType === 'product' && item.unit_price && (
-                  <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', marginTop: 'var(--space-1)' }}>
-                    Unit price: ${parseFloat(item.unit_price).toFixed(4)}
+                    {item.category}
                   </div>
                 )}
               </div>

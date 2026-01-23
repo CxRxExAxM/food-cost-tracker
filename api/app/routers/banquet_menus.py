@@ -67,6 +67,7 @@ class PrepItemCreate(BaseModel):
     responsibility: Optional[str] = None
     product_id: Optional[int] = None
     recipe_id: Optional[int] = None
+    common_product_id: Optional[int] = None
 
 
 class PrepItemUpdate(BaseModel):
@@ -79,6 +80,7 @@ class PrepItemUpdate(BaseModel):
     responsibility: Optional[str] = None
     product_id: Optional[int] = None
     recipe_id: Optional[int] = None
+    common_product_id: Optional[int] = None
 
 
 class ReorderItem(BaseModel):
@@ -233,7 +235,7 @@ def get_banquet_menu(menu_id: int, current_user: dict = Depends(get_current_user
         """, (menu_id,))
         menu_items = dicts_from_rows(cursor.fetchall())
 
-        # Get prep items for each menu item with linked product/recipe info
+        # Get prep items for each menu item with linked product/recipe/common_product info
         for item in menu_items:
             cursor.execute("""
                 SELECT
@@ -242,6 +244,8 @@ def get_banquet_menu(menu_id: int, current_user: dict = Depends(get_current_user
                     p.unit_id as product_unit_id,
                     u.abbreviation as product_unit_abbr,
                     r.name as recipe_name,
+                    cp.common_name as common_product_name,
+                    cp.category as common_product_category,
                     -- Get latest unit price for the product
                     (
                         SELECT ph.unit_price
@@ -250,11 +254,25 @@ def get_banquet_menu(menu_id: int, current_user: dict = Depends(get_current_user
                         WHERE dp.product_id = bp.product_id
                         ORDER BY ph.effective_date DESC
                         LIMIT 1
-                    ) as product_unit_cost
+                    ) as product_unit_cost,
+                    -- Get average unit cost for common product (from all linked products)
+                    (
+                        SELECT AVG(ph2.unit_price)
+                        FROM price_history ph2
+                        JOIN distributor_products dp2 ON dp2.id = ph2.distributor_product_id
+                        JOIN products p2 ON p2.id = dp2.product_id
+                        WHERE p2.common_product_id = bp.common_product_id
+                        AND ph2.effective_date = (
+                            SELECT MAX(ph3.effective_date)
+                            FROM price_history ph3
+                            WHERE ph3.distributor_product_id = dp2.id
+                        )
+                    ) as common_product_unit_cost
                 FROM banquet_prep_items bp
                 LEFT JOIN products p ON p.id = bp.product_id
                 LEFT JOIN units u ON u.id = p.unit_id
                 LEFT JOIN recipes r ON r.id = bp.recipe_id
+                LEFT JOIN common_products cp ON cp.id = bp.common_product_id
                 WHERE bp.banquet_menu_item_id = %s
                 ORDER BY bp.display_order, bp.name
             """, (item["id"],))
@@ -311,7 +329,19 @@ def calculate_menu_cost(
                         WHERE dp.product_id = bp.product_id
                         ORDER BY ph.effective_date DESC
                         LIMIT 1
-                    ) as product_unit_cost
+                    ) as product_unit_cost,
+                    (
+                        SELECT AVG(ph2.unit_price)
+                        FROM price_history ph2
+                        JOIN distributor_products dp2 ON dp2.id = ph2.distributor_product_id
+                        JOIN products p2 ON p2.id = dp2.product_id
+                        WHERE p2.common_product_id = bp.common_product_id
+                        AND ph2.effective_date = (
+                            SELECT MAX(ph3.effective_date)
+                            FROM price_history ph3
+                            WHERE ph3.distributor_product_id = dp2.id
+                        )
+                    ) as common_product_unit_cost
                 FROM banquet_prep_items bp
                 WHERE bp.banquet_menu_item_id = %s
             """, (item["id"],))
@@ -322,6 +352,8 @@ def calculate_menu_cost(
                 unit_cost = Decimal("0")
                 if prep.get("product_unit_cost"):
                     unit_cost = Decimal(str(prep["product_unit_cost"]))
+                elif prep.get("common_product_unit_cost"):
+                    unit_cost = Decimal(str(prep["common_product_unit_cost"]))
                 # TODO: Add recipe cost calculation when recipes are linked
 
                 amount = Decimal(str(prep.get("amount_per_guest") or 0))
@@ -333,7 +365,7 @@ def calculate_menu_cost(
                     "unit_cost": float(unit_cost),
                     "amount_per_guest": float(amount),
                     "total_cost": float(prep_total),
-                    "linked": bool(prep.get("product_id") or prep.get("recipe_id"))
+                    "linked": bool(prep.get("product_id") or prep.get("recipe_id") or prep.get("common_product_id"))
                 })
 
                 item_cost += prep_total
@@ -617,9 +649,10 @@ def reorder_menu_items(items: List[ReorderItem], current_user: dict = Depends(ge
 @router.post("/items/{item_id}/prep")
 def create_prep_item(item_id: int, prep: PrepItemCreate, current_user: dict = Depends(get_current_user)):
     """Add a prep item to a menu item."""
-    # Validate that only one of product_id or recipe_id is set
-    if prep.product_id and prep.recipe_id:
-        raise HTTPException(status_code=400, detail="Cannot link to both product and recipe")
+    # Validate that at most one of product_id, recipe_id, or common_product_id is set
+    link_count = sum(1 for x in [prep.product_id, prep.recipe_id, prep.common_product_id] if x)
+    if link_count > 1:
+        raise HTTPException(status_code=400, detail="Cannot link to multiple sources - choose product, recipe, or common product")
 
     with get_db() as conn:
         cursor = conn.cursor()
@@ -639,13 +672,13 @@ def create_prep_item(item_id: int, prep: PrepItemCreate, current_user: dict = De
         cursor.execute("""
             INSERT INTO banquet_prep_items (
                 banquet_menu_item_id, name, display_order, amount_per_guest, amount_unit,
-                vessel, responsibility, product_id, recipe_id
+                vessel, responsibility, product_id, recipe_id, common_product_id
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
         """, (
             item_id, prep.name, prep.display_order, prep.amount_per_guest, prep.amount_unit,
-            prep.vessel, prep.responsibility, prep.product_id, prep.recipe_id
+            prep.vessel, prep.responsibility, prep.product_id, prep.recipe_id, prep.common_product_id
         ))
 
         prep_id = cursor.fetchone()["id"]
@@ -657,11 +690,13 @@ def create_prep_item(item_id: int, prep: PrepItemCreate, current_user: dict = De
 @router.put("/prep/{prep_id}")
 def update_prep_item(prep_id: int, updates: PrepItemUpdate, current_user: dict = Depends(get_current_user)):
     """Update a prep item."""
-    # Validate that only one of product_id or recipe_id is set if both are in updates
     update_dict = updates.dict(exclude_unset=True)
-    if "product_id" in update_dict and "recipe_id" in update_dict:
-        if update_dict["product_id"] and update_dict["recipe_id"]:
-            raise HTTPException(status_code=400, detail="Cannot link to both product and recipe")
+
+    # Count how many link fields are being set to non-null values
+    link_fields = ["product_id", "recipe_id", "common_product_id"]
+    links_being_set = sum(1 for f in link_fields if f in update_dict and update_dict[f])
+    if links_being_set > 1:
+        raise HTTPException(status_code=400, detail="Cannot link to multiple sources - choose product, recipe, or common product")
 
     with get_db() as conn:
         cursor = conn.cursor()
@@ -670,7 +705,7 @@ def update_prep_item(prep_id: int, updates: PrepItemUpdate, current_user: dict =
         outlet_filter, outlet_params = build_outlet_filter(current_user, "bm")
 
         cursor.execute(f"""
-            SELECT bp.id, bp.product_id, bp.recipe_id FROM banquet_prep_items bp
+            SELECT bp.id, bp.product_id, bp.recipe_id, bp.common_product_id FROM banquet_prep_items bp
             JOIN banquet_menu_items bmi ON bmi.id = bp.banquet_menu_item_id
             JOIN banquet_menus bm ON bm.id = bmi.banquet_menu_id
             WHERE bp.id = %s AND bm.is_active = 1 AND {outlet_filter}
@@ -680,11 +715,16 @@ def update_prep_item(prep_id: int, updates: PrepItemUpdate, current_user: dict =
         if not existing:
             raise HTTPException(status_code=404, detail="Prep item not found or you don't have access")
 
-        # Handle clearing links: if setting product_id, clear recipe_id and vice versa
+        # Handle clearing links: when setting one link, clear the others
         if "product_id" in update_dict and update_dict["product_id"]:
             update_dict["recipe_id"] = None
+            update_dict["common_product_id"] = None
         elif "recipe_id" in update_dict and update_dict["recipe_id"]:
             update_dict["product_id"] = None
+            update_dict["common_product_id"] = None
+        elif "common_product_id" in update_dict and update_dict["common_product_id"]:
+            update_dict["product_id"] = None
+            update_dict["recipe_id"] = None
 
         # Build update query
         update_fields = []
