@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import axios from '../../../lib/axios';
-import { ChevronRight, Trash2, Link, Save, X } from 'lucide-react';
-import UnitSelect from '../../../components/UnitSelect';
+import { ChevronRight, Trash2, Link } from 'lucide-react';
 import AddPrepItemModal from './AddPrepItemModal';
 import LinkPrepItemModal from './LinkPrepItemModal';
 
@@ -13,14 +12,15 @@ const AMOUNT_MODES = [
 
 function PrepItemTable({ menuItemId, prepItems, itemCosts, guestCount, onPrepItemsChanged }) {
   const [expandedItems, setExpandedItems] = useState(new Set());
-  const [editingItem, setEditingItem] = useState(null); // prep item id being edited
-  const [editForm, setEditForm] = useState({});
-  const [saving, setSaving] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [linkingPrepItem, setLinkingPrepItem] = useState(null);
   const [units, setUnits] = useState([]);
 
-  // Load units for display
+  // Inline editing state (like Products page)
+  const [editingCell, setEditingCell] = useState(null); // { prepId, field }
+  const [editValue, setEditValue] = useState('');
+
+  // Load units for display and editing
   useEffect(() => {
     const loadUnits = async () => {
       try {
@@ -43,10 +43,10 @@ function PrepItemTable({ menuItemId, prepItems, itemCosts, guestCount, onPrepIte
     const newExpanded = new Set(expandedItems);
     if (newExpanded.has(prepId)) {
       newExpanded.delete(prepId);
-      // Cancel editing when collapsing
-      if (editingItem === prepId) {
-        setEditingItem(null);
-        setEditForm({});
+      // Cancel any editing when collapsing
+      if (editingCell?.prepId === prepId) {
+        setEditingCell(null);
+        setEditValue('');
       }
     } else {
       newExpanded.add(prepId);
@@ -54,58 +54,106 @@ function PrepItemTable({ menuItemId, prepItems, itemCosts, guestCount, onPrepIte
     setExpandedItems(newExpanded);
   };
 
-  const startEditing = (prep) => {
-    setEditingItem(prep.id);
-    setEditForm({
-      name: prep.name || '',
-      amount_mode: prep.amount_mode || 'per_person',
-      amount_per_guest: prep.amount_per_guest || '',
-      base_amount: prep.base_amount || '',
-      unit_id: prep.unit_id || null,
-      responsibility: prep.responsibility || ''
-    });
+  // Start editing a cell
+  const startCellEdit = (prepId, field, currentValue) => {
+    setEditingCell({ prepId, field });
+    setEditValue(currentValue ?? '');
   };
 
-  const cancelEditing = () => {
-    setEditingItem(null);
-    setEditForm({});
+  // Cancel editing
+  const cancelCellEdit = () => {
+    setEditingCell(null);
+    setEditValue('');
   };
 
-  const saveEditing = async () => {
-    if (!editingItem) return;
+  // Save cell value on blur
+  const handleCellSave = async (prepId, field) => {
+    const prep = prepItems.find(p => p.id === prepId);
+    if (!prep) {
+      cancelCellEdit();
+      return;
+    }
 
-    setSaving(true);
     try {
-      const payload = {
-        name: editForm.name,
-        amount_mode: editForm.amount_mode,
-        responsibility: editForm.responsibility || null,
-        unit_id: editForm.unit_id || null
-      };
+      let updateData = {};
 
-      if (editForm.amount_mode === 'per_person') {
-        payload.amount_per_guest = editForm.amount_per_guest ? parseFloat(editForm.amount_per_guest) : null;
-        payload.base_amount = null;
-      } else {
-        payload.base_amount = editForm.base_amount ? parseFloat(editForm.base_amount) : null;
-        payload.amount_per_guest = null;
+      // Build update payload based on field
+      if (field === 'name') {
+        updateData.name = editValue || prep.name;
+      } else if (field === 'amount_mode') {
+        updateData.amount_mode = editValue;
+        // Clear the opposite amount field when changing mode
+        if (editValue === 'per_person') {
+          updateData.base_amount = null;
+        } else {
+          updateData.amount_per_guest = null;
+        }
+      } else if (field === 'amount_per_guest') {
+        updateData.amount_per_guest = editValue ? parseFloat(editValue) : null;
+      } else if (field === 'base_amount') {
+        updateData.base_amount = editValue ? parseFloat(editValue) : null;
+      } else if (field === 'unit_id') {
+        updateData.unit_id = editValue ? parseInt(editValue) : null;
+      } else if (field === 'responsibility') {
+        updateData.responsibility = editValue || null;
       }
 
-      await axios.put(`/banquet-menus/prep/${editingItem}`, payload);
-      setEditingItem(null);
-      setEditForm({});
+      await axios.put(`/banquet-menus/prep/${prepId}`, updateData);
       onPrepItemsChanged();
     } catch (err) {
       console.error('Error saving prep item:', err);
-      alert('Failed to save changes');
     } finally {
-      setSaving(false);
+      cancelCellEdit();
     }
   };
 
-  const handleEditChange = (e) => {
-    const { name, value } = e.target;
-    setEditForm(prev => ({ ...prev, [name]: value }));
+  // Handle keyboard navigation
+  const handleCellKeyDown = (e, prepId, field) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      cancelCellEdit();
+      return;
+    }
+
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleCellSave(prepId, field);
+      return;
+    }
+
+    // Tab moves to next editable field
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const prep = prepItems.find(p => p.id === prepId);
+      if (!prep) return;
+
+      const mode = prep.amount_mode || 'per_person';
+      const amountField = mode === 'per_person' ? 'amount_per_guest' : 'base_amount';
+      const fields = ['name', 'amount_mode', amountField, 'unit_id', 'responsibility'];
+      const currentIdx = fields.indexOf(field);
+      const nextIdx = e.shiftKey ? currentIdx - 1 : currentIdx + 1;
+
+      if (nextIdx >= 0 && nextIdx < fields.length) {
+        const nextField = fields[nextIdx];
+        handleCellSave(prepId, field).then(() => {
+          // Wait a tick for state to update, then start editing next field
+          setTimeout(() => {
+            const updatedPrep = prepItems.find(p => p.id === prepId);
+            if (updatedPrep) {
+              let nextValue;
+              if (nextField === 'unit_id') {
+                nextValue = updatedPrep.unit_id;
+              } else {
+                nextValue = updatedPrep[nextField];
+              }
+              startCellEdit(prepId, nextField, nextValue);
+            }
+          }, 50);
+        });
+      } else {
+        handleCellSave(prepId, field);
+      }
+    }
   };
 
   const getCostForPrepItem = (prepId) => {
@@ -116,10 +164,6 @@ function PrepItemTable({ menuItemId, prepItems, itemCosts, guestCount, onPrepIte
   const getUnitCostForPrepItem = (prepId) => {
     const costData = itemCosts.find(c => c.prep_item_id === prepId);
     return costData?.unit_cost || 0;
-  };
-
-  const isLinked = (prepItem) => {
-    return prepItem.product_id || prepItem.recipe_id || prepItem.common_product_id;
   };
 
   const getLinkInfo = (prepItem) => {
@@ -164,6 +208,85 @@ function PrepItemTable({ menuItemId, prepItems, itemCosts, guestCount, onPrepIte
     }
   };
 
+  // Render an editable cell
+  const renderEditableCell = (prep, field, displayValue, inputType = 'text') => {
+    const isEditing = editingCell?.prepId === prep.id && editingCell?.field === field;
+
+    if (isEditing) {
+      // Special handling for select fields
+      if (field === 'amount_mode') {
+        return (
+          <select
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            onBlur={() => handleCellSave(prep.id, field)}
+            onKeyDown={(e) => handleCellKeyDown(e, prep.id, field)}
+            className="prep-inline-select"
+            autoFocus
+          >
+            {AMOUNT_MODES.map(mode => (
+              <option key={mode.value} value={mode.value}>{mode.label}</option>
+            ))}
+          </select>
+        );
+      }
+
+      if (field === 'unit_id') {
+        return (
+          <select
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            onBlur={() => handleCellSave(prep.id, field)}
+            onKeyDown={(e) => handleCellKeyDown(e, prep.id, field)}
+            className="prep-inline-select"
+            autoFocus
+          >
+            <option value="">--</option>
+            {units.map(u => (
+              <option key={u.id} value={u.id}>{u.abbreviation}</option>
+            ))}
+          </select>
+        );
+      }
+
+      // Standard input field
+      return (
+        <input
+          type={inputType}
+          value={editValue}
+          onChange={(e) => setEditValue(e.target.value)}
+          onBlur={() => handleCellSave(prep.id, field)}
+          onKeyDown={(e) => handleCellKeyDown(e, prep.id, field)}
+          onFocus={(e) => e.target.select()}
+          className="prep-inline-input"
+          autoFocus
+          step={inputType === 'number' ? '0.0001' : undefined}
+        />
+      );
+    }
+
+    // Determine what value to pass when starting edit
+    let editStartValue = displayValue;
+    if (field === 'unit_id') {
+      editStartValue = prep.unit_id;
+    } else if (field === 'amount_mode') {
+      editStartValue = prep.amount_mode || 'per_person';
+    }
+
+    return (
+      <span
+        className="prep-editable-value"
+        onClick={(e) => {
+          e.stopPropagation();
+          startCellEdit(prep.id, field, editStartValue);
+        }}
+        title="Click to edit"
+      >
+        {displayValue ?? '--'}
+      </span>
+    );
+  };
+
   return (
     <div className="prep-items-container">
       {prepItems.length === 0 ? (
@@ -177,7 +300,8 @@ function PrepItemTable({ menuItemId, prepItems, itemCosts, guestCount, onPrepIte
             const unitCost = getUnitCostForPrepItem(prep.id);
             const totalCost = getCostForPrepItem(prep.id);
             const isExpanded = expandedItems.has(prep.id);
-            const isEditing = editingItem === prep.id;
+            const mode = prep.amount_mode || 'per_person';
+            const unitAbbr = prep.unit_abbr || getUnitAbbr(prep.unit_id) || prep.amount_unit || '';
 
             return (
               <li key={prep.id} className="prep-item-row">
@@ -216,164 +340,81 @@ function PrepItemTable({ menuItemId, prepItems, itemCosts, guestCount, onPrepIte
                   </div>
                 </div>
 
-                {/* Expanded Details */}
+                {/* Expanded Details - Click to Edit */}
                 {isExpanded && (
                   <div className="prep-item-details">
-                    {isEditing ? (
-                      /* Inline Edit Form */
-                      <div className="prep-edit-form">
-                        <div className="prep-edit-row">
-                          <label>Name</label>
-                          <input
-                            type="text"
-                            name="name"
-                            className="form-input"
-                            value={editForm.name}
-                            onChange={handleEditChange}
-                          />
-                        </div>
-
-                        <div className="prep-edit-row">
-                          <label>Amount Type</label>
-                          <select
-                            name="amount_mode"
-                            className="form-input"
-                            value={editForm.amount_mode}
-                            onChange={handleEditChange}
-                          >
-                            {AMOUNT_MODES.map(mode => (
-                              <option key={mode.value} value={mode.value}>
-                                {mode.label}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-
-                        <div className="prep-edit-row">
-                          <label>
-                            {editForm.amount_mode === 'per_person' ? 'Amount Per Person' : 'Amount'}
-                          </label>
-                          <div className="prep-amount-input">
-                            <input
-                              type="number"
-                              name={editForm.amount_mode === 'per_person' ? 'amount_per_guest' : 'base_amount'}
-                              className="form-input"
-                              value={editForm.amount_mode === 'per_person' ? editForm.amount_per_guest : editForm.base_amount}
-                              onChange={handleEditChange}
-                              step="0.0001"
-                              min="0"
-                            />
-                            <UnitSelect
-                              value={editForm.unit_id}
-                              onChange={handleEditChange}
-                              name="unit_id"
-                            />
-                          </div>
-                        </div>
-
-                        <div className="prep-edit-row">
-                          <label>Responsibility</label>
-                          <input
-                            type="text"
-                            name="responsibility"
-                            className="form-input"
-                            value={editForm.responsibility}
-                            onChange={handleEditChange}
-                            placeholder="e.g., Hot Line, Pantry"
-                          />
-                        </div>
-
-                        <div className="prep-edit-actions">
-                          <button
-                            className="btn-secondary btn-sm"
-                            onClick={cancelEditing}
-                            disabled={saving}
-                          >
-                            <X size={14} /> Cancel
-                          </button>
-                          <button
-                            className="btn-primary btn-sm"
-                            onClick={saveEditing}
-                            disabled={saving}
-                          >
-                            <Save size={14} /> {saving ? 'Saving...' : 'Save'}
-                          </button>
-                        </div>
+                    <div className="prep-detail-grid">
+                      <div className="prep-detail-item">
+                        <span className="prep-detail-label">Name</span>
+                        {renderEditableCell(prep, 'name', prep.name)}
                       </div>
-                    ) : (
-                      /* Read-only Details */
-                      <div className="prep-detail-grid">
-                        <div className="prep-detail-item">
-                          <span className="prep-detail-label">Amount Type</span>
-                          <span className="prep-detail-value">
-                            {AMOUNT_MODES.find(m => m.value === (prep.amount_mode || 'per_person'))?.label}
-                          </span>
-                        </div>
 
-                        <div className="prep-detail-item">
-                          <span className="prep-detail-label">
-                            {(prep.amount_mode || 'per_person') === 'per_person' ? 'Per Person' : 'Amount'}
-                          </span>
-                          <span className="prep-detail-value">
-                            {(prep.amount_mode || 'per_person') === 'per_person'
-                              ? (prep.amount_per_guest || '--')
-                              : (prep.base_amount || '--')
-                            } {prep.unit_abbr || getUnitAbbr(prep.unit_id) || prep.amount_unit || ''}
-                          </span>
-                        </div>
-
-                        <div className="prep-detail-item">
-                          <span className="prep-detail-label">Unit Cost</span>
-                          <span className="prep-detail-value">
-                            {unitCost ? `$${unitCost.toFixed(4)}` : '--'}
-                          </span>
-                        </div>
-
-                        <div className="prep-detail-item">
-                          <span className="prep-detail-label">Total ({guestCount}g)</span>
-                          <span className="prep-detail-value prep-detail-total">
-                            {totalCost ? `$${totalCost.toFixed(2)}` : '--'}
-                          </span>
-                        </div>
-
-                        <div className="prep-detail-item">
-                          <span className="prep-detail-label">Linked To</span>
-                          <span className="prep-detail-value">
-                            {linkInfo ? (
-                              <span
-                                className={`prep-link-badge ${linkInfo.type} clickable`}
-                                onClick={() => setLinkingPrepItem(prep)}
-                              >
-                                {linkInfo.name}
-                              </span>
-                            ) : (
-                              <button
-                                className="btn-link-inline"
-                                onClick={() => setLinkingPrepItem(prep)}
-                              >
-                                <Link size={12} /> Link Product
-                              </button>
-                            )}
-                          </span>
-                        </div>
-
-                        {prep.responsibility && (
-                          <div className="prep-detail-item">
-                            <span className="prep-detail-label">Responsibility</span>
-                            <span className="prep-detail-value">{prep.responsibility}</span>
-                          </div>
+                      <div className="prep-detail-item">
+                        <span className="prep-detail-label">Amount Type</span>
+                        {renderEditableCell(
+                          prep,
+                          'amount_mode',
+                          AMOUNT_MODES.find(m => m.value === mode)?.label
                         )}
-
-                        <div className="prep-detail-actions">
-                          <button
-                            className="btn-secondary btn-sm"
-                            onClick={() => startEditing(prep)}
-                          >
-                            Edit
-                          </button>
-                        </div>
                       </div>
-                    )}
+
+                      <div className="prep-detail-item">
+                        <span className="prep-detail-label">
+                          {mode === 'per_person' ? 'Per Person' : 'Amount'}
+                        </span>
+                        {renderEditableCell(
+                          prep,
+                          mode === 'per_person' ? 'amount_per_guest' : 'base_amount',
+                          mode === 'per_person' ? prep.amount_per_guest : prep.base_amount,
+                          'number'
+                        )}
+                      </div>
+
+                      <div className="prep-detail-item">
+                        <span className="prep-detail-label">Unit</span>
+                        {renderEditableCell(prep, 'unit_id', unitAbbr || '--')}
+                      </div>
+
+                      <div className="prep-detail-item">
+                        <span className="prep-detail-label">Unit Cost</span>
+                        <span className="prep-detail-value">
+                          {unitCost ? `$${unitCost.toFixed(4)}` : '--'}
+                        </span>
+                      </div>
+
+                      <div className="prep-detail-item">
+                        <span className="prep-detail-label">Total ({guestCount}g)</span>
+                        <span className="prep-detail-value prep-detail-total">
+                          {totalCost ? `$${totalCost.toFixed(2)}` : '--'}
+                        </span>
+                      </div>
+
+                      <div className="prep-detail-item">
+                        <span className="prep-detail-label">Linked To</span>
+                        <span className="prep-detail-value">
+                          {linkInfo ? (
+                            <span
+                              className={`prep-link-badge ${linkInfo.type} clickable`}
+                              onClick={() => setLinkingPrepItem(prep)}
+                            >
+                              {linkInfo.name}
+                            </span>
+                          ) : (
+                            <button
+                              className="btn-link-inline"
+                              onClick={() => setLinkingPrepItem(prep)}
+                            >
+                              <Link size={12} /> Link Product
+                            </button>
+                          )}
+                        </span>
+                      </div>
+
+                      <div className="prep-detail-item">
+                        <span className="prep-detail-label">Responsibility</span>
+                        {renderEditableCell(prep, 'responsibility', prep.responsibility || '--')}
+                      </div>
+                    </div>
                   </div>
                 )}
               </li>

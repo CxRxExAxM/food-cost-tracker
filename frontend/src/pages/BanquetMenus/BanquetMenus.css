@@ -769,6 +769,46 @@
   padding: var(--space-2) var(--space-3);
 }
 
+/* Prep Item Inline Editing */
+.prep-editable-value {
+  cursor: pointer;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  transition: background var(--transition-fast) var(--ease-in-out);
+  color: var(--text-primary);
+}
+
+.prep-editable-value:hover {
+  background: var(--bg-elevated);
+}
+
+.prep-inline-input,
+.prep-inline-select {
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-sm);
+  font-family: var(--font-primary);
+  border: 2px solid var(--color-yellow);
+  border-radius: var(--radius-sm);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  outline: none;
+  min-width: 60px;
+  max-width: 150px;
+}
+
+.prep-inline-input:focus,
+.prep-inline-select:focus {
+  box-shadow: 0 0 0 3px rgba(212, 167, 44, 0.1);
+}
+
+.prep-inline-input[type="number"] {
+  width: 80px;
+}
+
+.prep-inline-select {
+  cursor: pointer;
+}
+
 /* Empty and Loading States */
 .loading {
   text-align: center;
