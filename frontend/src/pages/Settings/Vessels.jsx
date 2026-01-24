@@ -27,7 +27,6 @@ function Vessels() {
 
   // Common products for capacity modal
   const [commonProducts, setCommonProducts] = useState([]);
-  const [productSearch, setProductSearch] = useState('');
 
   useEffect(() => {
     loadVessels();
@@ -105,11 +104,6 @@ function Vessels() {
       setError('Failed to delete capacity');
     }
   };
-
-  const filteredProducts = commonProducts.filter(p =>
-    p.common_name?.toLowerCase().includes(productSearch.toLowerCase()) ||
-    p.category?.toLowerCase().includes(productSearch.toLowerCase())
-  );
 
   if (loading) {
     return (
@@ -298,16 +292,10 @@ function Vessels() {
         <CapacityModal
           vessel={capacityVessel}
           capacity={editingCapacity}
-          commonProducts={filteredProducts}
-          productSearch={productSearch}
-          onSearchChange={setProductSearch}
-          onClose={() => {
-            setShowCapacityModal(false);
-            setProductSearch('');
-          }}
+          commonProducts={commonProducts}
+          onClose={() => setShowCapacityModal(false)}
           onSaved={() => {
             setShowCapacityModal(false);
-            setProductSearch('');
             loadVesselDetails(capacityVessel.id);
           }}
         />
@@ -436,7 +424,7 @@ function VesselModal({ vessel, onClose, onSaved }) {
 
 
 // Capacity Create/Edit Modal
-function CapacityModal({ vessel, capacity, commonProducts, productSearch, onSearchChange, onClose, onSaved }) {
+function CapacityModal({ vessel, capacity, commonProducts, onClose, onSaved }) {
   const [formData, setFormData] = useState({
     common_product_id: capacity?.common_product_id || null,
     capacity: capacity?.capacity || '',
@@ -446,7 +434,14 @@ function CapacityModal({ vessel, capacity, commonProducts, productSearch, onSear
   const [selectedProduct, setSelectedProduct] = useState(
     capacity ? { id: capacity.common_product_id, common_name: capacity.product_name } : null
   );
+  const [productSearch, setProductSearch] = useState('');
   const [saving, setSaving] = useState(false);
+
+  // Filter products based on search
+  const filteredProducts = commonProducts.filter(p =>
+    p.common_name?.toLowerCase().includes(productSearch.toLowerCase()) ||
+    p.category?.toLowerCase().includes(productSearch.toLowerCase())
+  );
   const [error, setError] = useState(null);
 
   const handleChange = (e) => {
@@ -544,13 +539,13 @@ function CapacityModal({ vessel, capacity, commonProducts, productSearch, onSear
                       type="text"
                       className="form-input"
                       value={productSearch}
-                      onChange={e => onSearchChange(e.target.value)}
+                      onChange={e => setProductSearch(e.target.value)}
                       placeholder="Search products..."
                       autoFocus
                     />
                   </div>
                   <div className="product-search-results">
-                    {commonProducts.slice(0, 10).map(product => (
+                    {filteredProducts.slice(0, 10).map(product => (
                       <div
                         key={product.id}
                         className="product-search-item"
@@ -562,7 +557,7 @@ function CapacityModal({ vessel, capacity, commonProducts, productSearch, onSear
                         )}
                       </div>
                     ))}
-                    {commonProducts.length === 0 && productSearch && (
+                    {filteredProducts.length === 0 && productSearch && (
                       <div className="no-results">No products found</div>
                     )}
                   </div>
