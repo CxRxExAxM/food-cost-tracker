@@ -15,6 +15,118 @@ router = APIRouter(prefix="/banquet-menus", tags=["banquet-menus"])
 
 
 # ============================================
+# Helper Functions
+# ============================================
+
+def get_unit_conversion_factor(cursor, common_product_id: int, from_unit_id: int, to_unit_id: int, org_id: int) -> float:
+    """
+    Get conversion factor between two units for a common product.
+
+    Returns the factor to multiply a quantity in from_unit to get to_unit.
+    If no direct conversion exists, tries to find a path through standard conversions.
+
+    Example: 1 EA ribeye = 6 OZ, and we need to convert to LB
+    - Direct: EA -> LB might not exist
+    - Path: EA -> OZ (factor 6) then OZ -> LB (factor 0.0625) = 0.375
+    """
+    if from_unit_id == to_unit_id:
+        return 1.0
+
+    if not from_unit_id or not to_unit_id or not common_product_id:
+        return 1.0
+
+    # Try direct conversion
+    cursor.execute("""
+        SELECT conversion_factor
+        FROM product_conversions
+        WHERE common_product_id = %s
+          AND from_unit_id = %s
+          AND to_unit_id = %s
+          AND organization_id = %s
+    """, (common_product_id, from_unit_id, to_unit_id, org_id))
+
+    result = cursor.fetchone()
+    if result:
+        return float(result['conversion_factor'])
+
+    # Try reverse conversion
+    cursor.execute("""
+        SELECT conversion_factor
+        FROM product_conversions
+        WHERE common_product_id = %s
+          AND from_unit_id = %s
+          AND to_unit_id = %s
+          AND organization_id = %s
+    """, (common_product_id, to_unit_id, from_unit_id, org_id))
+
+    result = cursor.fetchone()
+    if result:
+        return 1.0 / float(result['conversion_factor'])
+
+    # Try two-hop conversion through a common unit (typically OZ or LB)
+    # Get all conversions FROM the from_unit
+    cursor.execute("""
+        SELECT to_unit_id, conversion_factor
+        FROM product_conversions
+        WHERE common_product_id = %s
+          AND from_unit_id = %s
+          AND organization_id = %s
+    """, (common_product_id, from_unit_id, org_id))
+
+    from_conversions = {row['to_unit_id']: row['conversion_factor'] for row in cursor.fetchall()}
+
+    # Get all conversions TO the to_unit (we need from X to to_unit)
+    cursor.execute("""
+        SELECT from_unit_id, conversion_factor
+        FROM product_conversions
+        WHERE common_product_id = %s
+          AND to_unit_id = %s
+          AND organization_id = %s
+    """, (common_product_id, to_unit_id, org_id))
+
+    to_conversions = {row['from_unit_id']: row['conversion_factor'] for row in cursor.fetchall()}
+
+    # Find intermediate unit that connects both
+    for intermediate_unit, factor1 in from_conversions.items():
+        if intermediate_unit in to_conversions:
+            # from_unit -> intermediate -> to_unit
+            factor2 = to_conversions[intermediate_unit]
+            return float(factor1) * float(factor2)
+
+    # Also check if we can go: from_unit -> intermediate, then intermediate -> to_unit (reverse)
+    cursor.execute("""
+        SELECT from_unit_id, conversion_factor
+        FROM product_conversions
+        WHERE common_product_id = %s
+          AND to_unit_id = %s
+          AND organization_id = %s
+    """, (common_product_id, to_unit_id, org_id))
+
+    # Try standard weight conversions if no product-specific conversion found
+    # This handles OZ <-> LB conversions automatically
+    cursor.execute("""
+        SELECT u1.abbreviation as from_abbr, u2.abbreviation as to_abbr
+        FROM units u1, units u2
+        WHERE u1.id = %s AND u2.id = %s
+    """, (from_unit_id, to_unit_id))
+
+    units = cursor.fetchone()
+    if units:
+        from_abbr = units['from_abbr'].upper()
+        to_abbr = units['to_abbr'].upper()
+
+        # Standard weight conversions
+        weight_to_oz = {'OZ': 1, 'LB': 16, 'G': 0.035274, 'KG': 35.274}
+
+        if from_abbr in weight_to_oz and to_abbr in weight_to_oz:
+            # Convert through ounces
+            return weight_to_oz[from_abbr] / weight_to_oz[to_abbr]
+
+    # No conversion found - return 1.0 (assumes same unit or incompatible)
+    return 1.0
+
+
+# ============================================
 # Pydantic Models
 # ============================================
 
@@ -356,6 +468,7 @@ def calculate_menu_cost(
                         WHERE vpc.vessel_id = bp.vessel_id
                           AND vpc.common_product_id = bp.common_product_id
                     ) as vessel_product_capacity,
+                    -- Get product unit cost and the product's unit_id
                     (
                         SELECT ph.unit_price
                         FROM price_history ph
@@ -364,6 +477,12 @@ def calculate_menu_cost(
                         ORDER BY ph.effective_date DESC
                         LIMIT 1
                     ) as product_unit_cost,
+                    (
+                        SELECT p.unit_id
+                        FROM products p
+                        WHERE p.id = bp.product_id
+                    ) as product_pricing_unit_id,
+                    -- Get common product average unit cost and typical pricing unit
                     (
                         SELECT AVG(ph2.unit_price)
                         FROM price_history ph2
@@ -375,21 +494,48 @@ def calculate_menu_cost(
                             FROM price_history ph3
                             WHERE ph3.distributor_product_id = dp2.id
                         )
-                    ) as common_product_unit_cost
+                    ) as common_product_unit_cost,
+                    -- Get the most common pricing unit for this common product
+                    (
+                        SELECT p2.unit_id
+                        FROM products p2
+                        WHERE p2.common_product_id = bp.common_product_id
+                        GROUP BY p2.unit_id
+                        ORDER BY COUNT(*) DESC
+                        LIMIT 1
+                    ) as common_product_pricing_unit_id
                 FROM banquet_prep_items bp
                 LEFT JOIN vessels v ON v.id = bp.vessel_id
                 WHERE bp.banquet_menu_item_id = %s
             """, (item["id"],))
 
             prep_items = dicts_from_rows(cursor.fetchall())
+            org_id = current_user["organization_id"]
 
             for prep in prep_items:
                 unit_cost = Decimal("0")
+                pricing_unit_id = None
+
                 if prep.get("product_unit_cost"):
                     unit_cost = Decimal(str(prep["product_unit_cost"]))
+                    pricing_unit_id = prep.get("product_pricing_unit_id")
                 elif prep.get("common_product_unit_cost"):
                     unit_cost = Decimal(str(prep["common_product_unit_cost"]))
+                    pricing_unit_id = prep.get("common_product_pricing_unit_id")
                 # TODO: Add recipe cost calculation when recipes are linked
+
+                # Apply unit conversion if prep item unit differs from pricing unit
+                prep_unit_id = prep.get("unit_id")
+                common_product_id = prep.get("common_product_id")
+
+                if prep_unit_id and pricing_unit_id and prep_unit_id != pricing_unit_id and common_product_id:
+                    # Convert: we have price per pricing_unit, we want price per prep_unit
+                    # e.g., price is $15/LB, prep is in EA, conversion EA->LB = 0.375
+                    # so cost per EA = $15 * 0.375 = $5.625
+                    conversion_factor = get_unit_conversion_factor(
+                        cursor, common_product_id, prep_unit_id, pricing_unit_id, org_id
+                    )
+                    unit_cost = unit_cost * Decimal(str(conversion_factor))
 
                 # Calculate amount based on amount_mode and vessel
                 amount_mode = prep.get("amount_mode") or "per_person"
@@ -420,6 +566,8 @@ def calculate_menu_cost(
                     "prep_item_id": prep["id"],
                     "name": prep["name"],
                     "unit_cost": float(unit_cost),
+                    "unit_id": prep.get("unit_id"),
+                    "pricing_unit_id": pricing_unit_id,
                     "amount_mode": amount_mode,
                     "amount_per_guest": float(prep.get("amount_per_guest") or 0),
                     "base_amount": float(prep.get("base_amount") or 0),
