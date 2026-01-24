@@ -62,8 +62,13 @@ class PrepItemCreate(BaseModel):
     name: str
     display_order: Optional[int] = 0
     amount_per_guest: Optional[float] = None
-    amount_unit: Optional[str] = None
-    vessel: Optional[str] = None
+    amount_unit: Optional[str] = None  # Legacy field, prefer unit_id
+    unit_id: Optional[int] = None
+    amount_mode: Optional[str] = 'per_person'  # 'per_person', 'at_minimum', 'fixed'
+    base_amount: Optional[float] = None  # For at_minimum/fixed modes
+    vessel: Optional[str] = None  # Legacy text field
+    vessel_id: Optional[int] = None  # FK to vessels table
+    vessel_count: Optional[float] = None  # Number of vessels
     responsibility: Optional[str] = None
     product_id: Optional[int] = None
     recipe_id: Optional[int] = None
@@ -75,8 +80,13 @@ class PrepItemUpdate(BaseModel):
     name: Optional[str] = None
     display_order: Optional[int] = None
     amount_per_guest: Optional[float] = None
-    amount_unit: Optional[str] = None
-    vessel: Optional[str] = None
+    amount_unit: Optional[str] = None  # Legacy field, prefer unit_id
+    unit_id: Optional[int] = None
+    amount_mode: Optional[str] = None  # 'per_person', 'at_minimum', 'fixed'
+    base_amount: Optional[float] = None  # For at_minimum/fixed modes
+    vessel: Optional[str] = None  # Legacy text field
+    vessel_id: Optional[int] = None  # FK to vessels table
+    vessel_count: Optional[float] = None  # Number of vessels
     responsibility: Optional[str] = None
     product_id: Optional[int] = None
     recipe_id: Optional[int] = None
@@ -242,10 +252,24 @@ def get_banquet_menu(menu_id: int, current_user: dict = Depends(get_current_user
                     bp.*,
                     p.name as product_name,
                     p.unit_id as product_unit_id,
-                    u.abbreviation as product_unit_abbr,
+                    pu.abbreviation as product_unit_abbr,
                     r.name as recipe_name,
                     cp.common_name as common_product_name,
                     cp.category as common_product_category,
+                    -- Unit info for the prep item
+                    bu.abbreviation as unit_abbr,
+                    bu.name as unit_name,
+                    -- Vessel info
+                    v.name as vessel_name,
+                    v.default_capacity as vessel_default_capacity,
+                    vu.abbreviation as vessel_unit_abbr,
+                    -- Get product-specific vessel capacity if exists
+                    (
+                        SELECT vpc.capacity
+                        FROM vessel_product_capacities vpc
+                        WHERE vpc.vessel_id = bp.vessel_id
+                          AND vpc.common_product_id = bp.common_product_id
+                    ) as vessel_product_capacity,
                     -- Get latest unit price for the product
                     (
                         SELECT ph.unit_price
@@ -270,9 +294,12 @@ def get_banquet_menu(menu_id: int, current_user: dict = Depends(get_current_user
                     ) as common_product_unit_cost
                 FROM banquet_prep_items bp
                 LEFT JOIN products p ON p.id = bp.product_id
-                LEFT JOIN units u ON u.id = p.unit_id
+                LEFT JOIN units pu ON pu.id = p.unit_id
+                LEFT JOIN units bu ON bu.id = bp.unit_id
                 LEFT JOIN recipes r ON r.id = bp.recipe_id
                 LEFT JOIN common_products cp ON cp.id = bp.common_product_id
+                LEFT JOIN vessels v ON v.id = bp.vessel_id
+                LEFT JOIN units vu ON vu.id = v.default_unit_id
                 WHERE bp.banquet_menu_item_id = %s
                 ORDER BY bp.display_order, bp.name
             """, (item["id"],))
@@ -322,6 +349,13 @@ def calculate_menu_cost(
             cursor.execute("""
                 SELECT
                     bp.*,
+                    v.default_capacity as vessel_default_capacity,
+                    (
+                        SELECT vpc.capacity
+                        FROM vessel_product_capacities vpc
+                        WHERE vpc.vessel_id = bp.vessel_id
+                          AND vpc.common_product_id = bp.common_product_id
+                    ) as vessel_product_capacity,
                     (
                         SELECT ph.unit_price
                         FROM price_history ph
@@ -343,6 +377,7 @@ def calculate_menu_cost(
                         )
                     ) as common_product_unit_cost
                 FROM banquet_prep_items bp
+                LEFT JOIN vessels v ON v.id = bp.vessel_id
                 WHERE bp.banquet_menu_item_id = %s
             """, (item["id"],))
 
@@ -356,14 +391,41 @@ def calculate_menu_cost(
                     unit_cost = Decimal(str(prep["common_product_unit_cost"]))
                 # TODO: Add recipe cost calculation when recipes are linked
 
-                amount = Decimal(str(prep.get("amount_per_guest") or 0))
-                prep_total = unit_cost * amount * guests
+                # Calculate amount based on amount_mode and vessel
+                amount_mode = prep.get("amount_mode") or "per_person"
+                calculated_amount = Decimal("0")
+
+                # Check if using vessel-based calculation
+                if prep.get("vessel_id") and prep.get("vessel_count"):
+                    vessel_count = Decimal(str(prep["vessel_count"]))
+                    # Use product-specific capacity if available, otherwise vessel default
+                    if prep.get("vessel_product_capacity"):
+                        capacity = Decimal(str(prep["vessel_product_capacity"]))
+                    elif prep.get("vessel_default_capacity"):
+                        capacity = Decimal(str(prep["vessel_default_capacity"]))
+                    else:
+                        capacity = Decimal("0")
+                    calculated_amount = vessel_count * capacity
+                else:
+                    # Standard amount modes
+                    if amount_mode == "per_person":
+                        amount_per_guest = Decimal(str(prep.get("amount_per_guest") or 0))
+                        calculated_amount = amount_per_guest * guests
+                    elif amount_mode in ("at_minimum", "fixed"):
+                        calculated_amount = Decimal(str(prep.get("base_amount") or 0))
+
+                prep_total = unit_cost * calculated_amount
 
                 prep_costs.append({
                     "prep_item_id": prep["id"],
                     "name": prep["name"],
                     "unit_cost": float(unit_cost),
-                    "amount_per_guest": float(amount),
+                    "amount_mode": amount_mode,
+                    "amount_per_guest": float(prep.get("amount_per_guest") or 0),
+                    "base_amount": float(prep.get("base_amount") or 0),
+                    "vessel_id": prep.get("vessel_id"),
+                    "vessel_count": float(prep.get("vessel_count") or 0),
+                    "calculated_amount": float(calculated_amount),
                     "total_cost": float(prep_total),
                     "linked": bool(prep.get("product_id") or prep.get("recipe_id") or prep.get("common_product_id"))
                 })
@@ -672,13 +734,17 @@ def create_prep_item(item_id: int, prep: PrepItemCreate, current_user: dict = De
         cursor.execute("""
             INSERT INTO banquet_prep_items (
                 banquet_menu_item_id, name, display_order, amount_per_guest, amount_unit,
-                vessel, responsibility, product_id, recipe_id, common_product_id
+                unit_id, amount_mode, base_amount,
+                vessel, vessel_id, vessel_count,
+                responsibility, product_id, recipe_id, common_product_id
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
         """, (
             item_id, prep.name, prep.display_order, prep.amount_per_guest, prep.amount_unit,
-            prep.vessel, prep.responsibility, prep.product_id, prep.recipe_id, prep.common_product_id
+            prep.unit_id, prep.amount_mode, prep.base_amount,
+            prep.vessel, prep.vessel_id, prep.vessel_count,
+            prep.responsibility, prep.product_id, prep.recipe_id, prep.common_product_id
         ))
 
         prep_id = cursor.fetchone()["id"]
