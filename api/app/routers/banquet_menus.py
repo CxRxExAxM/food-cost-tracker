@@ -18,6 +18,17 @@ router = APIRouter(prefix="/banquet-menus", tags=["banquet-menus"])
 # Helper Functions
 # ============================================
 
+def get_unit_id_from_abbreviation(cursor, abbr: str) -> int:
+    """Look up unit ID from abbreviation."""
+    if not abbr:
+        return None
+    cursor.execute("""
+        SELECT id FROM units WHERE UPPER(abbreviation) = UPPER(%s) LIMIT 1
+    """, (abbr.strip(),))
+    result = cursor.fetchone()
+    return result['id'] if result else None
+
+
 def get_unit_conversion_factor(cursor, common_product_id: int, from_unit_id: int, to_unit_id: int, org_id: int) -> float:
     """
     Get conversion factor between two units for a common product.
@@ -515,25 +526,36 @@ def calculate_menu_cost(
             for prep in prep_items:
                 unit_cost = Decimal("0")
                 pricing_unit_id = None
+                linked_common_product_id = None
 
                 if prep.get("product_unit_cost"):
                     unit_cost = Decimal(str(prep["product_unit_cost"]))
                     pricing_unit_id = prep.get("product_pricing_unit_id")
+                    # For direct product links, get the common_product_id from the product
+                    if prep.get("product_id"):
+                        cursor.execute("SELECT common_product_id FROM products WHERE id = %s", (prep["product_id"],))
+                        prod_result = cursor.fetchone()
+                        if prod_result:
+                            linked_common_product_id = prod_result.get("common_product_id")
                 elif prep.get("common_product_unit_cost"):
                     unit_cost = Decimal(str(prep["common_product_unit_cost"]))
                     pricing_unit_id = prep.get("common_product_pricing_unit_id")
+                    linked_common_product_id = prep.get("common_product_id")
                 # TODO: Add recipe cost calculation when recipes are linked
 
-                # Apply unit conversion if prep item unit differs from pricing unit
+                # Get prep item's unit - prefer unit_id, fallback to looking up from amount_unit text
                 prep_unit_id = prep.get("unit_id")
-                common_product_id = prep.get("common_product_id")
+                if not prep_unit_id and prep.get("amount_unit"):
+                    prep_unit_id = get_unit_id_from_abbreviation(cursor, prep["amount_unit"])
 
-                if prep_unit_id and pricing_unit_id and prep_unit_id != pricing_unit_id and common_product_id:
+                # Apply unit conversion if prep item unit differs from pricing unit
+                if prep_unit_id and pricing_unit_id and prep_unit_id != pricing_unit_id:
                     # Convert: we have price per pricing_unit, we want price per prep_unit
-                    # e.g., price is $15/LB, prep is in EA, conversion EA->LB = 0.375
-                    # so cost per EA = $15 * 0.375 = $5.625
+                    # e.g., price is $22.4/LB, prep is 6 OZ, conversion OZ->LB = 0.0625
+                    # so cost per OZ = $22.4 * 0.0625 = $1.40
+                    # total for 6 OZ = $1.40 * 6 = $8.40
                     conversion_factor = get_unit_conversion_factor(
-                        cursor, common_product_id, prep_unit_id, pricing_unit_id, org_id
+                        cursor, linked_common_product_id, prep_unit_id, pricing_unit_id, org_id
                     )
                     unit_cost = unit_cost * Decimal(str(conversion_factor))
 
