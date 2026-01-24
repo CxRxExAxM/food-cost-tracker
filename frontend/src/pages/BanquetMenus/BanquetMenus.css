@@ -495,7 +495,7 @@
   border-style: solid;
 }
 
-/* Expandable Prep Items */
+/* Prep Items Flat Table */
 .prep-empty-state {
   padding: var(--space-4);
   color: var(--text-tertiary);
@@ -503,66 +503,32 @@
   font-style: italic;
 }
 
-.prep-item-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.prep-item-row {
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.prep-item-row:last-child {
-  border-bottom: none;
-}
-
-.prep-item-header {
-  display: flex;
+/* Amount group - value + unit side by side */
+.prep-amount-group {
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  padding: var(--space-3) var(--space-4);
-  cursor: pointer;
-  transition: background var(--transition-fast) var(--ease-in-out);
-  gap: var(--space-4);
+  gap: var(--space-1);
 }
 
-.prep-item-header:hover {
-  background: var(--bg-tertiary);
-}
-
-.prep-item-left {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-width: 0;
-  flex-shrink: 1;
-}
-
-.prep-item-name {
-  font-size: var(--text-sm);
-  font-weight: var(--font-weight-medium);
-  color: var(--text-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.prep-item-summary {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-  flex: 1;
-  justify-content: flex-end;
-}
-
-.prep-amount {
-  font-size: var(--text-xs);
+.prep-amount-group .amount-value {
   font-family: var(--font-mono);
-  color: var(--text-secondary);
-  white-space: nowrap;
 }
 
+.prep-amount-group .amount-unit {
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+}
+
+/* Mode badge in table */
+.prep-mode-badge {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  background: var(--bg-tertiary);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+}
+
+/* Link badge */
 .prep-link-badge {
   display: inline-flex;
   align-items: center;
@@ -598,28 +564,31 @@
   opacity: 0.8;
 }
 
-.prep-cost {
-  font-size: var(--text-xs);
-  font-family: var(--font-mono);
-  font-weight: var(--font-weight-medium);
-  color: var(--text-primary);
-  white-space: nowrap;
-  min-width: 70px;
-  text-align: right;
-}
-
-.prep-cost.no-cost {
-  color: var(--text-tertiary);
-}
-
-.prep-item-actions {
-  display: flex;
+/* Link button */
+.btn-link-inline {
+  display: inline-flex;
+  align-items: center;
   gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  background: transparent;
+  color: var(--color-yellow);
+  border: 1px dashed var(--color-yellow-dim);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  font-family: var(--font-primary);
+  cursor: pointer;
+  transition: all var(--transition-base) var(--ease-in-out);
 }
 
+.btn-link-inline:hover {
+  background: var(--color-yellow-dim);
+  border-style: solid;
+}
+
+/* Delete action button */
 .btn-prep-action {
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -643,133 +612,24 @@
   color: var(--color-red);
 }
 
-/* Prep Item Expanded Details */
-.prep-item-details {
-  padding: var(--space-4) var(--space-4) var(--space-4) calc(var(--space-4) + 22px);
-  background: var(--bg-tertiary);
-  border-top: 1px solid var(--border-subtle);
-}
-
-.prep-detail-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  gap: var(--space-4);
-}
-
-.prep-detail-item {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-}
-
-.prep-detail-label {
-  font-size: var(--text-xs);
-  font-weight: var(--font-weight-medium);
-  color: var(--text-tertiary);
-  text-transform: uppercase;
-  letter-spacing: var(--tracking-wide);
-}
-
-.prep-detail-value {
-  font-size: var(--text-sm);
-  color: var(--text-primary);
-}
-
-.prep-detail-value.prep-detail-total {
+/* Cost cells */
+.prep-cost-cell,
+.prep-total-cell {
   font-family: var(--font-mono);
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-medium);
+}
+
+.prep-total-cell {
   color: var(--color-green-bright);
 }
 
-.prep-detail-actions {
-  grid-column: 1 / -1;
-  display: flex;
-  justify-content: flex-start;
-  gap: var(--space-2);
-  margin-top: var(--space-2);
-  padding-top: var(--space-3);
-  border-top: 1px solid var(--border-subtle);
-}
-
-.btn-link-inline {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  padding: var(--space-1) var(--space-2);
-  background: transparent;
-  color: var(--color-yellow);
-  border: 1px dashed var(--color-yellow-dim);
-  border-radius: var(--radius-sm);
-  font-size: var(--text-xs);
-  font-family: var(--font-primary);
-  cursor: pointer;
-  transition: all var(--transition-base) var(--ease-in-out);
-}
-
-.btn-link-inline:hover {
-  background: var(--color-yellow-dim);
-  border-style: solid;
-}
-
-/* Prep Item Edit Form */
-.prep-edit-form {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-}
-
-.prep-edit-row {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-.prep-edit-row label {
-  font-size: var(--text-xs);
-  font-weight: var(--font-weight-medium);
+.prep-cost-cell.no-cost,
+.prep-total-cell.no-cost {
   color: var(--text-tertiary);
-  text-transform: uppercase;
-  letter-spacing: var(--tracking-wide);
+  font-weight: var(--font-weight-normal);
 }
 
-.prep-amount-input {
-  display: flex;
-  gap: var(--space-2);
-}
-
-.prep-amount-input .form-input {
-  flex: 1;
-  min-width: 80px;
-}
-
-.prep-amount-input .unit-select {
-  min-width: 100px;
-}
-
-.prep-edit-actions {
-  display: flex;
-  justify-content: flex-start;
-  gap: var(--space-2);
-  margin-top: var(--space-2);
-  padding-top: var(--space-3);
-  border-top: 1px solid var(--border-subtle);
-}
-
-/* Small button variant */
-.btn-sm {
-  padding: var(--space-2) var(--space-3);
-  font-size: var(--text-xs);
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-}
-
-.btn-primary.btn-sm,
-.btn-secondary.btn-sm {
-  padding: var(--space-2) var(--space-3);
-}
-
-/* Prep Item Inline Editing */
+/* Inline Editing */
 .prep-editable-value {
   cursor: pointer;
   padding: var(--space-1) var(--space-2);
@@ -792,8 +652,8 @@
   background: var(--bg-tertiary);
   color: var(--text-primary);
   outline: none;
-  min-width: 60px;
-  max-width: 150px;
+  min-width: 50px;
+  max-width: 120px;
 }
 
 .prep-inline-input:focus,
@@ -802,7 +662,7 @@
 }
 
 .prep-inline-input[type="number"] {
-  width: 80px;
+  width: 70px;
 }
 
 .prep-inline-select {

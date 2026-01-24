@@ -1,22 +1,21 @@
 import { useState, useEffect } from 'react';
 import axios from '../../../lib/axios';
-import { ChevronRight, Trash2, Link } from 'lucide-react';
+import { Trash2, Link } from 'lucide-react';
 import AddPrepItemModal from './AddPrepItemModal';
 import LinkPrepItemModal from './LinkPrepItemModal';
 
 const AMOUNT_MODES = [
-  { value: 'per_person', label: 'Per Person' },
-  { value: 'at_minimum', label: 'At Minimum' },
-  { value: 'fixed', label: 'Fixed' }
+  { value: 'per_person', label: '/pp', fullLabel: 'Per Person' },
+  { value: 'at_minimum', label: 'min', fullLabel: 'At Minimum' },
+  { value: 'fixed', label: 'fixed', fullLabel: 'Fixed' }
 ];
 
 function PrepItemTable({ menuItemId, prepItems, itemCosts, guestCount, onPrepItemsChanged }) {
-  const [expandedItems, setExpandedItems] = useState(new Set());
   const [showAddModal, setShowAddModal] = useState(false);
   const [linkingPrepItem, setLinkingPrepItem] = useState(null);
   const [units, setUnits] = useState([]);
 
-  // Inline editing state (like Products page)
+  // Inline editing state
   const [editingCell, setEditingCell] = useState(null); // { prepId, field }
   const [editValue, setEditValue] = useState('');
 
@@ -37,21 +36,6 @@ function PrepItemTable({ menuItemId, prepItems, itemCosts, guestCount, onPrepIte
     if (!unitId) return '';
     const unit = units.find(u => u.id === unitId);
     return unit?.abbreviation || '';
-  };
-
-  const toggleExpand = (prepId) => {
-    const newExpanded = new Set(expandedItems);
-    if (newExpanded.has(prepId)) {
-      newExpanded.delete(prepId);
-      // Cancel any editing when collapsing
-      if (editingCell?.prepId === prepId) {
-        setEditingCell(null);
-        setEditValue('');
-      }
-    } else {
-      newExpanded.add(prepId);
-    }
-    setExpandedItems(newExpanded);
   };
 
   // Start editing a cell
@@ -77,12 +61,10 @@ function PrepItemTable({ menuItemId, prepItems, itemCosts, guestCount, onPrepIte
     try {
       let updateData = {};
 
-      // Build update payload based on field
       if (field === 'name') {
         updateData.name = editValue || prep.name;
       } else if (field === 'amount_mode') {
         updateData.amount_mode = editValue;
-        // Clear the opposite amount field when changing mode
         if (editValue === 'per_person') {
           updateData.base_amount = null;
         } else {
@@ -94,8 +76,6 @@ function PrepItemTable({ menuItemId, prepItems, itemCosts, guestCount, onPrepIte
         updateData.base_amount = editValue ? parseFloat(editValue) : null;
       } else if (field === 'unit_id') {
         updateData.unit_id = editValue ? parseInt(editValue) : null;
-      } else if (field === 'responsibility') {
-        updateData.responsibility = editValue || null;
       }
 
       await axios.put(`/banquet-menus/prep/${prepId}`, updateData);
@@ -119,40 +99,6 @@ function PrepItemTable({ menuItemId, prepItems, itemCosts, guestCount, onPrepIte
       e.preventDefault();
       handleCellSave(prepId, field);
       return;
-    }
-
-    // Tab moves to next editable field
-    if (e.key === 'Tab') {
-      e.preventDefault();
-      const prep = prepItems.find(p => p.id === prepId);
-      if (!prep) return;
-
-      const mode = prep.amount_mode || 'per_person';
-      const amountField = mode === 'per_person' ? 'amount_per_guest' : 'base_amount';
-      const fields = ['name', 'amount_mode', amountField, 'unit_id', 'responsibility'];
-      const currentIdx = fields.indexOf(field);
-      const nextIdx = e.shiftKey ? currentIdx - 1 : currentIdx + 1;
-
-      if (nextIdx >= 0 && nextIdx < fields.length) {
-        const nextField = fields[nextIdx];
-        handleCellSave(prepId, field).then(() => {
-          // Wait a tick for state to update, then start editing next field
-          setTimeout(() => {
-            const updatedPrep = prepItems.find(p => p.id === prepId);
-            if (updatedPrep) {
-              let nextValue;
-              if (nextField === 'unit_id') {
-                nextValue = updatedPrep.unit_id;
-              } else {
-                nextValue = updatedPrep[nextField];
-              }
-              startCellEdit(prepId, nextField, nextValue);
-            }
-          }, 50);
-        });
-      } else {
-        handleCellSave(prepId, field);
-      }
     }
   };
 
@@ -179,9 +125,8 @@ function PrepItemTable({ menuItemId, prepItems, itemCosts, guestCount, onPrepIte
     return null;
   };
 
-  const handleDeletePrepItem = async (prepId, e) => {
-    e.stopPropagation();
-    if (!confirm('Are you sure you want to delete this prep item?')) {
+  const handleDeletePrepItem = async (prepId) => {
+    if (!confirm('Delete this prep item?')) {
       return;
     }
 
@@ -194,26 +139,11 @@ function PrepItemTable({ menuItemId, prepItems, itemCosts, guestCount, onPrepIte
     }
   };
 
-  const formatAmount = (prep) => {
-    const mode = prep.amount_mode || 'per_person';
-    const unitAbbr = prep.unit_abbr || getUnitAbbr(prep.unit_id) || prep.amount_unit || '';
-
-    if (mode === 'per_person') {
-      const amt = prep.amount_per_guest;
-      return amt ? `${amt} ${unitAbbr}/person` : '--';
-    } else {
-      const amt = prep.base_amount;
-      const modeLabel = mode === 'at_minimum' ? 'min' : 'fixed';
-      return amt ? `${amt} ${unitAbbr} (${modeLabel})` : '--';
-    }
-  };
-
   // Render an editable cell
-  const renderEditableCell = (prep, field, displayValue, inputType = 'text') => {
+  const renderEditableCell = (prep, field, displayValue, inputType = 'text', className = '') => {
     const isEditing = editingCell?.prepId === prep.id && editingCell?.field === field;
 
     if (isEditing) {
-      // Special handling for select fields
       if (field === 'amount_mode') {
         return (
           <select
@@ -225,7 +155,7 @@ function PrepItemTable({ menuItemId, prepItems, itemCosts, guestCount, onPrepIte
             autoFocus
           >
             {AMOUNT_MODES.map(mode => (
-              <option key={mode.value} value={mode.value}>{mode.label}</option>
+              <option key={mode.value} value={mode.value}>{mode.fullLabel}</option>
             ))}
           </select>
         );
@@ -249,7 +179,6 @@ function PrepItemTable({ menuItemId, prepItems, itemCosts, guestCount, onPrepIte
         );
       }
 
-      // Standard input field
       return (
         <input
           type={inputType}
@@ -265,7 +194,6 @@ function PrepItemTable({ menuItemId, prepItems, itemCosts, guestCount, onPrepIte
       );
     }
 
-    // Determine what value to pass when starting edit
     let editStartValue = displayValue;
     if (field === 'unit_id') {
       editStartValue = prep.unit_id;
@@ -275,11 +203,8 @@ function PrepItemTable({ menuItemId, prepItems, itemCosts, guestCount, onPrepIte
 
     return (
       <span
-        className="prep-editable-value"
-        onClick={(e) => {
-          e.stopPropagation();
-          startCellEdit(prep.id, field, editStartValue);
-        }}
+        className={`prep-editable-value ${className}`}
+        onClick={() => startCellEdit(prep.id, field, editStartValue)}
         title="Click to edit"
       >
         {displayValue ?? '--'}
@@ -294,133 +219,80 @@ function PrepItemTable({ menuItemId, prepItems, itemCosts, guestCount, onPrepIte
           No prep items yet. Click "Add Prep Item" below.
         </div>
       ) : (
-        <ul className="prep-item-list">
-          {prepItems.map((prep) => {
-            const linkInfo = getLinkInfo(prep);
-            const unitCost = getUnitCostForPrepItem(prep.id);
-            const totalCost = getCostForPrepItem(prep.id);
-            const isExpanded = expandedItems.has(prep.id);
-            const mode = prep.amount_mode || 'per_person';
-            const unitAbbr = prep.unit_abbr || getUnitAbbr(prep.unit_id) || prep.amount_unit || '';
+        <table className="prep-items-table">
+          <thead>
+            <tr>
+              <th>Prep Item</th>
+              <th className="text-center">Amount</th>
+              <th className="text-center">Type</th>
+              <th>Linked To</th>
+              <th className="text-right">Unit Cost</th>
+              <th className="text-right">Total</th>
+              <th className="text-center">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {prepItems.map((prep) => {
+              const linkInfo = getLinkInfo(prep);
+              const unitCost = getUnitCostForPrepItem(prep.id);
+              const totalCost = getCostForPrepItem(prep.id);
+              const mode = prep.amount_mode || 'per_person';
+              const unitAbbr = prep.unit_abbr || getUnitAbbr(prep.unit_id) || prep.amount_unit || '';
+              const amountField = mode === 'per_person' ? 'amount_per_guest' : 'base_amount';
+              const amountValue = mode === 'per_person' ? prep.amount_per_guest : prep.base_amount;
+              const modeLabel = AMOUNT_MODES.find(m => m.value === mode)?.label || '';
 
-            return (
-              <li key={prep.id} className="prep-item-row">
-                {/* Collapsed Header */}
-                <div
-                  className="prep-item-header"
-                  onClick={() => toggleExpand(prep.id)}
-                >
-                  <div className="prep-item-left">
-                    <span className={`expand-icon ${isExpanded ? 'expanded' : ''}`}>
-                      <ChevronRight size={14} />
+              return (
+                <tr key={prep.id}>
+                  <td className="prep-name-cell">
+                    {renderEditableCell(prep, 'name', prep.name)}
+                  </td>
+                  <td className="text-center prep-amount-cell">
+                    <span className="prep-amount-group">
+                      {renderEditableCell(prep, amountField, amountValue, 'number', 'amount-value')}
+                      {renderEditableCell(prep, 'unit_id', unitAbbr || '--', 'text', 'amount-unit')}
                     </span>
-                    <span className="prep-item-name">{prep.name}</span>
-                  </div>
-
-                  <div className="prep-item-summary">
-                    <span className="prep-amount">{formatAmount(prep)}</span>
-                    {linkInfo && (
-                      <span className={`prep-link-badge ${linkInfo.type}`}>
+                  </td>
+                  <td className="text-center">
+                    {renderEditableCell(prep, 'amount_mode', modeLabel, 'text', 'prep-mode-badge')}
+                  </td>
+                  <td className="prep-link-cell">
+                    {linkInfo ? (
+                      <span
+                        className={`prep-link-badge ${linkInfo.type} clickable`}
+                        onClick={() => setLinkingPrepItem(prep)}
+                      >
                         {linkInfo.name}
                       </span>
+                    ) : (
+                      <button
+                        className="btn-link-inline"
+                        onClick={() => setLinkingPrepItem(prep)}
+                      >
+                        <Link size={12} /> Link
+                      </button>
                     )}
-                    <span className={`prep-cost ${!unitCost ? 'no-cost' : ''}`}>
-                      {unitCost ? `$${unitCost.toFixed(2)}/unit` : '--'}
-                    </span>
-                  </div>
-
-                  <div className="prep-item-actions" onClick={e => e.stopPropagation()}>
+                  </td>
+                  <td className={`text-right prep-cost-cell ${!unitCost ? 'no-cost' : ''}`}>
+                    {unitCost ? `$${unitCost.toFixed(2)}` : '--'}
+                  </td>
+                  <td className={`text-right prep-total-cell ${!totalCost ? 'no-cost' : ''}`}>
+                    {totalCost ? `$${totalCost.toFixed(2)}` : '--'}
+                  </td>
+                  <td className="text-center prep-actions-cell">
                     <button
                       className="btn-prep-action delete"
-                      onClick={(e) => handleDeletePrepItem(prep.id, e)}
+                      onClick={() => handleDeletePrepItem(prep.id)}
                       title="Delete prep item"
                     >
-                      <Trash2 size={12} />
+                      <Trash2 size={14} />
                     </button>
-                  </div>
-                </div>
-
-                {/* Expanded Details - Click to Edit */}
-                {isExpanded && (
-                  <div className="prep-item-details">
-                    <div className="prep-detail-grid">
-                      <div className="prep-detail-item">
-                        <span className="prep-detail-label">Name</span>
-                        {renderEditableCell(prep, 'name', prep.name)}
-                      </div>
-
-                      <div className="prep-detail-item">
-                        <span className="prep-detail-label">Amount Type</span>
-                        {renderEditableCell(
-                          prep,
-                          'amount_mode',
-                          AMOUNT_MODES.find(m => m.value === mode)?.label
-                        )}
-                      </div>
-
-                      <div className="prep-detail-item">
-                        <span className="prep-detail-label">
-                          {mode === 'per_person' ? 'Per Person' : 'Amount'}
-                        </span>
-                        {renderEditableCell(
-                          prep,
-                          mode === 'per_person' ? 'amount_per_guest' : 'base_amount',
-                          mode === 'per_person' ? prep.amount_per_guest : prep.base_amount,
-                          'number'
-                        )}
-                      </div>
-
-                      <div className="prep-detail-item">
-                        <span className="prep-detail-label">Unit</span>
-                        {renderEditableCell(prep, 'unit_id', unitAbbr || '--')}
-                      </div>
-
-                      <div className="prep-detail-item">
-                        <span className="prep-detail-label">Unit Cost</span>
-                        <span className="prep-detail-value">
-                          {unitCost ? `$${unitCost.toFixed(4)}` : '--'}
-                        </span>
-                      </div>
-
-                      <div className="prep-detail-item">
-                        <span className="prep-detail-label">Total ({guestCount}g)</span>
-                        <span className="prep-detail-value prep-detail-total">
-                          {totalCost ? `$${totalCost.toFixed(2)}` : '--'}
-                        </span>
-                      </div>
-
-                      <div className="prep-detail-item">
-                        <span className="prep-detail-label">Linked To</span>
-                        <span className="prep-detail-value">
-                          {linkInfo ? (
-                            <span
-                              className={`prep-link-badge ${linkInfo.type} clickable`}
-                              onClick={() => setLinkingPrepItem(prep)}
-                            >
-                              {linkInfo.name}
-                            </span>
-                          ) : (
-                            <button
-                              className="btn-link-inline"
-                              onClick={() => setLinkingPrepItem(prep)}
-                            >
-                              <Link size={12} /> Link Product
-                            </button>
-                          )}
-                        </span>
-                      </div>
-
-                      <div className="prep-detail-item">
-                        <span className="prep-detail-label">Responsibility</span>
-                        {renderEditableCell(prep, 'responsibility', prep.responsibility || '--')}
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </li>
-            );
-          })}
-        </ul>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       )}
 
       <button className="btn-add-prep" onClick={() => setShowAddModal(true)}>
