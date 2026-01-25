@@ -339,7 +339,7 @@ def unmap_product(product_id: int, current_user: dict = Depends(get_current_user
 
 @router.patch("/{product_id}")
 def update_product(product_id: int, updates: dict, current_user: dict = Depends(get_current_user)):
-    """Update product fields."""
+    """Update product fields and/or prices."""
     with get_db() as conn:
         cursor = conn.cursor()
 
@@ -356,7 +356,12 @@ def update_product(product_id: int, updates: dict, current_user: dict = Depends(
         current_pack = product["pack"]
         current_size = product["size"]
 
-        # Build update query dynamically
+        # Separate price fields from product fields
+        price_fields = ['case_price', 'unit_price']
+        case_price_update = updates.pop('case_price', None)
+        unit_price_update = updates.pop('unit_price', None)
+
+        # Build update query dynamically for product fields
         allowed_fields = ['name', 'brand', 'pack', 'size', 'unit_id', 'common_product_id', 'is_catch_weight']
         update_fields = []
         params = []
@@ -370,14 +375,12 @@ def update_product(product_id: int, updates: dict, current_user: dict = Depends(
                 else:
                     params.append(value)
 
-        if not update_fields:
-            raise HTTPException(status_code=400, detail="No valid fields to update")
-
-        params.append(product_id)
-        params.extend(outlet_params)
-        query = f"UPDATE products SET {', '.join(update_fields)} WHERE id = %s AND {outlet_filter}"
-
-        cursor.execute(query, params)
+        # Update product fields if any
+        if update_fields:
+            params.append(product_id)
+            params.extend(outlet_params)
+            query = f"UPDATE products SET {', '.join(update_fields)} WHERE id = %s AND {outlet_filter}"
+            cursor.execute(query, params)
 
         # Recalculate unit_price in price_history if pack or size changed
         if 'pack' in updates or 'size' in updates:
@@ -394,6 +397,40 @@ def update_product(product_id: int, updates: dict, current_user: dict = Depends(
                     )
                     AND case_price IS NOT NULL
                 """, (new_pack, new_size, product_id))
+
+        # Handle price updates (case_price and/or unit_price)
+        if case_price_update is not None or unit_price_update is not None:
+            # Get the latest price_history record for this product
+            cursor.execute("""
+                SELECT ph.id, ph.case_price, ph.unit_price, dp.id as distributor_product_id
+                FROM price_history ph
+                JOIN distributor_products dp ON dp.id = ph.distributor_product_id
+                WHERE dp.product_id = %s
+                ORDER BY ph.effective_date DESC, ph.id DESC
+                LIMIT 1
+            """, (product_id,))
+
+            price_record = dict_from_row(cursor.fetchone())
+
+            if price_record:
+                # Update existing price_history record
+                new_case_price = float(case_price_update) if case_price_update is not None else price_record['case_price']
+                new_unit_price = float(unit_price_update) if unit_price_update is not None else price_record['unit_price']
+
+                # If only case_price changed, recalculate unit_price
+                if case_price_update is not None and unit_price_update is None:
+                    if current_pack and current_size:
+                        new_unit_price = round(new_case_price / (current_pack * current_size), 2)
+
+                cursor.execute("""
+                    UPDATE price_history
+                    SET case_price = %s, unit_price = %s
+                    WHERE id = %s
+                """, (new_case_price, new_unit_price, price_record['id']))
+
+        # Ensure we have at least one update
+        if not update_fields and case_price_update is None and unit_price_update is None:
+            raise HTTPException(status_code=400, detail="No valid fields to update")
 
         conn.commit()
 

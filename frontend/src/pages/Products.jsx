@@ -459,7 +459,7 @@ function Products() {
         updateData[field] = editValue ? parseInt(editValue) : null;
       } else if (field === 'pack') {
         updateData[field] = editValue ? parseInt(editValue) : null;
-      } else if (field === 'size') {
+      } else if (field === 'size' || field === 'case_price' || field === 'unit_price') {
         updateData[field] = editValue ? parseFloat(editValue) : null;
       } else {
         updateData[field] = editValue || null;
@@ -476,12 +476,13 @@ function Products() {
             const unit = units.find(u => u.id === updateData[field]);
             updated.unit_abbreviation = unit ? unit.abbreviation : null;
           }
-          // Recalculate unit price if pack or size changed
-          if ((field === 'pack' || field === 'size') && updated.case_price) {
+          // Recalculate unit price if pack, size, or case_price changed
+          if ((field === 'pack' || field === 'size' || field === 'case_price') && updated.case_price) {
             const newPack = field === 'pack' ? updateData[field] : updated.pack;
             const newSize = field === 'size' ? updateData[field] : updated.size;
-            if (newPack && newSize) {
-              updated.unit_price = Math.round((updated.case_price / (newPack * newSize)) * 100) / 100;
+            const newCasePrice = field === 'case_price' ? updateData[field] : updated.case_price;
+            if (newPack && newSize && newCasePrice) {
+              updated.unit_price = Math.round((newCasePrice / (newPack * newSize)) * 100) / 100;
             }
           }
           return updated;
@@ -606,9 +607,10 @@ function Products() {
         );
       }
 
+      const isNumberField = ['pack', 'size', 'case_price', 'unit_price'].includes(field);
       return (
         <input
-          type={field === 'pack' || field === 'size' ? 'number' : 'text'}
+          type={isNumberField ? 'number' : 'text'}
           value={editValue}
           onChange={(e) => setEditValue(e.target.value)}
           onBlur={() => handleCellSave(product.id, field)}
@@ -616,15 +618,19 @@ function Products() {
           onFocus={(e) => e.target.select()}
           className="inline-edit-input"
           autoFocus
-          step={field === 'size' ? '0.01' : undefined}
+          step={['size', 'case_price', 'unit_price'].includes(field) ? '0.01' : undefined}
         />
       );
     }
 
-    // Determine the value to pass for editing
+    // Determine the value to pass for editing (use raw values, not formatted display)
     let editStartValue = displayValue;
     if (field === 'unit_id') {
       editStartValue = product.unit_id;
+    } else if (field === 'case_price') {
+      editStartValue = product.case_price;
+    } else if (field === 'unit_price') {
+      editStartValue = product.unit_price;
     }
 
     return (
@@ -946,8 +952,8 @@ function Products() {
                       {product.is_catch_weight ? '⚖️' : '○'}
                     </button>
                   </td>
-                  <td className="text-right price-cell">{formatPrice(product.case_price)}</td>
-                  <td className="text-right price-cell">{formatPrice(product.unit_price)}</td>
+                  <td className="text-right price-cell">{renderEditableCell(product, 'case_price', formatPrice(product.case_price))}</td>
+                  <td className="text-right price-cell">{renderEditableCell(product, 'unit_price', formatPrice(product.unit_price))}</td>
                   <td className="mapping-cell">
                     {editingProductId === product.id ? (
                       <div className="mapping-editor">
