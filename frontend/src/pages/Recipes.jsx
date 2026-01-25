@@ -952,11 +952,13 @@ function IngredientMappingCell({ values, onFieldChange, commonProducts, onKeyDow
 
 function RecipeIngredients({ recipe, onIngredientsChange }) {
   const [commonProducts, setCommonProducts] = useState([]);
+  const [availableRecipes, setAvailableRecipes] = useState([]);
   const [units, setUnits] = useState([]);
   const [showAddRow, setShowAddRow] = useState(false);
-  const [addMode, setAddMode] = useState('map'); // 'map' or 'text'
+  const [addMode, setAddMode] = useState('map'); // 'map', 'text', or 'subrecipe'
   const [newIngredient, setNewIngredient] = useState({
     common_product_id: '',
+    sub_recipe_id: '',
     ingredient_name: '',
     quantity: '',
     unit_id: '',
@@ -964,6 +966,7 @@ function RecipeIngredients({ recipe, onIngredientsChange }) {
   });
   const [searchTerm, setSearchTerm] = useState('');
   const [filteredProducts, setFilteredProducts] = useState([]);
+  const [filteredRecipes, setFilteredRecipes] = useState([]);
   const [showAutocomplete, setShowAutocomplete] = useState(false);
   const [editingIngredientId, setEditingIngredientId] = useState(null);
   const [editedValues, setEditedValues] = useState({});
@@ -971,6 +974,7 @@ function RecipeIngredients({ recipe, onIngredientsChange }) {
   useEffect(() => {
     fetchCommonProducts();
     fetchUnits();
+    fetchAvailableRecipes();
   }, []);
 
   const fetchCommonProducts = async () => {
@@ -979,6 +983,17 @@ function RecipeIngredients({ recipe, onIngredientsChange }) {
       setCommonProducts(response.data);
     } catch (error) {
       console.error('Error fetching common products:', error);
+    }
+  };
+
+  const fetchAvailableRecipes = async () => {
+    try {
+      const response = await axios.get(`${API_URL}/recipes`);
+      // Filter out the current recipe to prevent circular references
+      const otherRecipes = response.data.filter(r => r.id !== recipe.id);
+      setAvailableRecipes(otherRecipes);
+    } catch (error) {
+      console.error('Error fetching recipes:', error);
     }
   };
 
@@ -994,20 +1009,34 @@ function RecipeIngredients({ recipe, onIngredientsChange }) {
   const handleSearchChange = (value) => {
     setSearchTerm(value);
     if (value.trim()) {
-      const filtered = commonProducts.filter(cp =>
-        cp.common_name.toLowerCase().includes(value.toLowerCase())
-      );
-      setFilteredProducts(filtered);
+      if (addMode === 'subrecipe') {
+        const filtered = availableRecipes.filter(r =>
+          r.name.toLowerCase().includes(value.toLowerCase())
+        );
+        setFilteredRecipes(filtered);
+      } else {
+        const filtered = commonProducts.filter(cp =>
+          cp.common_name.toLowerCase().includes(value.toLowerCase())
+        );
+        setFilteredProducts(filtered);
+      }
       setShowAutocomplete(true);
     } else {
       setFilteredProducts([]);
+      setFilteredRecipes([]);
       setShowAutocomplete(false);
     }
   };
 
   const selectProduct = (product) => {
-    setNewIngredient({ ...newIngredient, common_product_id: product.id });
+    setNewIngredient({ ...newIngredient, common_product_id: product.id, sub_recipe_id: '' });
     setSearchTerm(product.common_name);
+    setShowAutocomplete(false);
+  };
+
+  const selectSubRecipe = (subRecipe) => {
+    setNewIngredient({ ...newIngredient, sub_recipe_id: subRecipe.id, common_product_id: '' });
+    setSearchTerm(subRecipe.name);
     setShowAutocomplete(false);
   };
 
@@ -1015,6 +1044,11 @@ function RecipeIngredients({ recipe, onIngredientsChange }) {
     // Validate based on mode
     if (addMode === 'map') {
       if (!newIngredient.common_product_id || !newIngredient.quantity || !newIngredient.unit_id) {
+        alert('Please fill in all required fields');
+        return;
+      }
+    } else if (addMode === 'subrecipe') {
+      if (!newIngredient.sub_recipe_id || !newIngredient.quantity || !newIngredient.unit_id) {
         alert('Please fill in all required fields');
         return;
       }
@@ -1026,19 +1060,29 @@ function RecipeIngredients({ recipe, onIngredientsChange }) {
     }
 
     try {
-      const ingredientData = addMode === 'map'
-        ? {
-            common_product_id: parseInt(newIngredient.common_product_id),
-            quantity: parseFloat(newIngredient.quantity),
-            unit_id: parseInt(newIngredient.unit_id),
-            yield_percentage: parseFloat(newIngredient.yield_percentage)
-          }
-        : {
-            ingredient_name: newIngredient.ingredient_name,
-            quantity: parseFloat(newIngredient.quantity),
-            unit_id: parseInt(newIngredient.unit_id),
-            yield_percentage: parseFloat(newIngredient.yield_percentage)
-          };
+      let ingredientData;
+      if (addMode === 'map') {
+        ingredientData = {
+          common_product_id: parseInt(newIngredient.common_product_id),
+          quantity: parseFloat(newIngredient.quantity),
+          unit_id: parseInt(newIngredient.unit_id),
+          yield_percentage: parseFloat(newIngredient.yield_percentage)
+        };
+      } else if (addMode === 'subrecipe') {
+        ingredientData = {
+          sub_recipe_id: parseInt(newIngredient.sub_recipe_id),
+          quantity: parseFloat(newIngredient.quantity),
+          unit_id: parseInt(newIngredient.unit_id),
+          yield_percentage: parseFloat(newIngredient.yield_percentage)
+        };
+      } else {
+        ingredientData = {
+          ingredient_name: newIngredient.ingredient_name,
+          quantity: parseFloat(newIngredient.quantity),
+          unit_id: parseInt(newIngredient.unit_id),
+          yield_percentage: parseFloat(newIngredient.yield_percentage)
+        };
+      }
 
       await axios.post(`${API_URL}/recipes/${recipe.id}/ingredients`, ingredientData);
 
@@ -1048,6 +1092,7 @@ function RecipeIngredients({ recipe, onIngredientsChange }) {
       // Reset form
       setNewIngredient({
         common_product_id: '',
+        sub_recipe_id: '',
         ingredient_name: '',
         quantity: '',
         unit_id: '',
@@ -1342,9 +1387,23 @@ function RecipeIngredients({ recipe, onIngredientsChange }) {
                           fontWeight: '500',
                           cursor: 'pointer'
                         }}
-                        onClick={() => setAddMode('map')}
+                        onClick={() => { setAddMode('map'); setSearchTerm(''); setShowAutocomplete(false); }}
                       >
                         Map to Product
+                      </button>
+                      <button
+                        type="button"
+                        style={{
+                          padding: '0.5rem 1rem',
+                          background: addMode === 'subrecipe' ? '#3b82f6' : '#fff',
+                          color: addMode === 'subrecipe' ? 'white' : '#6b7280',
+                          border: 'none',
+                          fontWeight: '500',
+                          cursor: 'pointer'
+                        }}
+                        onClick={() => { setAddMode('subrecipe'); setSearchTerm(''); setShowAutocomplete(false); }}
+                      >
+                        Sub-Recipe
                       </button>
                       <button
                         type="button"
@@ -1356,7 +1415,7 @@ function RecipeIngredients({ recipe, onIngredientsChange }) {
                           fontWeight: '500',
                           cursor: 'pointer'
                         }}
-                        onClick={() => setAddMode('text')}
+                        onClick={() => { setAddMode('text'); setSearchTerm(''); setShowAutocomplete(false); }}
                       >
                         Quick Add Text
                       </button>
@@ -1387,6 +1446,35 @@ function RecipeIngredients({ recipe, onIngredientsChange }) {
                           ))}
                         </div>
                       )}
+                    </div>
+                  ) : addMode === 'subrecipe' ? (
+                    <div className="autocomplete-container">
+                      <input
+                        type="text"
+                        className="ingredient-input"
+                        value={searchTerm}
+                        onChange={(e) => handleSearchChange(e.target.value)}
+                        placeholder="Search recipes..."
+                        autoFocus
+                        style={{ width: '100%', marginBottom: '0.5rem' }}
+                      />
+                      {showAutocomplete && filteredRecipes.length > 0 && (
+                        <div className="autocomplete-dropdown">
+                          {filteredRecipes.slice(0, 10).map(r => (
+                            <div
+                              key={r.id}
+                              className="autocomplete-item"
+                              onClick={() => selectSubRecipe(r)}
+                            >
+                              {r.name}
+                              {r.category && <span style={{ marginLeft: '0.5rem', color: '#9ca3af', fontSize: '0.8em' }}>{r.category}</span>}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <small style={{ display: 'block', marginTop: '0.25rem', color: '#6b7280', fontSize: '0.75rem' }}>
+                        Sub-recipe costs will be calculated from their ingredients
+                      </small>
                     </div>
                   ) : (
                     <div style={{ marginBottom: '0.5rem' }}>
@@ -1462,6 +1550,7 @@ function RecipeIngredients({ recipe, onIngredientsChange }) {
                           setSearchTerm('');
                           setNewIngredient({
                             common_product_id: '',
+                            sub_recipe_id: '',
                             ingredient_name: '',
                             quantity: '',
                             unit_id: '',
