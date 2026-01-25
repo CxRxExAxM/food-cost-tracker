@@ -504,6 +504,12 @@ def calculate_menu_cost(
                         FROM products p
                         WHERE p.id = bp.product_id
                     ) as product_pricing_unit_id,
+                    -- Check if product is catch weight (pricing is per LB)
+                    (
+                        SELECT p.is_catch_weight
+                        FROM products p
+                        WHERE p.id = bp.product_id
+                    ) as product_is_catch_weight,
                     -- Get common product average unit cost and typical pricing unit
                     (
                         SELECT AVG(ph2.unit_price)
@@ -525,7 +531,13 @@ def calculate_menu_cost(
                         GROUP BY p2.unit_id
                         ORDER BY COUNT(*) DESC
                         LIMIT 1
-                    ) as common_product_pricing_unit_id
+                    ) as common_product_pricing_unit_id,
+                    -- Check if any linked common product has catch weight products
+                    (
+                        SELECT MAX(p2.is_catch_weight)
+                        FROM products p2
+                        WHERE p2.common_product_id = bp.common_product_id
+                    ) as common_product_is_catch_weight
                 FROM banquet_prep_items bp
                 LEFT JOIN vessels v ON v.id = bp.vessel_id
                 WHERE bp.banquet_menu_item_id = %s
@@ -534,14 +546,21 @@ def calculate_menu_cost(
             prep_items = dicts_from_rows(cursor.fetchall())
             org_id = current_user["organization_id"]
 
+            # Get LB unit ID for catch weight products (they're always priced per LB)
+            cursor.execute("SELECT id FROM units WHERE UPPER(abbreviation) = 'LB' LIMIT 1")
+            lb_unit_result = cursor.fetchone()
+            lb_unit_id = lb_unit_result['id'] if lb_unit_result else None
+
             for prep in prep_items:
                 unit_cost = Decimal("0")
                 pricing_unit_id = None
                 linked_common_product_id = None
+                is_catch_weight = False
 
                 if prep.get("product_unit_cost"):
                     unit_cost = Decimal(str(prep["product_unit_cost"]))
                     pricing_unit_id = prep.get("product_pricing_unit_id")
+                    is_catch_weight = bool(prep.get("product_is_catch_weight"))
                     # For direct product links, get the common_product_id from the product
                     if prep.get("product_id"):
                         cursor.execute("SELECT common_product_id FROM products WHERE id = %s", (prep["product_id"],))
@@ -552,7 +571,13 @@ def calculate_menu_cost(
                     unit_cost = Decimal(str(prep["common_product_unit_cost"]))
                     pricing_unit_id = prep.get("common_product_pricing_unit_id")
                     linked_common_product_id = prep.get("common_product_id")
+                    is_catch_weight = bool(prep.get("common_product_is_catch_weight"))
                 # TODO: Add recipe cost calculation when recipes are linked
+
+                # For catch weight products, pricing is always per LB regardless of display unit
+                if is_catch_weight and lb_unit_id:
+                    print(f"[COST DEBUG] Catch weight product detected, using LB (id={lb_unit_id}) as pricing unit instead of {pricing_unit_id}")
+                    pricing_unit_id = lb_unit_id
 
                 # Get prep item's unit - prefer unit_id, fallback to looking up from amount_unit text
                 prep_unit_id = prep.get("unit_id")
