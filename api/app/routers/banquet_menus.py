@@ -548,8 +548,18 @@ def calculate_menu_cost(
                 if not prep_unit_id and prep.get("amount_unit"):
                     prep_unit_id = get_unit_id_from_abbreviation(cursor, prep["amount_unit"])
 
-                # Debug: log unit conversion info
-                print(f"[COST DEBUG] Prep '{prep.get('name')}': prep_unit_id={prep_unit_id}, pricing_unit_id={pricing_unit_id}, linked_common_product_id={linked_common_product_id}, unit_cost_before={unit_cost}")
+                # Debug: log unit conversion info with abbreviations
+                prep_unit_abbr = None
+                pricing_unit_abbr = None
+                if prep_unit_id:
+                    cursor.execute("SELECT abbreviation FROM units WHERE id = %s", (prep_unit_id,))
+                    r = cursor.fetchone()
+                    prep_unit_abbr = r['abbreviation'] if r else None
+                if pricing_unit_id:
+                    cursor.execute("SELECT abbreviation FROM units WHERE id = %s", (pricing_unit_id,))
+                    r = cursor.fetchone()
+                    pricing_unit_abbr = r['abbreviation'] if r else None
+                print(f"[COST DEBUG] Prep '{prep.get('name')}': prep_unit={prep_unit_abbr}(id={prep_unit_id}), pricing_unit={pricing_unit_abbr}(id={pricing_unit_id}), common_prod_id={linked_common_product_id}, unit_cost_before={unit_cost}")
 
                 # Apply unit conversion if prep item unit differs from pricing unit
                 if prep_unit_id and pricing_unit_id and prep_unit_id != pricing_unit_id:
