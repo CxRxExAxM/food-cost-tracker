@@ -37,7 +37,7 @@ def upgrade() -> None:
         UPDATE price_history ph
         SET outlet_id = ib.outlet_id
         FROM import_batches ib
-        WHERE ph.import_batch_id = ib.batch_id
+        WHERE ph.import_batch_id = ib.id
         AND ph.outlet_id IS NULL
     """)
 
