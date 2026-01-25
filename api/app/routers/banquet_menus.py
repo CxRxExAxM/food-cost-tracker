@@ -40,19 +40,11 @@ def get_unit_conversion_factor(cursor, common_product_id: int, from_unit_id: int
     - Direct: EA -> LB might not exist
     - Path: EA -> OZ (factor 6) then OZ -> LB (factor 0.0625) = 0.375
     """
-    print(f"[CONV DEBUG] Looking up conversion: from_unit={from_unit_id} to_unit={to_unit_id} common_product={common_product_id} org={org_id}")
-
     if from_unit_id == to_unit_id:
-        print(f"[CONV DEBUG] Same unit, returning 1.0")
         return 1.0
 
     if not from_unit_id or not to_unit_id:
-        print(f"[CONV DEBUG] Missing unit IDs, returning 1.0")
         return 1.0
-
-    # Can still try standard conversions without common_product_id
-    if not common_product_id:
-        print(f"[CONV DEBUG] No common_product_id, trying standard conversions only")
 
     # Try direct conversion
     cursor.execute("""
@@ -139,12 +131,9 @@ def get_unit_conversion_factor(cursor, common_product_id: int, from_unit_id: int
 
         if from_abbr in weight_to_oz and to_abbr in weight_to_oz:
             # Convert through ounces
-            factor = weight_to_oz[from_abbr] / weight_to_oz[to_abbr]
-            print(f"[CONV DEBUG] Standard weight conversion {from_abbr}->{to_abbr}: {factor}")
-            return factor
+            return weight_to_oz[from_abbr] / weight_to_oz[to_abbr]
 
     # No conversion found - return 1.0 (assumes same unit or incompatible)
-    print(f"[CONV DEBUG] No conversion found, returning 1.0")
     return 1.0
 
 
@@ -576,26 +565,12 @@ def calculate_menu_cost(
 
                 # For catch weight products, pricing is always per LB regardless of display unit
                 if is_catch_weight and lb_unit_id:
-                    print(f"[COST DEBUG] Catch weight product detected, using LB (id={lb_unit_id}) as pricing unit instead of {pricing_unit_id}")
                     pricing_unit_id = lb_unit_id
 
                 # Get prep item's unit - prefer unit_id, fallback to looking up from amount_unit text
                 prep_unit_id = prep.get("unit_id")
                 if not prep_unit_id and prep.get("amount_unit"):
                     prep_unit_id = get_unit_id_from_abbreviation(cursor, prep["amount_unit"])
-
-                # Debug: log unit conversion info with abbreviations
-                prep_unit_abbr = None
-                pricing_unit_abbr = None
-                if prep_unit_id:
-                    cursor.execute("SELECT abbreviation FROM units WHERE id = %s", (prep_unit_id,))
-                    r = cursor.fetchone()
-                    prep_unit_abbr = r['abbreviation'] if r else None
-                if pricing_unit_id:
-                    cursor.execute("SELECT abbreviation FROM units WHERE id = %s", (pricing_unit_id,))
-                    r = cursor.fetchone()
-                    pricing_unit_abbr = r['abbreviation'] if r else None
-                print(f"[COST DEBUG] Prep '{prep.get('name')}': prep_unit={prep_unit_abbr}(id={prep_unit_id}), pricing_unit={pricing_unit_abbr}(id={pricing_unit_id}), common_prod_id={linked_common_product_id}, unit_cost_before={unit_cost}")
 
                 # Apply unit conversion if prep item unit differs from pricing unit
                 if prep_unit_id and pricing_unit_id and prep_unit_id != pricing_unit_id:
@@ -606,12 +581,7 @@ def calculate_menu_cost(
                     conversion_factor = get_unit_conversion_factor(
                         cursor, linked_common_product_id, prep_unit_id, pricing_unit_id, org_id
                     )
-                    print(f"[COST DEBUG] Conversion factor: {conversion_factor}, unit_cost_after={unit_cost * Decimal(str(conversion_factor))}")
                     unit_cost = unit_cost * Decimal(str(conversion_factor))
-                elif prep_unit_id and pricing_unit_id:
-                    print(f"[COST DEBUG] No conversion needed (same unit)")
-                else:
-                    print(f"[COST DEBUG] Missing unit IDs - no conversion applied")
 
                 # Calculate amount based on amount_mode and vessel
                 amount_mode = prep.get("amount_mode") or "per_person"
