@@ -10,6 +10,7 @@ from typing import Optional, List
 from decimal import Decimal
 from ..database import get_db, dicts_from_rows, dict_from_row
 from ..auth import get_current_user, build_outlet_filter, check_outlet_access
+from .recipes import _calculate_ingredient_costs
 
 router = APIRouter(prefix="/banquet-menus", tags=["banquet-menus"])
 
@@ -126,12 +127,29 @@ def get_unit_conversion_factor(cursor, common_product_id: int, from_unit_id: int
         from_abbr = units['from_abbr'].upper()
         to_abbr = units['to_abbr'].upper()
 
-        # Standard weight conversions
+        # Standard weight conversions (all relative to OZ)
         weight_to_oz = {'OZ': 1, 'LB': 16, 'G': 0.035274, 'KG': 35.274}
 
         if from_abbr in weight_to_oz and to_abbr in weight_to_oz:
             # Convert through ounces
             return weight_to_oz[from_abbr] / weight_to_oz[to_abbr]
+
+        # Standard volume conversions (all relative to FL OZ)
+        volume_to_floz = {
+            'FL OZ': 1,
+            'CUP': 8,
+            'PT': 16,
+            'QT': 32,
+            'GAL': 128,
+            'ML': 0.033814,
+            'L': 33.814,
+            'TBSP': 0.5,
+            'TSP': 0.166667
+        }
+
+        if from_abbr in volume_to_floz and to_abbr in volume_to_floz:
+            # Convert through fluid ounces
+            return volume_to_floz[from_abbr] / volume_to_floz[to_abbr]
 
     # No conversion found - return 1.0 (assumes same unit or incompatible)
     return 1.0
@@ -561,7 +579,29 @@ def calculate_menu_cost(
                     pricing_unit_id = prep.get("common_product_pricing_unit_id")
                     linked_common_product_id = prep.get("common_product_id")
                     is_catch_weight = bool(prep.get("common_product_is_catch_weight"))
-                # TODO: Add recipe cost calculation when recipes are linked
+                elif prep.get("recipe_id"):
+                    # Calculate recipe cost and get cost per yield unit
+                    cursor.execute("""
+                        SELECT r.id, r.yield_amount, r.yield_unit_id, r.outlet_id
+                        FROM recipes r
+                        WHERE r.id = %s
+                    """, (prep["recipe_id"],))
+                    recipe_info = dict_from_row(cursor.fetchone())
+
+                    if recipe_info:
+                        recipe_outlet_id = recipe_info.get("outlet_id") or menu.get("outlet_id")
+                        # Calculate total recipe cost using shared function
+                        _, recipe_total_cost = _calculate_ingredient_costs(
+                            cursor, prep["recipe_id"], recipe_outlet_id, visited=set()
+                        )
+
+                        recipe_yield = recipe_info.get("yield_amount")
+                        recipe_yield_unit_id = recipe_info.get("yield_unit_id")
+
+                        if recipe_total_cost > 0 and recipe_yield and recipe_yield > 0:
+                            # Cost per yield unit (e.g., cost per gallon)
+                            unit_cost = Decimal(str(recipe_total_cost)) / Decimal(str(recipe_yield))
+                            pricing_unit_id = recipe_yield_unit_id
 
                 # For catch weight products, pricing is always per LB regardless of display unit
                 if is_catch_weight and lb_unit_id:
