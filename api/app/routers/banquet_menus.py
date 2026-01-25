@@ -40,11 +40,19 @@ def get_unit_conversion_factor(cursor, common_product_id: int, from_unit_id: int
     - Direct: EA -> LB might not exist
     - Path: EA -> OZ (factor 6) then OZ -> LB (factor 0.0625) = 0.375
     """
+    print(f"[CONV DEBUG] Looking up conversion: from_unit={from_unit_id} to_unit={to_unit_id} common_product={common_product_id} org={org_id}")
+
     if from_unit_id == to_unit_id:
+        print(f"[CONV DEBUG] Same unit, returning 1.0")
         return 1.0
 
-    if not from_unit_id or not to_unit_id or not common_product_id:
+    if not from_unit_id or not to_unit_id:
+        print(f"[CONV DEBUG] Missing unit IDs, returning 1.0")
         return 1.0
+
+    # Can still try standard conversions without common_product_id
+    if not common_product_id:
+        print(f"[CONV DEBUG] No common_product_id, trying standard conversions only")
 
     # Try direct conversion
     cursor.execute("""
@@ -131,9 +139,12 @@ def get_unit_conversion_factor(cursor, common_product_id: int, from_unit_id: int
 
         if from_abbr in weight_to_oz and to_abbr in weight_to_oz:
             # Convert through ounces
-            return weight_to_oz[from_abbr] / weight_to_oz[to_abbr]
+            factor = weight_to_oz[from_abbr] / weight_to_oz[to_abbr]
+            print(f"[CONV DEBUG] Standard weight conversion {from_abbr}->{to_abbr}: {factor}")
+            return factor
 
     # No conversion found - return 1.0 (assumes same unit or incompatible)
+    print(f"[CONV DEBUG] No conversion found, returning 1.0")
     return 1.0
 
 
