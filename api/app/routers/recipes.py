@@ -222,8 +222,8 @@ def update_recipe(recipe_id: int, updates: dict, current_user: dict = Depends(ge
         # Build update query
         allowed_fields = [
             'name', 'description', 'category', 'category_path',
-            'yield_amount', 'yield_unit_id', 'prep_time_minutes',
-            'cook_time_minutes', 'method', 'notes'
+            'yield_amount', 'yield_unit_id', 'servings', 'serving_unit_id',
+            'prep_time_minutes', 'cook_time_minutes', 'method', 'notes'
         ]
 
         update_fields = []
