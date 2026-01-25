@@ -44,7 +44,7 @@ function LinkPrepItemModal({ prepItem, onClose, onLinked }) {
         const response = await axios.get('/recipes', {
           params: { search: searchTerm, limit: 20 }
         });
-        setSearchResults(response.data.recipes || []);
+        setSearchResults(response.data.recipes || response.data || []);
       }
     } catch (err) {
       console.error('Error searching:', err);
