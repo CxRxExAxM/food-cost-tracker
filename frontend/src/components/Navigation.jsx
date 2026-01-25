@@ -63,6 +63,9 @@ function Navigation() {
             <Link to="/recipes" className={`nav-link ${isActivePath('/recipes') ? 'active' : ''}`}>
               Recipes
             </Link>
+            <Link to="/banquet-menus" className={`nav-link ${isActivePath('/banquet-menus') ? 'active' : ''}`}>
+              Banquet Menus
+            </Link>
             {isAdmin() && (
               <Link to="/users" className={`nav-link ${isActivePath('/users') ? 'active' : ''}`}>
                 Users
@@ -76,6 +79,11 @@ function Navigation() {
             {isAdmin() && (
               <Link to="/admin" className={`nav-link ${isActivePath('/admin') ? 'active' : ''}`}>
                 Admin
+              </Link>
+            )}
+            {isAdmin() && (
+              <Link to="/settings/vessels" className={`nav-link ${isActivePath('/settings/vessels') ? 'active' : ''}`}>
+                Vessels
               </Link>
             )}
             {user?.is_super_admin && (

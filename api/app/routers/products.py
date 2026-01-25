@@ -162,9 +162,9 @@ def list_products(
         # else: admin user, show all products (no additional filter)
 
         if search:
-            where_clause += " AND (p.name ILIKE %s OR p.brand ILIKE %s)"
+            where_clause += " AND (p.name ILIKE %s OR p.brand ILIKE %s OR cp.common_name ILIKE %s)"
             search_term = f"%{search}%"
-            params.extend([search_term, search_term])
+            params.extend([search_term, search_term, search_term])
 
         if distributor_id:
             where_clause += " AND dp.distributor_id = %s"
@@ -182,6 +182,7 @@ def list_products(
             SELECT COUNT(DISTINCT p.id) as count
             FROM products p
             LEFT JOIN distributor_products dp ON dp.product_id = p.id
+            LEFT JOIN common_products cp ON cp.id = p.common_product_id
             {where_clause}
         """
         cursor.execute(count_query, params)

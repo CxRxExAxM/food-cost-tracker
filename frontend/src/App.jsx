@@ -12,6 +12,8 @@ import SuperAdminDashboard from './pages/SuperAdmin/Dashboard';
 import SuperAdminOrganizations from './pages/SuperAdmin/Organizations';
 import SuperAdminOrganizationDetail from './pages/SuperAdmin/OrganizationDetail';
 import SuperAdminAuditLogs from './pages/SuperAdmin/AuditLogs';
+import BanquetMenus from './pages/BanquetMenus/BanquetMenus';
+import Vessels from './pages/Settings/Vessels';
 import ImpersonationBanner from './components/ImpersonationBanner';
 import './App.css';
 
@@ -144,6 +146,22 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <Admin />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/banquet-menus"
+        element={
+          <ProtectedRoute>
+            <BanquetMenus />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/settings/vessels"
+        element={
+          <ProtectedRoute>
+            <Vessels />
           </ProtectedRoute>
         }
       />
