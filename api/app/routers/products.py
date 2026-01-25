@@ -364,7 +364,11 @@ def update_product(product_id: int, updates: dict, current_user: dict = Depends(
         for field, value in updates.items():
             if field in allowed_fields:
                 update_fields.append(f"{field} = %s")
-                params.append(value)
+                # Convert boolean to int for is_catch_weight (stored as INTEGER in DB)
+                if field == 'is_catch_weight':
+                    params.append(int(value) if value is not None else 0)
+                else:
+                    params.append(value)
 
         if not update_fields:
             raise HTTPException(status_code=400, detail="No valid fields to update")
