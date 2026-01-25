@@ -15,9 +15,17 @@ function PrepItemTable({ menuItemId, prepItems, itemCosts, guestCount, onPrepIte
   const [linkingPrepItem, setLinkingPrepItem] = useState(null);
   const [units, setUnits] = useState([]);
 
+  // Local copy of prep items for optimistic updates
+  const [localPrepItems, setLocalPrepItems] = useState(prepItems);
+
   // Inline editing state
   const [editingCell, setEditingCell] = useState(null); // { prepId, field }
   const [editValue, setEditValue] = useState('');
+
+  // Sync local state when props change (e.g., after add/delete/link)
+  useEffect(() => {
+    setLocalPrepItems(prepItems);
+  }, [prepItems]);
 
   // Load units for display and editing
   useEffect(() => {
@@ -50,40 +58,64 @@ function PrepItemTable({ menuItemId, prepItems, itemCosts, guestCount, onPrepIte
     setEditValue('');
   };
 
-  // Save cell value on blur
+  // Save cell value on blur - update locally, save to server in background
   const handleCellSave = async (prepId, field) => {
-    const prep = prepItems.find(p => p.id === prepId);
+    const prep = localPrepItems.find(p => p.id === prepId);
     if (!prep) {
       cancelCellEdit();
       return;
     }
 
-    try {
-      let updateData = {};
+    // Build update payload
+    let updateData = {};
+    let localUpdate = {};
 
-      if (field === 'name') {
-        updateData.name = editValue || prep.name;
-      } else if (field === 'amount_mode') {
-        updateData.amount_mode = editValue;
-        if (editValue === 'per_person') {
-          updateData.base_amount = null;
-        } else {
-          updateData.amount_per_guest = null;
-        }
-      } else if (field === 'amount_per_guest') {
-        updateData.amount_per_guest = editValue ? parseFloat(editValue) : null;
-      } else if (field === 'base_amount') {
-        updateData.base_amount = editValue ? parseFloat(editValue) : null;
-      } else if (field === 'unit_id') {
-        updateData.unit_id = editValue ? parseInt(editValue) : null;
+    if (field === 'name') {
+      const newValue = editValue || prep.name;
+      updateData.name = newValue;
+      localUpdate.name = newValue;
+    } else if (field === 'amount_mode') {
+      updateData.amount_mode = editValue;
+      localUpdate.amount_mode = editValue;
+      if (editValue === 'per_person') {
+        updateData.base_amount = null;
+        localUpdate.base_amount = null;
+      } else {
+        updateData.amount_per_guest = null;
+        localUpdate.amount_per_guest = null;
       }
+    } else if (field === 'amount_per_guest') {
+      const numValue = editValue ? parseFloat(editValue) : null;
+      updateData.amount_per_guest = numValue;
+      localUpdate.amount_per_guest = numValue;
+    } else if (field === 'base_amount') {
+      const numValue = editValue ? parseFloat(editValue) : null;
+      updateData.base_amount = numValue;
+      localUpdate.base_amount = numValue;
+    } else if (field === 'unit_id') {
+      const numValue = editValue ? parseInt(editValue) : null;
+      updateData.unit_id = numValue;
+      localUpdate.unit_id = numValue;
+      // Also update the display abbreviation
+      localUpdate.unit_abbr = getUnitAbbr(numValue);
+    }
 
+    // Update local state immediately (optimistic update)
+    setLocalPrepItems(prev => prev.map(p =>
+      p.id === prepId ? { ...p, ...localUpdate } : p
+    ));
+
+    cancelCellEdit();
+
+    // Save to server in background - don't trigger full reload for inline edits
+    try {
       await axios.put(`/banquet-menus/prep/${prepId}`, updateData);
-      onPrepItemsChanged();
+      // Note: Costs will be stale until next add/delete/link operation or page refresh
+      // This is intentional to avoid jarring reloads during rapid editing
     } catch (err) {
       console.error('Error saving prep item:', err);
-    } finally {
-      cancelCellEdit();
+      // Revert on error
+      setLocalPrepItems(prepItems);
     }
   };
 
@@ -214,7 +246,7 @@ function PrepItemTable({ menuItemId, prepItems, itemCosts, guestCount, onPrepIte
 
   return (
     <div className="prep-items-container">
-      {prepItems.length === 0 ? (
+      {localPrepItems.length === 0 ? (
         <div className="prep-empty-state">
           No prep items yet. Click "Add Prep Item" below.
         </div>
@@ -232,7 +264,7 @@ function PrepItemTable({ menuItemId, prepItems, itemCosts, guestCount, onPrepIte
             </tr>
           </thead>
           <tbody>
-            {prepItems.map((prep) => {
+            {localPrepItems.map((prep) => {
               const linkInfo = getLinkInfo(prep);
               const unitCost = getUnitCostForPrepItem(prep.id);
               const totalCost = getCostForPrepItem(prep.id);

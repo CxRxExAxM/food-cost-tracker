@@ -548,6 +548,9 @@ def calculate_menu_cost(
                 if not prep_unit_id and prep.get("amount_unit"):
                     prep_unit_id = get_unit_id_from_abbreviation(cursor, prep["amount_unit"])
 
+                # Debug: log unit conversion info
+                print(f"[COST DEBUG] Prep '{prep.get('name')}': prep_unit_id={prep_unit_id}, pricing_unit_id={pricing_unit_id}, linked_common_product_id={linked_common_product_id}, unit_cost_before={unit_cost}")
+
                 # Apply unit conversion if prep item unit differs from pricing unit
                 if prep_unit_id and pricing_unit_id and prep_unit_id != pricing_unit_id:
                     # Convert: we have price per pricing_unit, we want price per prep_unit
@@ -557,7 +560,12 @@ def calculate_menu_cost(
                     conversion_factor = get_unit_conversion_factor(
                         cursor, linked_common_product_id, prep_unit_id, pricing_unit_id, org_id
                     )
+                    print(f"[COST DEBUG] Conversion factor: {conversion_factor}, unit_cost_after={unit_cost * Decimal(str(conversion_factor))}")
                     unit_cost = unit_cost * Decimal(str(conversion_factor))
+                elif prep_unit_id and pricing_unit_id:
+                    print(f"[COST DEBUG] No conversion needed (same unit)")
+                else:
+                    print(f"[COST DEBUG] Missing unit IDs - no conversion applied")
 
                 # Calculate amount based on amount_mode and vessel
                 amount_mode = prep.get("amount_mode") or "per_person"
