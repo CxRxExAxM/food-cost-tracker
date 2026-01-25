@@ -389,9 +389,10 @@ def update_product(product_id: int, updates: dict, current_user: dict = Depends(
 
             if new_pack and new_size:
                 # Update unit_price for all price_history records for this product
+                # Cast to numeric for ROUND to work with precision argument
                 cursor.execute("""
                     UPDATE price_history
-                    SET unit_price = ROUND(case_price / (%s * %s), 2)
+                    SET unit_price = ROUND((case_price / (%s * %s))::numeric, 2)
                     WHERE distributor_product_id IN (
                         SELECT id FROM distributor_products WHERE product_id = %s
                     )
