@@ -1285,7 +1285,8 @@ function RecipeIngredients({ recipe, onIngredientsChange }) {
                         </div>
                       ) : (
                         <span onClick={() => handleStartEdit(ing.id)}>
-                          {ing.ingredient_name || ing.common_name || 'Unknown'}
+                          {ing.ingredient_name || ing.common_name || ing.sub_recipe_name || 'Unknown'}
+                          {ing.sub_recipe_id && <span className="sub-recipe-badge">sub-recipe</span>}
                         </span>
                       )}
                     </td>
