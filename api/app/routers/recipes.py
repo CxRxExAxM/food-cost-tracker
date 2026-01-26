@@ -3,7 +3,7 @@ from typing import Optional
 from ..database import get_db, dicts_from_rows, dict_from_row
 from ..schemas import Recipe, RecipeCreate, RecipeWithIngredients, RecipeWithCost
 from ..auth import get_current_user, build_outlet_filter, check_outlet_access
-from .banquet_menus import get_unit_conversion_factor
+from ..utils.conversions import get_unit_conversion_factor
 import json
 
 router = APIRouter(prefix="/recipes", tags=["recipes"])
