@@ -52,126 +52,108 @@ def upgrade():
         sa.PrimaryKeyConstraint('id')
     )
 
-    # Unique constraint: one conversion per from/to unit pair per scope
-    # (outlet_id NULL means org-wide, organization_id NULL means system-wide)
+    # Index for fast lookups (not unique due to NULL handling issues)
     op.create_index('idx_base_conversions_lookup',
                     'base_conversions',
-                    ['organization_id', 'outlet_id', 'from_unit_id', 'to_unit_id'],
-                    unique=True)
+                    ['organization_id', 'outlet_id', 'from_unit_id', 'to_unit_id'])
     op.create_index('idx_base_conversions_org', 'base_conversions', ['organization_id'])
     op.create_index('idx_base_conversions_outlet', 'base_conversions', ['outlet_id'])
+    op.create_index('idx_base_conversions_units', 'base_conversions', ['from_unit_id', 'to_unit_id'])
 
     # ============================================
     # Seed system-wide default conversions
     # These apply to all organizations (organization_id = NULL)
+    # Using individual INSERTs to avoid CASE/NULL issues
     # ============================================
-    op.execute("""
-        -- Weight conversions (relative to OZ)
-        INSERT INTO base_conversions (organization_id, outlet_id, from_unit_id, to_unit_id, conversion_factor, notes)
-        SELECT NULL, NULL, f.id, t.id,
-            CASE
-                -- OZ to others
-                WHEN f.abbreviation = 'OZ' AND t.abbreviation = 'LB' THEN 0.0625
-                WHEN f.abbreviation = 'OZ' AND t.abbreviation = 'G' THEN 28.3495
-                WHEN f.abbreviation = 'OZ' AND t.abbreviation = 'KG' THEN 0.0283495
-                -- LB to others
-                WHEN f.abbreviation = 'LB' AND t.abbreviation = 'OZ' THEN 16
-                WHEN f.abbreviation = 'LB' AND t.abbreviation = 'G' THEN 453.592
-                WHEN f.abbreviation = 'LB' AND t.abbreviation = 'KG' THEN 0.453592
-                -- G to others
-                WHEN f.abbreviation = 'G' AND t.abbreviation = 'OZ' THEN 0.035274
-                WHEN f.abbreviation = 'G' AND t.abbreviation = 'LB' THEN 0.00220462
-                WHEN f.abbreviation = 'G' AND t.abbreviation = 'KG' THEN 0.001
-                -- KG to others
-                WHEN f.abbreviation = 'KG' AND t.abbreviation = 'OZ' THEN 35.274
-                WHEN f.abbreviation = 'KG' AND t.abbreviation = 'LB' THEN 2.20462
-                WHEN f.abbreviation = 'KG' AND t.abbreviation = 'G' THEN 1000
-            END,
-            'System default weight conversion'
-        FROM units f
-        CROSS JOIN units t
-        WHERE f.abbreviation IN ('OZ', 'LB', 'G', 'KG')
-          AND t.abbreviation IN ('OZ', 'LB', 'G', 'KG')
-          AND f.id != t.id
-        ON CONFLICT DO NOTHING;
 
-        -- Volume conversions (relative to FL OZ)
-        INSERT INTO base_conversions (organization_id, outlet_id, from_unit_id, to_unit_id, conversion_factor, notes)
-        SELECT NULL, NULL, f.id, t.id,
-            CASE
-                -- FL OZ to others
-                WHEN f.abbreviation = 'FL OZ' AND t.abbreviation = 'CUP' THEN 0.125
-                WHEN f.abbreviation = 'FL OZ' AND t.abbreviation = 'PT' THEN 0.0625
-                WHEN f.abbreviation = 'FL OZ' AND t.abbreviation = 'QT' THEN 0.03125
-                WHEN f.abbreviation = 'FL OZ' AND t.abbreviation = 'GAL' THEN 0.0078125
-                WHEN f.abbreviation = 'FL OZ' AND t.abbreviation = 'ML' THEN 29.5735
-                WHEN f.abbreviation = 'FL OZ' AND t.abbreviation = 'L' THEN 0.0295735
-                WHEN f.abbreviation = 'FL OZ' AND t.abbreviation = 'TBSP' THEN 2
-                WHEN f.abbreviation = 'FL OZ' AND t.abbreviation = 'TSP' THEN 6
-                -- GAL to others
-                WHEN f.abbreviation = 'GAL' AND t.abbreviation = 'FL OZ' THEN 128
-                WHEN f.abbreviation = 'GAL' AND t.abbreviation = 'CUP' THEN 16
-                WHEN f.abbreviation = 'GAL' AND t.abbreviation = 'PT' THEN 8
-                WHEN f.abbreviation = 'GAL' AND t.abbreviation = 'QT' THEN 4
-                WHEN f.abbreviation = 'GAL' AND t.abbreviation = 'ML' THEN 3785.41
-                WHEN f.abbreviation = 'GAL' AND t.abbreviation = 'L' THEN 3.78541
-                -- QT to others
-                WHEN f.abbreviation = 'QT' AND t.abbreviation = 'FL OZ' THEN 32
-                WHEN f.abbreviation = 'QT' AND t.abbreviation = 'CUP' THEN 4
-                WHEN f.abbreviation = 'QT' AND t.abbreviation = 'PT' THEN 2
-                WHEN f.abbreviation = 'QT' AND t.abbreviation = 'GAL' THEN 0.25
-                WHEN f.abbreviation = 'QT' AND t.abbreviation = 'ML' THEN 946.353
-                WHEN f.abbreviation = 'QT' AND t.abbreviation = 'L' THEN 0.946353
-                -- PT to others
-                WHEN f.abbreviation = 'PT' AND t.abbreviation = 'FL OZ' THEN 16
-                WHEN f.abbreviation = 'PT' AND t.abbreviation = 'CUP' THEN 2
-                WHEN f.abbreviation = 'PT' AND t.abbreviation = 'QT' THEN 0.5
-                WHEN f.abbreviation = 'PT' AND t.abbreviation = 'GAL' THEN 0.125
-                -- CUP to others
-                WHEN f.abbreviation = 'CUP' AND t.abbreviation = 'FL OZ' THEN 8
-                WHEN f.abbreviation = 'CUP' AND t.abbreviation = 'PT' THEN 0.5
-                WHEN f.abbreviation = 'CUP' AND t.abbreviation = 'QT' THEN 0.25
-                WHEN f.abbreviation = 'CUP' AND t.abbreviation = 'GAL' THEN 0.0625
-                WHEN f.abbreviation = 'CUP' AND t.abbreviation = 'ML' THEN 236.588
-                WHEN f.abbreviation = 'CUP' AND t.abbreviation = 'TBSP' THEN 16
-                WHEN f.abbreviation = 'CUP' AND t.abbreviation = 'TSP' THEN 48
-                -- TBSP to others
-                WHEN f.abbreviation = 'TBSP' AND t.abbreviation = 'FL OZ' THEN 0.5
-                WHEN f.abbreviation = 'TBSP' AND t.abbreviation = 'TSP' THEN 3
-                WHEN f.abbreviation = 'TBSP' AND t.abbreviation = 'ML' THEN 14.7868
-                WHEN f.abbreviation = 'TBSP' AND t.abbreviation = 'CUP' THEN 0.0625
-                -- TSP to others
-                WHEN f.abbreviation = 'TSP' AND t.abbreviation = 'FL OZ' THEN 0.166667
-                WHEN f.abbreviation = 'TSP' AND t.abbreviation = 'TBSP' THEN 0.333333
-                WHEN f.abbreviation = 'TSP' AND t.abbreviation = 'ML' THEN 4.92892
-                WHEN f.abbreviation = 'TSP' AND t.abbreviation = 'CUP' THEN 0.0208333
-                -- L to others
-                WHEN f.abbreviation = 'L' AND t.abbreviation = 'FL OZ' THEN 33.814
-                WHEN f.abbreviation = 'L' AND t.abbreviation = 'ML' THEN 1000
-                WHEN f.abbreviation = 'L' AND t.abbreviation = 'GAL' THEN 0.264172
-                WHEN f.abbreviation = 'L' AND t.abbreviation = 'QT' THEN 1.05669
-                -- ML to others
-                WHEN f.abbreviation = 'ML' AND t.abbreviation = 'FL OZ' THEN 0.033814
-                WHEN f.abbreviation = 'ML' AND t.abbreviation = 'L' THEN 0.001
-                WHEN f.abbreviation = 'ML' AND t.abbreviation = 'TSP' THEN 0.202884
-                WHEN f.abbreviation = 'ML' AND t.abbreviation = 'TBSP' THEN 0.067628
-            END,
-            'System default volume conversion'
-        FROM units f
-        CROSS JOIN units t
-        WHERE f.abbreviation IN ('FL OZ', 'CUP', 'PT', 'QT', 'GAL', 'ML', 'L', 'TBSP', 'TSP')
-          AND t.abbreviation IN ('FL OZ', 'CUP', 'PT', 'QT', 'GAL', 'ML', 'L', 'TBSP', 'TSP')
-          AND f.id != t.id
-        ON CONFLICT DO NOTHING;
+    # Weight conversions
+    weight_conversions = [
+        ('OZ', 'LB', 0.0625),
+        ('OZ', 'G', 28.3495),
+        ('OZ', 'KG', 0.0283495),
+        ('LB', 'OZ', 16),
+        ('LB', 'G', 453.592),
+        ('LB', 'KG', 0.453592),
+        ('G', 'OZ', 0.035274),
+        ('G', 'LB', 0.00220462),
+        ('G', 'KG', 0.001),
+        ('KG', 'OZ', 35.274),
+        ('KG', 'LB', 2.20462),
+        ('KG', 'G', 1000),
+    ]
 
-        -- Clean up any NULL conversion factors (pairs that weren't defined)
-        DELETE FROM base_conversions WHERE conversion_factor IS NULL;
-    """)
+    for from_unit, to_unit, factor in weight_conversions:
+        op.execute(f"""
+            INSERT INTO base_conversions (organization_id, outlet_id, from_unit_id, to_unit_id, conversion_factor, notes)
+            SELECT NULL, NULL, f.id, t.id, {factor}, 'System default weight conversion'
+            FROM units f, units t
+            WHERE f.abbreviation = '{from_unit}' AND t.abbreviation = '{to_unit}'
+        """)
+
+    # Volume conversions
+    volume_conversions = [
+        ('FL OZ', 'CUP', 0.125),
+        ('FL OZ', 'PT', 0.0625),
+        ('FL OZ', 'QT', 0.03125),
+        ('FL OZ', 'GAL', 0.0078125),
+        ('FL OZ', 'ML', 29.5735),
+        ('FL OZ', 'L', 0.0295735),
+        ('FL OZ', 'TBSP', 2),
+        ('FL OZ', 'TSP', 6),
+        ('GAL', 'FL OZ', 128),
+        ('GAL', 'CUP', 16),
+        ('GAL', 'PT', 8),
+        ('GAL', 'QT', 4),
+        ('GAL', 'ML', 3785.41),
+        ('GAL', 'L', 3.78541),
+        ('QT', 'FL OZ', 32),
+        ('QT', 'CUP', 4),
+        ('QT', 'PT', 2),
+        ('QT', 'GAL', 0.25),
+        ('QT', 'ML', 946.353),
+        ('QT', 'L', 0.946353),
+        ('PT', 'FL OZ', 16),
+        ('PT', 'CUP', 2),
+        ('PT', 'QT', 0.5),
+        ('PT', 'GAL', 0.125),
+        ('CUP', 'FL OZ', 8),
+        ('CUP', 'PT', 0.5),
+        ('CUP', 'QT', 0.25),
+        ('CUP', 'GAL', 0.0625),
+        ('CUP', 'ML', 236.588),
+        ('CUP', 'TBSP', 16),
+        ('CUP', 'TSP', 48),
+        ('TBSP', 'FL OZ', 0.5),
+        ('TBSP', 'TSP', 3),
+        ('TBSP', 'ML', 14.7868),
+        ('TBSP', 'CUP', 0.0625),
+        ('TSP', 'FL OZ', 0.166667),
+        ('TSP', 'TBSP', 0.333333),
+        ('TSP', 'ML', 4.92892),
+        ('TSP', 'CUP', 0.0208333),
+        ('L', 'FL OZ', 33.814),
+        ('L', 'ML', 1000),
+        ('L', 'GAL', 0.264172),
+        ('L', 'QT', 1.05669),
+        ('ML', 'FL OZ', 0.033814),
+        ('ML', 'L', 0.001),
+        ('ML', 'TSP', 0.202884),
+        ('ML', 'TBSP', 0.067628),
+    ]
+
+    for from_unit, to_unit, factor in volume_conversions:
+        op.execute(f"""
+            INSERT INTO base_conversions (organization_id, outlet_id, from_unit_id, to_unit_id, conversion_factor, notes)
+            SELECT NULL, NULL, f.id, t.id, {factor}, 'System default volume conversion'
+            FROM units f, units t
+            WHERE f.abbreviation = '{from_unit}' AND t.abbreviation = '{to_unit}'
+        """)
 
     print("✅ Base conversions table created and seeded with system defaults")
 
 
 def downgrade():
+    op.drop_index('idx_base_conversions_units', 'base_conversions')
     op.drop_index('idx_base_conversions_outlet', 'base_conversions')
     op.drop_index('idx_base_conversions_org', 'base_conversions')
     op.drop_index('idx_base_conversions_lookup', 'base_conversions')
