@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import axios from '../../../lib/axios';
-import { ChevronRight, Edit2, Trash2 } from 'lucide-react';
+import { ChevronRight, Edit2, Trash2, GripVertical } from 'lucide-react';
 import PrepItemTable from './PrepItemTable';
 import AddItemModal from './AddItemModal';
 import EditItemModal from './EditItemModal';
@@ -8,6 +8,11 @@ import EditItemModal from './EditItemModal';
 function MenuItemList({ menuId, menuItems, itemCosts, guestCount, expandedItems, onToggleExpand, onItemsChanged, onInlineEdit }) {
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
+
+  // Drag and drop state
+  const [draggedItem, setDraggedItem] = useState(null);
+  const [dragOverItem, setDragOverItem] = useState(null);
+  const dragNodeRef = useRef(null);
 
   const getCostForItem = (itemId) => {
     const costData = itemCosts.find(c => c.menu_item_id === itemId);
@@ -39,6 +44,59 @@ function MenuItemList({ menuId, menuItems, itemCosts, guestCount, expandedItems,
     onItemsChanged();
   };
 
+  // Drag and drop handlers
+  const handleDragStart = (e, item, index) => {
+    setDraggedItem({ item, index });
+    dragNodeRef.current = e.target;
+    e.target.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragEnd = (e) => {
+    e.target.classList.remove('dragging');
+    setDraggedItem(null);
+    setDragOverItem(null);
+    dragNodeRef.current = null;
+  };
+
+  const handleDragOver = (e, index) => {
+    e.preventDefault();
+    if (draggedItem === null || draggedItem.index === index) return;
+    setDragOverItem(index);
+  };
+
+  const handleDragLeave = () => {
+    setDragOverItem(null);
+  };
+
+  const handleDrop = async (e, targetIndex) => {
+    e.preventDefault();
+    if (draggedItem === null || draggedItem.index === targetIndex) {
+      setDragOverItem(null);
+      return;
+    }
+
+    // Calculate new order
+    const items = [...menuItems];
+    const [removed] = items.splice(draggedItem.index, 1);
+    items.splice(targetIndex, 0, removed);
+
+    // Build reorder payload with new display_order values
+    const reorderPayload = items.map((item, idx) => ({
+      id: item.id,
+      display_order: idx
+    }));
+
+    setDragOverItem(null);
+
+    try {
+      await axios.patch('/banquet-menus/items/reorder', reorderPayload);
+      onItemsChanged();
+    } catch (err) {
+      console.error('Error reordering items:', err);
+    }
+  };
+
   return (
     <div className="menu-items-section">
       <div className="section-header">
@@ -54,13 +112,29 @@ function MenuItemList({ menuId, menuItems, itemCosts, guestCount, expandedItems,
         </div>
       ) : (
         <ul className="menu-item-list">
-          {menuItems.map((item) => (
-            <li key={item.id} className="menu-item-row">
+          {menuItems.map((item, index) => (
+            <li
+              key={item.id}
+              className={`menu-item-row ${dragOverItem === index ? 'drag-over' : ''}`}
+              draggable
+              onDragStart={(e) => handleDragStart(e, item, index)}
+              onDragEnd={handleDragEnd}
+              onDragOver={(e) => handleDragOver(e, index)}
+              onDragLeave={handleDragLeave}
+              onDrop={(e) => handleDrop(e, index)}
+            >
               <div
                 className="menu-item-header"
                 onClick={() => onToggleExpand(item.id)}
               >
                 <div className="menu-item-left">
+                  <span
+                    className="drag-handle"
+                    onMouseDown={(e) => e.stopPropagation()}
+                    title="Drag to reorder"
+                  >
+                    <GripVertical size={16} />
+                  </span>
                   <span className={`expand-icon ${expandedItems.has(item.id) ? 'expanded' : ''}`}>
                     <ChevronRight size={16} />
                   </span>

@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import axios from '../../../lib/axios';
-import { Trash2, Link } from 'lucide-react';
+import { Trash2, Link, GripVertical } from 'lucide-react';
 import AddPrepItemModal from './AddPrepItemModal';
 import LinkPrepItemModal from './LinkPrepItemModal';
 
@@ -15,6 +15,11 @@ function PrepItemTable({ menuItemId, prepItems, itemCosts, guestCount, onPrepIte
   // Inline editing state
   const [editingCell, setEditingCell] = useState(null); // { prepId, field }
   const [editValue, setEditValue] = useState('');
+
+  // Drag and drop state
+  const [draggedItem, setDraggedItem] = useState(null);
+  const [dragOverItem, setDragOverItem] = useState(null);
+  const dragNodeRef = useRef(null);
 
   // Sync local state when props change (e.g., after add/delete/link)
   useEffect(() => {
@@ -226,6 +231,69 @@ function PrepItemTable({ menuItemId, prepItems, itemCosts, guestCount, onPrepIte
     return `/${num}`;
   };
 
+  // Drag and drop handlers
+  const handleDragStart = (e, prep, index) => {
+    setDraggedItem({ prep, index });
+    dragNodeRef.current = e.target.closest('tr');
+    if (dragNodeRef.current) {
+      dragNodeRef.current.classList.add('dragging');
+    }
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragEnd = () => {
+    if (dragNodeRef.current) {
+      dragNodeRef.current.classList.remove('dragging');
+    }
+    setDraggedItem(null);
+    setDragOverItem(null);
+    dragNodeRef.current = null;
+  };
+
+  const handleDragOver = (e, index) => {
+    e.preventDefault();
+    if (draggedItem === null || draggedItem.index === index) return;
+    setDragOverItem(index);
+  };
+
+  const handleDragLeave = () => {
+    setDragOverItem(null);
+  };
+
+  const handleDrop = async (e, targetIndex) => {
+    e.preventDefault();
+    if (draggedItem === null || draggedItem.index === targetIndex) {
+      setDragOverItem(null);
+      return;
+    }
+
+    // Calculate new order locally
+    const items = [...localPrepItems];
+    const [removed] = items.splice(draggedItem.index, 1);
+    items.splice(targetIndex, 0, removed);
+
+    // Update local state immediately for smooth UX
+    setLocalPrepItems(items);
+
+    // Build reorder payload
+    const reorderPayload = items.map((item, idx) => ({
+      id: item.id,
+      display_order: idx
+    }));
+
+    setDragOverItem(null);
+
+    try {
+      await axios.patch('/banquet-menus/prep/reorder', reorderPayload);
+      // Optionally refresh from server
+      onPrepItemsChanged();
+    } catch (err) {
+      console.error('Error reordering prep items:', err);
+      // Revert on error
+      setLocalPrepItems(prepItems);
+    }
+  };
+
   return (
     <div className="prep-items-container">
       {localPrepItems.length === 0 ? (
@@ -236,6 +304,7 @@ function PrepItemTable({ menuItemId, prepItems, itemCosts, guestCount, onPrepIte
         <table className="prep-items-table">
           <thead>
             <tr>
+              <th className="drag-col"></th>
               <th>Prep Item</th>
               <th className="text-center">Amount</th>
               <th className="text-center">Per</th>
@@ -247,7 +316,7 @@ function PrepItemTable({ menuItemId, prepItems, itemCosts, guestCount, onPrepIte
             </tr>
           </thead>
           <tbody>
-            {localPrepItems.map((prep) => {
+            {localPrepItems.map((prep, index) => {
               const linkInfo = getLinkInfo(prep);
               const unitCost = getUnitCostForPrepItem(prep.id);
               const totalCost = getCostForPrepItem(prep.id);
@@ -256,7 +325,21 @@ function PrepItemTable({ menuItemId, prepItems, itemCosts, guestCount, onPrepIte
               const guestsPerAmount = prep.guests_per_amount || 1;
 
               return (
-                <tr key={prep.id}>
+                <tr
+                  key={prep.id}
+                  className={dragOverItem === index ? 'drag-over' : ''}
+                  draggable
+                  onDragStart={(e) => handleDragStart(e, prep, index)}
+                  onDragEnd={handleDragEnd}
+                  onDragOver={(e) => handleDragOver(e, index)}
+                  onDragLeave={handleDragLeave}
+                  onDrop={(e) => handleDrop(e, index)}
+                >
+                  <td className="drag-cell">
+                    <span className="drag-handle" title="Drag to reorder">
+                      <GripVertical size={14} />
+                    </span>
+                  </td>
                   <td className="prep-name-cell">
                     {renderEditableCell(prep, 'name', prep.name)}
                   </td>

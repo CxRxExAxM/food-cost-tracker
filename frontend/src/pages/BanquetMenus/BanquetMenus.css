@@ -939,6 +939,61 @@
   box-shadow: 0 0 0 3px rgba(212, 167, 44, 0.1);
 }
 
+/* Drag and Drop */
+.drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  color: var(--text-tertiary);
+  padding: var(--space-1);
+  margin-right: var(--space-1);
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast) var(--ease-in-out);
+}
+
+.drag-handle:hover {
+  color: var(--text-secondary);
+  background: var(--bg-tertiary);
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+.menu-item-row.dragging {
+  opacity: 0.5;
+  background: var(--bg-tertiary);
+}
+
+.menu-item-row.drag-over {
+  border-top: 2px solid var(--color-yellow);
+  margin-top: -2px;
+}
+
+.prep-items-table tbody tr.dragging {
+  opacity: 0.5;
+  background: var(--bg-tertiary);
+}
+
+.prep-items-table tbody tr.drag-over {
+  box-shadow: inset 0 2px 0 var(--color-yellow);
+}
+
+.drag-col {
+  width: 32px;
+  padding: var(--space-2) !important;
+}
+
+.drag-cell {
+  width: 32px;
+  padding: var(--space-2) var(--space-2) !important;
+}
+
+.drag-cell .drag-handle {
+  margin-right: 0;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .banquet-menus-page {

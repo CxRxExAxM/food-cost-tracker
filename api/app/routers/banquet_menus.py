@@ -718,6 +718,13 @@ def create_menu_item(menu_id: int, item: MenuItemCreate, current_user: dict = De
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Menu not found or you don't have access")
 
+        # Get minimum display_order to insert at top
+        cursor.execute("""
+            SELECT COALESCE(MIN(display_order), 0) - 1 as new_order
+            FROM banquet_menu_items WHERE banquet_menu_id = %s
+        """, (menu_id,))
+        new_order = cursor.fetchone()["new_order"]
+
         cursor.execute("""
             INSERT INTO banquet_menu_items (
                 banquet_menu_id, name, display_order, is_enhancement, additional_price
@@ -725,7 +732,7 @@ def create_menu_item(menu_id: int, item: MenuItemCreate, current_user: dict = De
             VALUES (%s, %s, %s, %s, %s)
             RETURNING id
         """, (
-            menu_id, item.name, item.display_order,
+            menu_id, item.name, new_order,
             int(item.is_enhancement), item.additional_price
         ))
 
@@ -847,6 +854,13 @@ def create_prep_item(item_id: int, prep: PrepItemCreate, current_user: dict = De
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Menu item not found or you don't have access")
 
+        # Get minimum display_order to insert at top
+        cursor.execute("""
+            SELECT COALESCE(MIN(display_order), 0) - 1 as new_order
+            FROM banquet_prep_items WHERE banquet_menu_item_id = %s
+        """, (item_id,))
+        new_order = cursor.fetchone()["new_order"]
+
         # Use old columns (amount_mode) which always exist
         # The cost calculation will use guests_per_amount if available, otherwise derive from amount_mode
         cursor.execute("""
@@ -859,7 +873,7 @@ def create_prep_item(item_id: int, prep: PrepItemCreate, current_user: dict = De
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
         """, (
-            item_id, prep.name, prep.display_order, prep.amount_per_guest, prep.amount_unit,
+            item_id, prep.name, new_order, prep.amount_per_guest, prep.amount_unit,
             prep.unit_id, prep.amount_mode or 'per_person', prep.base_amount,
             prep.vessel, prep.vessel_id, prep.vessel_count,
             prep.responsibility, prep.product_id, prep.recipe_id, prep.common_product_id
