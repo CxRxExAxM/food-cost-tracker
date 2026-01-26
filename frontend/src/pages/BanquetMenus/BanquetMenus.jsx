@@ -193,13 +193,24 @@ function BanquetMenus() {
     }
   }, [guestCount, selectedMenuId]);
 
+  // Get outlet ID for API calls (null if 'all' selected)
+  const getOutletIdParam = () => {
+    if (!selectedOutlet || selectedOutlet.id === 'all') return null;
+    return selectedOutlet.id;
+  };
+
   const fetchMealPeriods = async () => {
-    // console.log('[BanquetMenus] fetchMealPeriods called for outlet:', selectedOutlet?.id);
+    const outletId = getOutletIdParam();
+    if (!outletId) {
+      // No specific outlet selected - clear data
+      setMealPeriods([]);
+      return;
+    }
+
     try {
       const response = await axios.get('/banquet-menus/meal-periods', {
-        params: { outlet_id: selectedOutlet.id }
+        params: { outlet_id: outletId }
       });
-      // console.log('[BanquetMenus] meal periods response:', response.data);
       setMealPeriods(response.data.meal_periods || []);
     } catch (err) {
       console.error('Error fetching meal periods:', err);
@@ -208,10 +219,13 @@ function BanquetMenus() {
   };
 
   const fetchServiceTypes = async () => {
+    const outletId = getOutletIdParam();
+    if (!outletId) return;
+
     try {
       const response = await axios.get('/banquet-menus/service-types', {
         params: {
-          outlet_id: selectedOutlet.id,
+          outlet_id: outletId,
           meal_period: selectedMealPeriod
         }
       });
@@ -223,10 +237,13 @@ function BanquetMenus() {
   };
 
   const fetchMenus = async () => {
+    const outletId = getOutletIdParam();
+    if (!outletId) return;
+
     try {
       const response = await axios.get('/banquet-menus', {
         params: {
-          outlet_id: selectedOutlet.id,
+          outlet_id: outletId,
           meal_period: selectedMealPeriod,
           service_type: selectedServiceType
         }
@@ -326,7 +343,7 @@ function BanquetMenus() {
     }
   };
 
-  if (!selectedOutlet?.id) {
+  if (!selectedOutlet?.id || selectedOutlet.id === 'all') {
     return (
       <div className="app-container">
         <Navigation />
@@ -336,7 +353,9 @@ function BanquetMenus() {
               <h1>Banquet Menus</h1>
             </div>
             <div className="empty-state">
-              Please select an outlet to view banquet menus.
+              {selectedOutlet?.id === 'all'
+                ? 'Please select a specific outlet to view banquet menus. Banquet menus are managed per outlet.'
+                : 'Please select an outlet to view banquet menus.'}
             </div>
           </div>
         </main>

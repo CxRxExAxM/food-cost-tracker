@@ -1,13 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { useOutlet } from '../contexts/OutletContext';
 import OutletSelector from './outlets/OutletSelector';
 import './Navigation.css';
 
 function Navigation() {
   const { user, logout, isAdmin } = useAuth();
-  const { currentOutlet } = useOutlet();
   const navigate = useNavigate();
   const location = useLocation();
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -65,11 +63,9 @@ function Navigation() {
             <Link to="/recipes" className={`nav-link ${isActivePath('/recipes') ? 'active' : ''}`}>
               Recipes
             </Link>
-            {currentOutlet?.name?.toLowerCase().includes('banquet') && (
-              <Link to="/banquet-menus" className={`nav-link ${isActivePath('/banquet-menus') ? 'active' : ''}`}>
-                Banquet Menus
-              </Link>
-            )}
+            <Link to="/banquet-menus" className={`nav-link ${isActivePath('/banquet-menus') ? 'active' : ''}`}>
+              Banquet Menus
+            </Link>
             {isAdmin() && (
               <Link to="/users" className={`nav-link ${isActivePath('/users') ? 'active' : ''}`}>
                 Users
