@@ -3,19 +3,12 @@ import axios from '../../../lib/axios';
 import UnitSelect from '../../../components/UnitSelect';
 import VesselSelect from '../../../components/VesselSelect';
 
-const AMOUNT_MODES = [
-  { value: 'per_person', label: 'Per Person', description: 'Scales with guest count' },
-  { value: 'at_minimum', label: 'At Minimum', description: 'Fixed amount based on min guests' },
-  { value: 'fixed', label: 'Fixed', description: 'Same amount regardless of guests' },
-  { value: 'vessel', label: 'By Vessel', description: 'Based on vessel capacity' }
-];
-
 function AddPrepItemModal({ menuItemId, onClose, onPrepItemAdded }) {
   const [formData, setFormData] = useState({
     name: '',
-    amount_mode: 'per_person',
+    useVessel: false,
     amount_per_guest: '',
-    base_amount: '',
+    guests_per_amount: '1',  // Default: per 1 guest (per person)
     unit_id: null,
     amount_unit: '', // Legacy fallback
     vessel_id: null,
@@ -39,15 +32,15 @@ function AddPrepItemModal({ menuItemId, onClose, onPrepItemAdded }) {
     }
   };
 
-  const handleModeChange = (mode) => {
+  const toggleVesselMode = (useVessel) => {
     setFormData(prev => ({
       ...prev,
-      amount_mode: mode,
+      useVessel,
       // Clear fields when switching modes
-      ...(mode === 'vessel' ? { amount_per_guest: '', base_amount: '' } : {}),
-      ...(mode !== 'vessel' ? { vessel_id: null, vessel_count: '' } : {})
+      ...(useVessel ? { amount_per_guest: '', guests_per_amount: '1' } : {}),
+      ...(!useVessel ? { vessel_id: null, vessel_count: '' } : {})
     }));
-    if (mode !== 'vessel') {
+    if (!useVessel) {
       setSelectedVessel(null);
     }
   };
@@ -68,20 +61,14 @@ function AddPrepItemModal({ menuItemId, onClose, onPrepItemAdded }) {
         responsibility: formData.responsibility || null
       };
 
-      // Set amount mode (use 'per_person' for vessel mode since vessel_id handles it)
-      if (formData.amount_mode === 'vessel') {
-        payload.amount_mode = 'per_person'; // Default mode when using vessel
+      if (formData.useVessel) {
+        // Vessel mode
         payload.vessel_id = formData.vessel_id;
         payload.vessel_count = formData.vessel_count ? parseFloat(formData.vessel_count) : null;
       } else {
-        payload.amount_mode = formData.amount_mode;
-
-        if (formData.amount_mode === 'per_person') {
-          payload.amount_per_guest = formData.amount_per_guest ? parseFloat(formData.amount_per_guest) : null;
-        } else {
-          // at_minimum or fixed
-          payload.base_amount = formData.base_amount ? parseFloat(formData.base_amount) : null;
-        }
+        // Standard "per X guests" mode
+        payload.amount_per_guest = formData.amount_per_guest ? parseFloat(formData.amount_per_guest) : null;
+        payload.guests_per_amount = formData.guests_per_amount ? parseInt(formData.guests_per_amount) : 1;
       }
 
       // Unit (prefer unit_id, fallback to legacy amount_unit)
@@ -107,11 +94,9 @@ function AddPrepItemModal({ menuItemId, onClose, onPrepItemAdded }) {
     }
   };
 
-  const isVesselMode = formData.amount_mode === 'vessel';
-
   // Calculate preview for vessel mode
   const vesselPreview = () => {
-    if (!isVesselMode || !selectedVessel || !formData.vessel_count) return null;
+    if (!formData.useVessel || !selectedVessel || !formData.vessel_count) return null;
     const count = parseFloat(formData.vessel_count) || 0;
     const capacity = parseFloat(selectedVessel.default_capacity) || 0;
     const total = count * capacity;
@@ -145,70 +130,93 @@ function AddPrepItemModal({ menuItemId, onClose, onPrepItemAdded }) {
               />
             </div>
 
-            {/* Amount Mode Selector */}
+            {/* Amount Type Toggle */}
             <div className="form-group">
               <label>Amount Type</label>
-              <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
-                {AMOUNT_MODES.map(mode => (
-                  <button
-                    key={mode.value}
-                    type="button"
-                    onClick={() => handleModeChange(mode.value)}
-                    style={{
-                      padding: 'var(--space-2) var(--space-3)',
-                      borderRadius: 'var(--radius-md)',
-                      border: formData.amount_mode === mode.value
-                        ? '2px solid var(--primary)'
-                        : '1px solid var(--border-color)',
-                      backgroundColor: formData.amount_mode === mode.value
-                        ? 'var(--primary-light)'
-                        : 'var(--surface-color)',
-                      cursor: 'pointer',
-                      fontSize: 'var(--text-sm)'
-                    }}
-                    title={mode.description}
-                  >
-                    {mode.label}
-                  </button>
-                ))}
+              <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                <button
+                  type="button"
+                  onClick={() => toggleVesselMode(false)}
+                  style={{
+                    padding: 'var(--space-2) var(--space-3)',
+                    borderRadius: 'var(--radius-md)',
+                    border: !formData.useVessel
+                      ? '2px solid var(--primary)'
+                      : '1px solid var(--border-color)',
+                    backgroundColor: !formData.useVessel
+                      ? 'var(--primary-light)'
+                      : 'var(--surface-color)',
+                    cursor: 'pointer',
+                    fontSize: 'var(--text-sm)'
+                  }}
+                >
+                  Per Guests
+                </button>
+                <button
+                  type="button"
+                  onClick={() => toggleVesselMode(true)}
+                  style={{
+                    padding: 'var(--space-2) var(--space-3)',
+                    borderRadius: 'var(--radius-md)',
+                    border: formData.useVessel
+                      ? '2px solid var(--primary)'
+                      : '1px solid var(--border-color)',
+                    backgroundColor: formData.useVessel
+                      ? 'var(--primary-light)'
+                      : 'var(--surface-color)',
+                    cursor: 'pointer',
+                    fontSize: 'var(--text-sm)'
+                  }}
+                >
+                  By Vessel
+                </button>
               </div>
-              <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', marginTop: 'var(--space-1)' }}>
-                {AMOUNT_MODES.find(m => m.value === formData.amount_mode)?.description}
-              </p>
             </div>
 
-            {/* Standard Amount Fields (non-vessel modes) */}
-            {!isVesselMode && (
-              <div className="form-row">
-                <div className="form-group">
-                  <label>
-                    {formData.amount_mode === 'per_person' ? 'Amount Per Guest' : 'Amount'}
-                  </label>
+            {/* Standard Amount Fields (per X guests) */}
+            {!formData.useVessel && (
+              <div className="form-group">
+                <label>Amount</label>
+                <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center', flexWrap: 'wrap' }}>
                   <input
                     type="number"
-                    name={formData.amount_mode === 'per_person' ? 'amount_per_guest' : 'base_amount'}
+                    name="amount_per_guest"
                     className="form-input"
-                    value={formData.amount_mode === 'per_person' ? formData.amount_per_guest : formData.base_amount}
+                    style={{ width: '80px' }}
+                    value={formData.amount_per_guest}
                     onChange={handleChange}
-                    placeholder="0.5"
+                    placeholder="2"
                     step="0.0001"
                     min="0"
                   />
-                </div>
-
-                <div className="form-group">
-                  <label>Unit</label>
-                  <UnitSelect
-                    value={formData.unit_id}
+                  <div style={{ width: '100px' }}>
+                    <UnitSelect
+                      value={formData.unit_id}
+                      onChange={handleChange}
+                      name="unit_id"
+                    />
+                  </div>
+                  <span style={{ color: 'var(--text-secondary)' }}>per</span>
+                  <input
+                    type="number"
+                    name="guests_per_amount"
+                    className="form-input"
+                    style={{ width: '60px' }}
+                    value={formData.guests_per_amount}
                     onChange={handleChange}
-                    name="unit_id"
+                    placeholder="1"
+                    min="1"
                   />
+                  <span style={{ color: 'var(--text-secondary)' }}>guest(s)</span>
                 </div>
+                <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', marginTop: 'var(--space-1)' }}>
+                  e.g., "2 OZ per 1 guest" or "1 bottle per 10 guests"
+                </p>
               </div>
             )}
 
             {/* Vessel-based Amount Fields */}
-            {isVesselMode && (
+            {formData.useVessel && (
               <>
                 <div className="form-row">
                   <div className="form-group" style={{ flex: 2 }}>
@@ -251,7 +259,7 @@ function AddPrepItemModal({ menuItemId, onClose, onPrepItemAdded }) {
             )}
 
             {/* Legacy vessel text field (only show if not using vessel mode) */}
-            {!isVesselMode && (
+            {!formData.useVessel && (
               <div className="form-row">
                 <div className="form-group">
                   <label>Vessel (optional text)</label>
@@ -279,7 +287,7 @@ function AddPrepItemModal({ menuItemId, onClose, onPrepItemAdded }) {
               </div>
             )}
 
-            {isVesselMode && (
+            {formData.useVessel && (
               <div className="form-group">
                 <label>Responsibility (optional)</label>
                 <input

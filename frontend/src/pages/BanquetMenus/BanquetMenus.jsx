@@ -54,7 +54,7 @@ function BanquetMenus() {
   // Current menu data
   const [currentMenu, setCurrentMenu] = useState(null);
   const [menuCost, setMenuCost] = useState(null);
-  const [guestCount, setGuestCount] = useState(50);
+  const [guestCount, setGuestCount] = useState(0);
 
   // UI state
   const [loading, setLoading] = useState(false);
@@ -255,7 +255,7 @@ function BanquetMenus() {
 
   const handleGuestCountChange = (e) => {
     const value = parseInt(e.target.value, 10);
-    if (!isNaN(value) && value >= 1) {
+    if (!isNaN(value) && value >= 0) {
       setGuestCount(value);
     }
   };

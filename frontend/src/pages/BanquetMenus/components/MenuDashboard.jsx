@@ -84,7 +84,7 @@ function MenuDashboard({ menu, menuCost, guestCount, onGuestCountChange, onEditC
             className="guest-input"
             value={guestCount}
             onChange={onGuestCountChange}
-            min="1"
+            min="0"
           />
         </div>
 

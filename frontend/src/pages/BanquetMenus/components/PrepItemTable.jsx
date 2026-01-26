@@ -4,12 +4,6 @@ import { Trash2, Link } from 'lucide-react';
 import AddPrepItemModal from './AddPrepItemModal';
 import LinkPrepItemModal from './LinkPrepItemModal';
 
-const AMOUNT_MODES = [
-  { value: 'per_person', label: '/pp', fullLabel: 'Per Person' },
-  { value: 'at_minimum', label: 'min', fullLabel: 'At Minimum' },
-  { value: 'fixed', label: 'fixed', fullLabel: 'Fixed' }
-];
-
 function PrepItemTable({ menuItemId, prepItems, itemCosts, guestCount, onPrepItemsChanged }) {
   const [showAddModal, setShowAddModal] = useState(false);
   const [linkingPrepItem, setLinkingPrepItem] = useState(null);
@@ -74,24 +68,14 @@ function PrepItemTable({ menuItemId, prepItems, itemCosts, guestCount, onPrepIte
       const newValue = editValue || prep.name;
       updateData.name = newValue;
       localUpdate.name = newValue;
-    } else if (field === 'amount_mode') {
-      updateData.amount_mode = editValue;
-      localUpdate.amount_mode = editValue;
-      if (editValue === 'per_person') {
-        updateData.base_amount = null;
-        localUpdate.base_amount = null;
-      } else {
-        updateData.amount_per_guest = null;
-        localUpdate.amount_per_guest = null;
-      }
     } else if (field === 'amount_per_guest') {
       const numValue = editValue ? parseFloat(editValue) : null;
       updateData.amount_per_guest = numValue;
       localUpdate.amount_per_guest = numValue;
-    } else if (field === 'base_amount') {
-      const numValue = editValue ? parseFloat(editValue) : null;
-      updateData.base_amount = numValue;
-      localUpdate.base_amount = numValue;
+    } else if (field === 'guests_per_amount') {
+      const numValue = editValue ? parseInt(editValue) : 1;
+      updateData.guests_per_amount = numValue;
+      localUpdate.guests_per_amount = numValue;
     } else if (field === 'unit_id') {
       const numValue = editValue ? parseInt(editValue) : null;
       updateData.unit_id = numValue;
@@ -144,6 +128,11 @@ function PrepItemTable({ menuItemId, prepItems, itemCosts, guestCount, onPrepIte
     return costData?.unit_cost || 0;
   };
 
+  const getCalculatedAmount = (prepId) => {
+    const costData = itemCosts.find(c => c.prep_item_id === prepId);
+    return costData?.calculated_amount || 0;
+  };
+
   const getLinkInfo = (prepItem) => {
     if (prepItem.common_product_id) {
       return { type: 'common', name: prepItem.common_product_name || 'Product' };
@@ -176,23 +165,6 @@ function PrepItemTable({ menuItemId, prepItems, itemCosts, guestCount, onPrepIte
     const isEditing = editingCell?.prepId === prep.id && editingCell?.field === field;
 
     if (isEditing) {
-      if (field === 'amount_mode') {
-        return (
-          <select
-            value={editValue}
-            onChange={(e) => setEditValue(e.target.value)}
-            onBlur={() => handleCellSave(prep.id, field)}
-            onKeyDown={(e) => handleCellKeyDown(e, prep.id, field)}
-            className="prep-inline-select"
-            autoFocus
-          >
-            {AMOUNT_MODES.map(mode => (
-              <option key={mode.value} value={mode.value}>{mode.fullLabel}</option>
-            ))}
-          </select>
-        );
-      }
-
       if (field === 'unit_id') {
         return (
           <select
@@ -222,6 +194,7 @@ function PrepItemTable({ menuItemId, prepItems, itemCosts, guestCount, onPrepIte
           className="prep-inline-input"
           autoFocus
           step={inputType === 'number' ? '0.0001' : undefined}
+          min={field === 'guests_per_amount' ? '1' : undefined}
         />
       );
     }
@@ -229,8 +202,8 @@ function PrepItemTable({ menuItemId, prepItems, itemCosts, guestCount, onPrepIte
     let editStartValue = displayValue;
     if (field === 'unit_id') {
       editStartValue = prep.unit_id;
-    } else if (field === 'amount_mode') {
-      editStartValue = prep.amount_mode || 'per_person';
+    } else if (field === 'guests_per_amount') {
+      editStartValue = prep.guests_per_amount || 1;
     }
 
     return (
@@ -242,6 +215,13 @@ function PrepItemTable({ menuItemId, prepItems, itemCosts, guestCount, onPrepIte
         {displayValue ?? '--'}
       </span>
     );
+  };
+
+  // Format the "per X" display
+  const formatPerGuests = (guestsPerAmount) => {
+    const num = guestsPerAmount || 1;
+    if (num === 1) return '/pp';
+    return `/${num}`;
   };
 
   return (
@@ -256,7 +236,8 @@ function PrepItemTable({ menuItemId, prepItems, itemCosts, guestCount, onPrepIte
             <tr>
               <th>Prep Item</th>
               <th className="text-center">Amount</th>
-              <th className="text-center">Type</th>
+              <th className="text-center">Per</th>
+              <th className="text-right">Qty Req</th>
               <th>Linked To</th>
               <th className="text-right">Unit Cost</th>
               <th className="text-right">Total</th>
@@ -268,11 +249,9 @@ function PrepItemTable({ menuItemId, prepItems, itemCosts, guestCount, onPrepIte
               const linkInfo = getLinkInfo(prep);
               const unitCost = getUnitCostForPrepItem(prep.id);
               const totalCost = getCostForPrepItem(prep.id);
-              const mode = prep.amount_mode || 'per_person';
+              const qtyRequired = getCalculatedAmount(prep.id);
               const unitAbbr = prep.unit_abbr || getUnitAbbr(prep.unit_id) || prep.amount_unit || '';
-              const amountField = mode === 'per_person' ? 'amount_per_guest' : 'base_amount';
-              const amountValue = mode === 'per_person' ? prep.amount_per_guest : prep.base_amount;
-              const modeLabel = AMOUNT_MODES.find(m => m.value === mode)?.label || '';
+              const guestsPerAmount = prep.guests_per_amount || 1;
 
               return (
                 <tr key={prep.id}>
@@ -281,12 +260,19 @@ function PrepItemTable({ menuItemId, prepItems, itemCosts, guestCount, onPrepIte
                   </td>
                   <td className="text-center prep-amount-cell">
                     <span className="prep-amount-group">
-                      {renderEditableCell(prep, amountField, amountValue, 'number', 'amount-value')}
+                      {renderEditableCell(prep, 'amount_per_guest', prep.amount_per_guest, 'number', 'amount-value')}
                       {renderEditableCell(prep, 'unit_id', unitAbbr || '--', 'text', 'amount-unit')}
                     </span>
                   </td>
                   <td className="text-center">
-                    {renderEditableCell(prep, 'amount_mode', modeLabel, 'text', 'prep-mode-badge')}
+                    {renderEditableCell(prep, 'guests_per_amount', formatPerGuests(guestsPerAmount), 'number', 'prep-per-badge')}
+                  </td>
+                  <td className="text-right prep-qty-cell">
+                    {qtyRequired > 0 ? (
+                      <span className="qty-required">
+                        {qtyRequired % 1 === 0 ? qtyRequired : qtyRequired.toFixed(2)} {unitAbbr}
+                      </span>
+                    ) : '--'}
                   </td>
                   <td className="prep-link-cell">
                     {linkInfo ? (
