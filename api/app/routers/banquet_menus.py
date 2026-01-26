@@ -832,21 +832,46 @@ def create_prep_item(item_id: int, prep: PrepItemCreate, current_user: dict = De
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Menu item not found or you don't have access")
 
+        # Check if guests_per_amount column exists (migration 014)
         cursor.execute("""
-            INSERT INTO banquet_prep_items (
-                banquet_menu_item_id, name, display_order, amount_per_guest, amount_unit,
-                unit_id, guests_per_amount,
-                vessel, vessel_id, vessel_count,
-                responsibility, product_id, recipe_id, common_product_id
-            )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            RETURNING id
-        """, (
-            item_id, prep.name, prep.display_order, prep.amount_per_guest, prep.amount_unit,
-            prep.unit_id, prep.guests_per_amount,
-            prep.vessel, prep.vessel_id, prep.vessel_count,
-            prep.responsibility, prep.product_id, prep.recipe_id, prep.common_product_id
-        ))
+            SELECT column_name FROM information_schema.columns
+            WHERE table_name = 'banquet_prep_items' AND column_name = 'guests_per_amount'
+        """)
+        has_guests_per_amount = cursor.fetchone() is not None
+
+        if has_guests_per_amount:
+            cursor.execute("""
+                INSERT INTO banquet_prep_items (
+                    banquet_menu_item_id, name, display_order, amount_per_guest, amount_unit,
+                    unit_id, guests_per_amount,
+                    vessel, vessel_id, vessel_count,
+                    responsibility, product_id, recipe_id, common_product_id
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id
+            """, (
+                item_id, prep.name, prep.display_order, prep.amount_per_guest, prep.amount_unit,
+                prep.unit_id, prep.guests_per_amount,
+                prep.vessel, prep.vessel_id, prep.vessel_count,
+                prep.responsibility, prep.product_id, prep.recipe_id, prep.common_product_id
+            ))
+        else:
+            # Fallback for pre-migration: use old columns
+            cursor.execute("""
+                INSERT INTO banquet_prep_items (
+                    banquet_menu_item_id, name, display_order, amount_per_guest, amount_unit,
+                    unit_id, amount_mode,
+                    vessel, vessel_id, vessel_count,
+                    responsibility, product_id, recipe_id, common_product_id
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id
+            """, (
+                item_id, prep.name, prep.display_order, prep.amount_per_guest, prep.amount_unit,
+                prep.unit_id, 'per_person',  # Default mode
+                prep.vessel, prep.vessel_id, prep.vessel_count,
+                prep.responsibility, prep.product_id, prep.recipe_id, prep.common_product_id
+            ))
 
         prep_id = cursor.fetchone()["id"]
         conn.commit()
@@ -892,6 +917,17 @@ def update_prep_item(prep_id: int, updates: PrepItemUpdate, current_user: dict =
         elif "common_product_id" in update_dict and update_dict["common_product_id"]:
             update_dict["product_id"] = None
             update_dict["recipe_id"] = None
+
+        # Check if guests_per_amount column exists (migration 014)
+        cursor.execute("""
+            SELECT column_name FROM information_schema.columns
+            WHERE table_name = 'banquet_prep_items' AND column_name = 'guests_per_amount'
+        """)
+        has_guests_per_amount = cursor.fetchone() is not None
+
+        # Remove guests_per_amount from update if column doesn't exist
+        if not has_guests_per_amount and "guests_per_amount" in update_dict:
+            del update_dict["guests_per_amount"]
 
         # Build update query
         update_fields = []
