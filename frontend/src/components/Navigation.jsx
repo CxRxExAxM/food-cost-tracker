@@ -86,6 +86,11 @@ function Navigation() {
                 Vessels
               </Link>
             )}
+            {isAdmin() && (
+              <Link to="/settings/conversions" className={`nav-link ${isActivePath('/settings/conversions') ? 'active' : ''}`}>
+                Conversions
+              </Link>
+            )}
             {user?.is_super_admin && (
               <Link to="/super-admin" className={`nav-link super-admin-link ${isActivePath('/super-admin') || isActivePath('/super-admin/organizations') ? 'active' : ''}`}>
                 Super Admin

@@ -14,6 +14,7 @@ import SuperAdminOrganizationDetail from './pages/SuperAdmin/OrganizationDetail'
 import SuperAdminAuditLogs from './pages/SuperAdmin/AuditLogs';
 import BanquetMenus from './pages/BanquetMenus/BanquetMenus';
 import Vessels from './pages/Settings/Vessels';
+import BaseConversions from './pages/Settings/BaseConversions';
 import ImpersonationBanner from './components/ImpersonationBanner';
 import './App.css';
 
@@ -162,6 +163,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <Vessels />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/settings/conversions"
+        element={
+          <ProtectedRoute>
+            <BaseConversions />
           </ProtectedRoute>
         }
       />
