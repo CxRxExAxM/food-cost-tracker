@@ -124,6 +124,31 @@
   margin: 0;
 }
 
+.dashboard-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.btn-export-pdf {
+  padding: var(--space-2) var(--space-4);
+  background: var(--color-blue-dim);
+  color: var(--color-blue);
+  border: 1px solid var(--color-blue);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-family: var(--font-primary);
+  cursor: pointer;
+  transition: all var(--transition-base) var(--ease-in-out);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.btn-export-pdf:hover {
+  background: var(--color-blue);
+  color: white;
+}
+
 .btn-edit-dashboard {
   padding: var(--space-2) var(--space-4);
   background: var(--bg-tertiary);

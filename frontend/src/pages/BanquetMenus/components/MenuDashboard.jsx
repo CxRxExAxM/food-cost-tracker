@@ -1,6 +1,12 @@
-import { Settings } from 'lucide-react';
+import { Settings, FileDown } from 'lucide-react';
+import { exportMenuToPdf } from '../utils/exportMenuPdf';
 
 function MenuDashboard({ menu, menuCost, guestCount, onGuestCountChange, onEditClick }) {
+  const handleExportPdf = () => {
+    if (menu) {
+      exportMenuToPdf(menu, menuCost, guestCount);
+    }
+  };
   const formatCurrency = (value) => {
     if (value === null || value === undefined) return '--';
     return `$${parseFloat(value).toFixed(2)}`;
@@ -24,10 +30,16 @@ function MenuDashboard({ menu, menuCost, guestCount, onGuestCountChange, onEditC
     <div className="menu-dashboard">
       <div className="dashboard-header">
         <h3 className="dashboard-title">Menu Overview</h3>
-        <button className="btn-edit-dashboard" onClick={onEditClick}>
-          <Settings size={16} />
-          Edit Settings
-        </button>
+        <div className="dashboard-actions">
+          <button className="btn-export-pdf" onClick={handleExportPdf} title="Export to PDF">
+            <FileDown size={16} />
+            Export PDF
+          </button>
+          <button className="btn-edit-dashboard" onClick={onEditClick}>
+            <Settings size={16} />
+            Edit Settings
+          </button>
+        </div>
       </div>
 
       <div className="dashboard-stats">
