@@ -13,7 +13,9 @@ const STORAGE_KEYS = {
   mealPeriod: 'banquetMenus_mealPeriod',
   serviceType: 'banquetMenus_serviceType',
   menuId: 'banquetMenus_menuId',
-  outletId: 'banquetMenus_outletId'
+  outletId: 'banquetMenus_outletId',
+  guestCount: 'banquetMenus_guestCount',
+  expandedItems: 'banquetMenus_expandedItems'
 };
 
 function BanquetMenus() {
@@ -24,29 +26,20 @@ function BanquetMenus() {
   const [serviceTypes, setServiceTypes] = useState([]);
   const [menus, setMenus] = useState([]);
 
-  // Selected values - initialize from localStorage
+  // Selected values - initialize from localStorage (will be validated when outlet loads)
   const [selectedMealPeriod, setSelectedMealPeriod] = useState(() => {
-    const savedOutletId = localStorage.getItem(STORAGE_KEYS.outletId);
-    if (savedOutletId === String(selectedOutlet?.id)) {
-      return localStorage.getItem(STORAGE_KEYS.mealPeriod) || '';
-    }
-    return '';
+    return localStorage.getItem(STORAGE_KEYS.mealPeriod) || '';
   });
   const [selectedServiceType, setSelectedServiceType] = useState(() => {
-    const savedOutletId = localStorage.getItem(STORAGE_KEYS.outletId);
-    if (savedOutletId === String(selectedOutlet?.id)) {
-      return localStorage.getItem(STORAGE_KEYS.serviceType) || '';
-    }
-    return '';
+    return localStorage.getItem(STORAGE_KEYS.serviceType) || '';
   });
   const [selectedMenuId, setSelectedMenuId] = useState(() => {
-    const savedOutletId = localStorage.getItem(STORAGE_KEYS.outletId);
-    if (savedOutletId === String(selectedOutlet?.id)) {
-      const saved = localStorage.getItem(STORAGE_KEYS.menuId);
-      return saved ? parseInt(saved, 10) : null;
-    }
-    return null;
+    const saved = localStorage.getItem(STORAGE_KEYS.menuId);
+    return saved ? parseInt(saved, 10) : null;
   });
+
+  // Track if selections have been validated against current outlet
+  const selectionsValidatedRef = useRef(false);
 
   // Track if this is initial load to restore selections
   const isInitialLoadRef = useRef(true);
@@ -54,7 +47,32 @@ function BanquetMenus() {
   // Current menu data
   const [currentMenu, setCurrentMenu] = useState(null);
   const [menuCost, setMenuCost] = useState(null);
-  const [guestCount, setGuestCount] = useState(0);
+  const [guestCount, setGuestCount] = useState(() => {
+    const saved = localStorage.getItem(STORAGE_KEYS.guestCount);
+    return saved ? parseInt(saved, 10) : 0;
+  });
+
+  // Expanded menu items - persisted in localStorage
+  const [expandedItems, setExpandedItems] = useState(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.expandedItems);
+      return saved ? new Set(JSON.parse(saved)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
+
+  // Ref for debounced cost refresh
+  const costRefreshTimeoutRef = useRef(null);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (costRefreshTimeoutRef.current) {
+        clearTimeout(costRefreshTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // UI state
   const [loading, setLoading] = useState(false);
@@ -87,16 +105,36 @@ function BanquetMenus() {
     }
   }, [selectedMenuId]);
 
-  // Fetch meal periods when outlet changes
+  // Persist guest count
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.guestCount, String(guestCount));
+  }, [guestCount]);
+
+  // Persist expanded items
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.expandedItems, JSON.stringify([...expandedItems]));
+  }, [expandedItems]);
+
+  // Validate and fetch when outlet becomes available
   useEffect(() => {
     if (selectedOutlet?.id) {
       const savedOutletId = localStorage.getItem(STORAGE_KEYS.outletId);
-      const outletChanged = savedOutletId !== String(selectedOutlet.id);
+      const outletMatches = savedOutletId === String(selectedOutlet.id);
 
-      fetchMealPeriods();
-
-      // Only reset selections if outlet actually changed
-      if (outletChanged && !isInitialLoadRef.current) {
+      // First time outlet loads - validate saved selections
+      if (!selectionsValidatedRef.current) {
+        selectionsValidatedRef.current = true;
+        if (!outletMatches) {
+          // Different outlet - clear saved selections
+          setSelectedMealPeriod('');
+          setSelectedServiceType('');
+          setSelectedMenuId(null);
+          setCurrentMenu(null);
+          setMenuCost(null);
+        }
+        localStorage.setItem(STORAGE_KEYS.outletId, String(selectedOutlet.id));
+      } else if (!outletMatches) {
+        // User changed outlets - reset selections
         setSelectedMealPeriod('');
         setSelectedServiceType('');
         setSelectedMenuId(null);
@@ -104,7 +142,10 @@ function BanquetMenus() {
         setMenuCost(null);
         localStorage.setItem(STORAGE_KEYS.outletId, String(selectedOutlet.id));
       }
-      // Mark initial load complete after a brief delay to allow cascades
+
+      fetchMealPeriods();
+
+      // Mark initial load complete after a brief delay
       setTimeout(() => {
         isInitialLoadRef.current = false;
       }, 500);
@@ -253,6 +294,31 @@ function BanquetMenus() {
     fetchMenuDetails();
   };
 
+  // Toggle expanded item
+  const toggleExpandedItem = (itemId) => {
+    setExpandedItems(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(itemId)) {
+        newSet.delete(itemId);
+      } else {
+        newSet.add(itemId);
+      }
+      return newSet;
+    });
+  };
+
+  // Debounced cost refresh for inline edits (doesn't refetch menu details)
+  const debouncedCostRefresh = useCallback(() => {
+    if (costRefreshTimeoutRef.current) {
+      clearTimeout(costRefreshTimeoutRef.current);
+    }
+    costRefreshTimeoutRef.current = setTimeout(() => {
+      if (selectedMenuId && guestCount > 0) {
+        fetchMenuCost();
+      }
+    }, 800); // 800ms debounce
+  }, [selectedMenuId, guestCount]);
+
   const handleGuestCountChange = (e) => {
     const value = parseInt(e.target.value, 10);
     if (!isNaN(value) && value >= 0) {
@@ -375,7 +441,10 @@ function BanquetMenus() {
                 menuItems={currentMenu.menu_items || []}
                 itemCosts={menuCost?.item_costs || []}
                 guestCount={guestCount}
+                expandedItems={expandedItems}
+                onToggleExpand={toggleExpandedItem}
                 onItemsChanged={handleMenuItemsChanged}
+                onInlineEdit={debouncedCostRefresh}
               />
             </>
           )}

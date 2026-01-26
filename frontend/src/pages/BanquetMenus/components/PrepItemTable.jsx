@@ -4,7 +4,7 @@ import { Trash2, Link } from 'lucide-react';
 import AddPrepItemModal from './AddPrepItemModal';
 import LinkPrepItemModal from './LinkPrepItemModal';
 
-function PrepItemTable({ menuItemId, prepItems, itemCosts, guestCount, onPrepItemsChanged }) {
+function PrepItemTable({ menuItemId, prepItems, itemCosts, guestCount, onPrepItemsChanged, onInlineEdit }) {
   const [showAddModal, setShowAddModal] = useState(false);
   const [linkingPrepItem, setLinkingPrepItem] = useState(null);
   const [units, setUnits] = useState([]);
@@ -94,8 +94,10 @@ function PrepItemTable({ menuItemId, prepItems, itemCosts, guestCount, onPrepIte
     // Save to server in background - don't trigger full reload for inline edits
     try {
       await axios.put(`/banquet-menus/prep/${prepId}`, updateData);
-      // Note: Costs will be stale until next add/delete/link operation or page refresh
-      // This is intentional to avoid jarring reloads during rapid editing
+      // Trigger debounced cost refresh
+      if (onInlineEdit) {
+        onInlineEdit();
+      }
     } catch (err) {
       console.error('Error saving prep item:', err);
       // Revert on error

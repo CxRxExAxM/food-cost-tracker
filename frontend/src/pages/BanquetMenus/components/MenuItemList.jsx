@@ -5,20 +5,9 @@ import PrepItemTable from './PrepItemTable';
 import AddItemModal from './AddItemModal';
 import EditItemModal from './EditItemModal';
 
-function MenuItemList({ menuId, menuItems, itemCosts, guestCount, onItemsChanged }) {
-  const [expandedItems, setExpandedItems] = useState(new Set());
+function MenuItemList({ menuId, menuItems, itemCosts, guestCount, expandedItems, onToggleExpand, onItemsChanged, onInlineEdit }) {
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
-
-  const toggleExpand = (itemId) => {
-    const newExpanded = new Set(expandedItems);
-    if (newExpanded.has(itemId)) {
-      newExpanded.delete(itemId);
-    } else {
-      newExpanded.add(itemId);
-    }
-    setExpandedItems(newExpanded);
-  };
 
   const getCostForItem = (itemId) => {
     const costData = itemCosts.find(c => c.menu_item_id === itemId);
@@ -69,7 +58,7 @@ function MenuItemList({ menuId, menuItems, itemCosts, guestCount, onItemsChanged
             <li key={item.id} className="menu-item-row">
               <div
                 className="menu-item-header"
-                onClick={() => toggleExpand(item.id)}
+                onClick={() => onToggleExpand(item.id)}
               >
                 <div className="menu-item-left">
                   <span className={`expand-icon ${expandedItems.has(item.id) ? 'expanded' : ''}`}>
@@ -114,6 +103,7 @@ function MenuItemList({ menuId, menuItems, itemCosts, guestCount, onItemsChanged
                   itemCosts={itemCosts.find(c => c.menu_item_id === item.id)?.prep_costs || []}
                   guestCount={guestCount}
                   onPrepItemsChanged={onItemsChanged}
+                  onInlineEdit={onInlineEdit}
                 />
               )}
             </li>
