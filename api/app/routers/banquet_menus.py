@@ -71,7 +71,9 @@ class PrepItemCreate(BaseModel):
     amount_per_guest: Optional[float] = None
     amount_unit: Optional[str] = None  # Legacy field, prefer unit_id
     unit_id: Optional[int] = None
-    guests_per_amount: Optional[int] = 1  # 1 = per person, 10 = per 10 guests
+    amount_mode: Optional[str] = 'per_person'  # Legacy: 'per_person', 'at_minimum', 'fixed'
+    base_amount: Optional[float] = None  # Legacy: for at_minimum/fixed modes
+    guests_per_amount: Optional[int] = 1  # New: 1 = per person, 10 = per 10 guests
     vessel: Optional[str] = None  # Legacy text field
     vessel_id: Optional[int] = None  # FK to vessels table
     vessel_count: Optional[float] = None  # Number of vessels
@@ -88,7 +90,9 @@ class PrepItemUpdate(BaseModel):
     amount_per_guest: Optional[float] = None
     amount_unit: Optional[str] = None  # Legacy field, prefer unit_id
     unit_id: Optional[int] = None
-    guests_per_amount: Optional[int] = None  # 1 = per person, 10 = per 10 guests
+    amount_mode: Optional[str] = None  # Legacy: 'per_person', 'at_minimum', 'fixed'
+    base_amount: Optional[float] = None  # Legacy: for at_minimum/fixed modes
+    guests_per_amount: Optional[int] = None  # New: 1 = per person, 10 = per 10 guests
     vessel: Optional[str] = None  # Legacy text field
     vessel_id: Optional[int] = None  # FK to vessels table
     vessel_count: Optional[float] = None  # Number of vessels
@@ -489,11 +493,10 @@ def calculate_menu_cost(
                     )
                     unit_cost = unit_cost * Decimal(str(conversion_factor))
 
-                # Calculate amount based on guests_per_amount
-                # guests_per_amount = 1 means "per person"
-                # guests_per_amount = 10 means "per 10 guests"
-                guests_per_amount = Decimal(str(prep.get("guests_per_amount") or 1))
+                # Calculate amount - supports both old (amount_mode) and new (guests_per_amount) formats
                 calculated_amount = Decimal("0")
+                amount_mode = prep.get("amount_mode") or "per_person"
+                guests_per_amount = prep.get("guests_per_amount") or 1
 
                 # Check if using vessel-based calculation
                 if prep.get("vessel_id") and prep.get("vessel_count"):
@@ -507,12 +510,22 @@ def calculate_menu_cost(
                         capacity = Decimal("0")
                     calculated_amount = vessel_count * capacity
                 else:
-                    # Standard calculation: amount * (guests / guests_per_amount)
-                    amount_per_guest = Decimal(str(prep.get("amount_per_guest") or 0))
-                    if guests_per_amount > 0:
-                        calculated_amount = amount_per_guest * (guests / guests_per_amount)
+                    # Check for new guests_per_amount field first
+                    if prep.get("guests_per_amount") is not None:
+                        # New calculation: amount * (guests / guests_per_amount)
+                        amount_per_guest = Decimal(str(prep.get("amount_per_guest") or 0))
+                        gpa = Decimal(str(guests_per_amount))
+                        if gpa > 0:
+                            calculated_amount = amount_per_guest * (guests / gpa)
+                        else:
+                            calculated_amount = amount_per_guest * guests
                     else:
-                        calculated_amount = amount_per_guest * guests
+                        # Legacy calculation using amount_mode
+                        if amount_mode == "per_person":
+                            amount_per_guest = Decimal(str(prep.get("amount_per_guest") or 0))
+                            calculated_amount = amount_per_guest * guests
+                        elif amount_mode in ("at_minimum", "fixed"):
+                            calculated_amount = Decimal(str(prep.get("base_amount") or 0))
 
                 prep_total = unit_cost * calculated_amount
 
@@ -522,7 +535,9 @@ def calculate_menu_cost(
                     "unit_cost": float(unit_cost),
                     "unit_id": prep.get("unit_id"),
                     "pricing_unit_id": pricing_unit_id,
+                    "amount_mode": amount_mode,
                     "amount_per_guest": float(prep.get("amount_per_guest") or 0),
+                    "base_amount": float(prep.get("base_amount") or 0),
                     "guests_per_amount": int(guests_per_amount),
                     "vessel_id": prep.get("vessel_id"),
                     "vessel_count": float(prep.get("vessel_count") or 0),
@@ -832,46 +847,23 @@ def create_prep_item(item_id: int, prep: PrepItemCreate, current_user: dict = De
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Menu item not found or you don't have access")
 
-        # Check if guests_per_amount column exists (migration 014)
+        # Use old columns (amount_mode) which always exist
+        # The cost calculation will use guests_per_amount if available, otherwise derive from amount_mode
         cursor.execute("""
-            SELECT column_name FROM information_schema.columns
-            WHERE table_name = 'banquet_prep_items' AND column_name = 'guests_per_amount'
-        """)
-        has_guests_per_amount = cursor.fetchone() is not None
-
-        if has_guests_per_amount:
-            cursor.execute("""
-                INSERT INTO banquet_prep_items (
-                    banquet_menu_item_id, name, display_order, amount_per_guest, amount_unit,
-                    unit_id, guests_per_amount,
-                    vessel, vessel_id, vessel_count,
-                    responsibility, product_id, recipe_id, common_product_id
-                )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                RETURNING id
-            """, (
-                item_id, prep.name, prep.display_order, prep.amount_per_guest, prep.amount_unit,
-                prep.unit_id, prep.guests_per_amount,
-                prep.vessel, prep.vessel_id, prep.vessel_count,
-                prep.responsibility, prep.product_id, prep.recipe_id, prep.common_product_id
-            ))
-        else:
-            # Fallback for pre-migration: use old columns
-            cursor.execute("""
-                INSERT INTO banquet_prep_items (
-                    banquet_menu_item_id, name, display_order, amount_per_guest, amount_unit,
-                    unit_id, amount_mode,
-                    vessel, vessel_id, vessel_count,
-                    responsibility, product_id, recipe_id, common_product_id
-                )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                RETURNING id
-            """, (
-                item_id, prep.name, prep.display_order, prep.amount_per_guest, prep.amount_unit,
-                prep.unit_id, 'per_person',  # Default mode
-                prep.vessel, prep.vessel_id, prep.vessel_count,
-                prep.responsibility, prep.product_id, prep.recipe_id, prep.common_product_id
-            ))
+            INSERT INTO banquet_prep_items (
+                banquet_menu_item_id, name, display_order, amount_per_guest, amount_unit,
+                unit_id, amount_mode, base_amount,
+                vessel, vessel_id, vessel_count,
+                responsibility, product_id, recipe_id, common_product_id
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
+        """, (
+            item_id, prep.name, prep.display_order, prep.amount_per_guest, prep.amount_unit,
+            prep.unit_id, prep.amount_mode or 'per_person', prep.base_amount,
+            prep.vessel, prep.vessel_id, prep.vessel_count,
+            prep.responsibility, prep.product_id, prep.recipe_id, prep.common_product_id
+        ))
 
         prep_id = cursor.fetchone()["id"]
         conn.commit()
