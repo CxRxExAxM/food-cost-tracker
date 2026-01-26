@@ -24,70 +24,78 @@ class ProductCreate(BaseModel):
 @router.post("")
 def create_product(product: ProductCreate, current_user: dict = Depends(get_current_user)):
     """Create a new product with optional distributor link and price."""
-    with get_db() as conn:
-        cursor = conn.cursor()
-        organization_id = current_user["organization_id"]
+    try:
+        with get_db() as conn:
+            cursor = conn.cursor()
+            organization_id = current_user["organization_id"]
 
-        # Determine outlet_id
-        outlet_id = product.outlet_id
-        if not outlet_id:
-            # No outlet specified - get first available outlet for user
-            from ..auth import get_user_outlet_ids
-            user_outlet_ids = get_user_outlet_ids(current_user["id"])
+            # Determine outlet_id
+            outlet_id = product.outlet_id
+            if not outlet_id:
+                # No outlet specified - get first available outlet for user
+                from ..auth import get_user_outlet_ids
+                user_outlet_ids = get_user_outlet_ids(current_user["id"])
 
-            if not user_outlet_ids:
-                # Org-wide admin - use first outlet in organization
-                cursor.execute("""
-                    SELECT id FROM outlets
-                    WHERE organization_id = %s AND is_active = 1
-                    ORDER BY id LIMIT 1
-                """, (organization_id,))
-                outlet_row = cursor.fetchone()
-                if not outlet_row:
-                    raise HTTPException(status_code=400, detail="No active outlets found in organization")
-                outlet_id = outlet_row["id"]
+                if not user_outlet_ids:
+                    # Org-wide admin - use first outlet in organization
+                    cursor.execute("""
+                        SELECT id FROM outlets
+                        WHERE organization_id = %s AND is_active = 1
+                        ORDER BY id LIMIT 1
+                    """, (organization_id,))
+                    outlet_row = cursor.fetchone()
+                    if not outlet_row:
+                        raise HTTPException(status_code=400, detail="No active outlets found in organization")
+                    outlet_id = outlet_row["id"]
+                else:
+                    # Use user's first assigned outlet
+                    outlet_id = user_outlet_ids[0]
             else:
-                # Use user's first assigned outlet
-                outlet_id = user_outlet_ids[0]
-        else:
-            # Outlet specified - verify user has access
-            if not check_outlet_access(current_user, outlet_id):
-                raise HTTPException(status_code=403, detail="You don't have access to this outlet")
+                # Outlet specified - verify user has access
+                if not check_outlet_access(current_user, outlet_id):
+                    raise HTTPException(status_code=403, detail="You don't have access to this outlet")
 
-        # Insert the product with organization_id and outlet_id
-        cursor.execute("""
-            INSERT INTO products (name, brand, pack, size, unit_id, is_catch_weight, organization_id, outlet_id)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-            RETURNING id
-        """, (product.name, product.brand, product.pack, product.size,
-              product.unit_id, int(product.is_catch_weight), organization_id, outlet_id))
-
-        product_id = cursor.fetchone()["id"]
-
-        # If distributor specified, create distributor_product link
-        if product.distributor_id:
+            # Insert the product with organization_id and outlet_id
             cursor.execute("""
-                INSERT INTO distributor_products (distributor_id, product_id, distributor_name, organization_id, outlet_id)
-                VALUES (%s, %s, %s, %s, %s)
+                INSERT INTO products (name, brand, pack, size, unit_id, is_catch_weight, organization_id, outlet_id)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
-            """, (product.distributor_id, product_id, product.name, organization_id, outlet_id))
+            """, (product.name, product.brand, product.pack, product.size,
+                  product.unit_id, int(product.is_catch_weight), organization_id, outlet_id))
 
-            distributor_product_id = cursor.fetchone()["id"]
+            product_id = cursor.fetchone()["id"]
 
-            # If price specified, add to price_history
-            if product.case_price is not None:
-                unit_price = None
-                if product.pack and product.size:
-                    unit_price = round(product.case_price / (product.pack * product.size), 2)
-
+            # If distributor specified, create distributor_product link
+            if product.distributor_id:
                 cursor.execute("""
-                    INSERT INTO price_history (distributor_product_id, case_price, unit_price, effective_date)
-                    VALUES (%s, %s, %s, CURRENT_DATE)
-                """, (distributor_product_id, product.case_price, unit_price))
+                    INSERT INTO distributor_products (distributor_id, product_id, distributor_name, organization_id, outlet_id)
+                    VALUES (%s, %s, %s, %s, %s)
+                    RETURNING id
+                """, (product.distributor_id, product_id, product.name, organization_id, outlet_id))
 
-        conn.commit()
+                distributor_product_id = cursor.fetchone()["id"]
 
-        return {"message": "Product created successfully", "product_id": product_id, "outlet_id": outlet_id}
+                # If price specified, add to price_history
+                if product.case_price is not None:
+                    unit_price = None
+                    if product.pack and product.size:
+                        unit_price = round(product.case_price / (product.pack * product.size), 2)
+
+                    cursor.execute("""
+                        INSERT INTO price_history (distributor_product_id, case_price, unit_price, effective_date, outlet_id)
+                        VALUES (%s, %s, %s, CURRENT_DATE, %s)
+                    """, (distributor_product_id, product.case_price, unit_price, outlet_id))
+
+            conn.commit()
+
+            return {"message": "Product created successfully", "product_id": product_id, "outlet_id": outlet_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        print(f"[ERROR] Create product failed: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to create product: {str(e)}")
 
 
 class ProductListResponse(BaseModel):

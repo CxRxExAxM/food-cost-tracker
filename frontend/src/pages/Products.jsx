@@ -71,6 +71,14 @@ function Products() {
     outlet_id: currentOutlet?.id && currentOutlet.id !== 'all' ? currentOutlet.id : ''
   });
 
+  // Update newProduct outlet_id when currentOutlet changes
+  useEffect(() => {
+    setNewProduct(prev => ({
+      ...prev,
+      outlet_id: currentOutlet?.id && currentOutlet.id !== 'all' ? currentOutlet.id : ''
+    }));
+  }, [currentOutlet]);
+
   useEffect(() => {
     fetchProducts();
     fetchCommonProducts();
