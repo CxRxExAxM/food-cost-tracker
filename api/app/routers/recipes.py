@@ -3,6 +3,7 @@ from typing import Optional
 from ..database import get_db, dicts_from_rows, dict_from_row
 from ..schemas import Recipe, RecipeCreate, RecipeWithIngredients, RecipeWithCost
 from ..auth import get_current_user, build_outlet_filter, check_outlet_access
+from .banquet_menus import get_unit_conversion_factor
 import json
 
 router = APIRouter(prefix="/recipes", tags=["recipes"])
@@ -446,7 +447,8 @@ def calculate_recipe_cost(recipe_id: int, current_user: dict = Depends(get_curre
 
         # Calculate costs recursively - use recipe's outlet_id for product filtering
         ingredients_with_costs, total_cost = _calculate_ingredient_costs(
-            cursor, recipe_id, recipe['outlet_id'], visited=set()
+            cursor, recipe_id, recipe['outlet_id'], visited=set(),
+            org_id=current_user["organization_id"]
         )
 
         # Calculate cost per serving (use servings field, fallback to yield_amount for backwards compat)
@@ -474,7 +476,7 @@ def calculate_recipe_cost(recipe_id: int, current_user: dict = Depends(get_curre
         }
 
 
-def _calculate_ingredient_costs(cursor, recipe_id: int, outlet_id: int, visited: set) -> tuple[list[dict], float]:
+def _calculate_ingredient_costs(cursor, recipe_id: int, outlet_id: int, visited: set, org_id: int = None) -> tuple[list[dict], float]:
     """
     Recursively calculate costs for all ingredients in a recipe.
 
@@ -483,10 +485,17 @@ def _calculate_ingredient_costs(cursor, recipe_id: int, outlet_id: int, visited:
         recipe_id: Recipe ID to calculate
         outlet_id: Outlet ID to filter products (for outlet-specific pricing)
         visited: Set of recipe IDs already visited (prevents infinite recursion)
+        org_id: Organization ID for conversion lookups (will be looked up from outlet if not provided)
 
     Returns:
         Tuple of (ingredients_with_costs, total_cost)
     """
+    # Get org_id from outlet if not provided
+    if org_id is None and outlet_id:
+        cursor.execute("SELECT organization_id FROM outlets WHERE id = %s", (outlet_id,))
+        outlet_row = cursor.fetchone()
+        if outlet_row:
+            org_id = outlet_row['organization_id']
     # Prevent infinite recursion from circular sub-recipe references
     if recipe_id in visited:
         return [], 0.0
@@ -561,39 +570,40 @@ def _calculate_ingredient_costs(cursor, recipe_id: int, outlet_id: int, visited:
                     total_cost += ing_cost
 
                 else:
-                    # Units don't match - try to find conversion
-                    cursor.execute("""
-                        SELECT conversion_factor, u1.abbreviation as from_unit, u2.abbreviation as to_unit
-                        FROM product_conversions pc
-                        JOIN units u1 ON u1.id = pc.from_unit_id
-                        JOIN units u2 ON u2.id = pc.to_unit_id
-                        WHERE pc.common_product_id = %s
-                          AND pc.from_unit_id = %s
-                          AND pc.to_unit_id = %s
-                    """, (ing['common_product_id'], ingredient_unit_id, product_unit_id))
+                    # Units don't match - use shared conversion logic
+                    # This checks: product conversions, chained conversions, and base conversions
+                    conversion_factor = get_unit_conversion_factor(
+                        cursor,
+                        ing['common_product_id'],
+                        ingredient_unit_id,
+                        product_unit_id,
+                        org_id,
+                        outlet_id
+                    )
 
-                    conversion = dict_from_row(cursor.fetchone())
-
-                    if conversion:
-                        # Apply conversion: ingredient quantity → product quantity
-                        converted_quantity = ing['quantity'] * conversion['conversion_factor']
+                    if conversion_factor != 1.0 or ingredient_unit_id == product_unit_id:
+                        # Conversion found or units actually match
+                        converted_quantity = ing['quantity'] * conversion_factor
                         ing_cost = converted_quantity * unit_price * (100 / yield_pct)
                         has_price = True
-                        price_source = f"{price_row['distributor_name']}: {price_row['product_name']} (converted {conversion['from_unit']} → {conversion['to_unit']})"
+                        if conversion_factor != 1.0:
+                            price_source = f"{price_row['distributor_name']}: {price_row['product_name']} (converted {ing.get('unit_abbreviation')} → {price_row.get('product_unit')})"
+                        else:
+                            price_source = f"{price_row['distributor_name']}: {price_row['product_name']}"
                         total_cost += ing_cost
                     else:
                         # No conversion available - log warning and use direct calc (may be inaccurate)
                         print(f"[WARN] No conversion from unit {ingredient_unit_id} ({ing.get('unit_abbreviation')}) to {product_unit_id} ({price_row.get('product_unit')}) for common_product {ing['common_product_id']}")
                         ing_cost = ing['quantity'] * unit_price * (100 / yield_pct)
                         has_price = True
-                        price_source = f"{price_row['distributor_name']}: {price_row['product_name']} (⚠️ unit mismatch: {ing.get('unit_abbreviation')} vs {price_row.get('product_unit')})"
+                        price_source = f"{price_row['distributor_name']}: {price_row['product_name']} (unit mismatch: {ing.get('unit_abbreviation')} vs {price_row.get('product_unit')})"
                         total_cost += ing_cost
 
         elif ing.get('sub_recipe_id'):
             # Recursively calculate sub-recipe cost - use sub-recipe's outlet_id
             sub_outlet_id = ing.get('sub_recipe_outlet_id', outlet_id)  # Fallback to parent if missing
             _, sub_recipe_total = _calculate_ingredient_costs(
-                cursor, ing['sub_recipe_id'], sub_outlet_id, visited.copy()
+                cursor, ing['sub_recipe_id'], sub_outlet_id, visited.copy(), org_id
             )
 
             if sub_recipe_total > 0:

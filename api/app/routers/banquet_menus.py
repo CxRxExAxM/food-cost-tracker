@@ -646,7 +646,7 @@ def calculate_menu_cost(
                         recipe_outlet_id = recipe_info.get("outlet_id") or menu.get("outlet_id")
                         # Calculate total recipe cost using shared function
                         _, recipe_total_cost = _calculate_ingredient_costs(
-                            cursor, prep["recipe_id"], recipe_outlet_id, visited=set()
+                            cursor, prep["recipe_id"], recipe_outlet_id, visited=set(), org_id=org_id
                         )
 
                         recipe_yield = recipe_info.get("yield_amount")
