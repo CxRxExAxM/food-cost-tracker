@@ -1,5 +1,5 @@
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 
 /**
  * Export banquet menu to PDF
@@ -32,7 +32,7 @@ export function exportMenuToPdf(menu, menuCost, guestCount) {
     ['Actual FC%', `${(menuCost?.actual_food_cost_pct || 0).toFixed(1)}%`],
   ];
 
-  doc.autoTable({
+  autoTable(doc, {
     startY: yPos,
     head: [],
     body: summaryData,
@@ -95,7 +95,7 @@ export function exportMenuToPdf(menu, menuCost, guestCount) {
         ];
       });
 
-      doc.autoTable({
+      autoTable(doc, {
         startY: yPos,
         head: [['Prep Item', 'Amount', 'Qty Req', 'Linked To', 'Unit $', 'Total', 'Notes']],
         body: tableData,
