@@ -17,6 +17,7 @@ class ProductCreate(BaseModel):
     unit_id: Optional[int] = None
     is_catch_weight: bool = False
     distributor_id: Optional[int] = None
+    distributor_sku: Optional[str] = None
     case_price: Optional[float] = None
     outlet_id: Optional[int] = None  # Added for multi-outlet support
 
@@ -68,10 +69,10 @@ def create_product(product: ProductCreate, current_user: dict = Depends(get_curr
             # If distributor specified, create distributor_product link
             if product.distributor_id:
                 cursor.execute("""
-                    INSERT INTO distributor_products (distributor_id, product_id, distributor_name, organization_id, outlet_id)
-                    VALUES (%s, %s, %s, %s, %s)
+                    INSERT INTO distributor_products (distributor_id, product_id, distributor_sku, distributor_name, organization_id, outlet_id)
+                    VALUES (%s, %s, %s, %s, %s, %s)
                     RETURNING id
-                """, (product.distributor_id, product_id, product.name, organization_id, outlet_id))
+                """, (product.distributor_id, product_id, product.distributor_sku or '', product.name, organization_id, outlet_id))
 
                 distributor_product_id = cursor.fetchone()["id"]
 

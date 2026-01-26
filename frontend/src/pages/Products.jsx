@@ -63,6 +63,7 @@ function Products() {
     name: '',
     brand: '',
     distributor_id: '',
+    distributor_sku: '',
     pack: '',
     size: '',
     unit_id: '',
@@ -398,6 +399,7 @@ function Products() {
         unit_id: newProduct.unit_id ? parseInt(newProduct.unit_id) : null,
         is_catch_weight: newProduct.is_catch_weight,
         distributor_id: newProduct.distributor_id ? parseInt(newProduct.distributor_id) : null,
+        distributor_sku: newProduct.distributor_sku.trim() || null,
         case_price: newProduct.case_price ? parseFloat(newProduct.case_price) : null,
         outlet_id: newProduct.outlet_id ? parseInt(newProduct.outlet_id) : null
       };
@@ -837,6 +839,7 @@ function Products() {
                 {renderSortableHeader('name', 'Product Name')}
                 {renderSortableHeader('brand', 'Brand')}
                 {renderSortableHeader('distributor_name', 'Distributor')}
+                <th>SKU</th>
                 {renderSortableHeader('pack', 'Pack', 'text-center')}
                 {renderSortableHeader('size', 'Size', 'text-center')}
                 {renderSortableHeader('unit', 'Unit', 'text-center')}
@@ -881,6 +884,15 @@ function Products() {
                         <option key={d.id} value={d.id}>{d.name}</option>
                       ))}
                     </select>
+                  </td>
+                  <td>
+                    <input
+                      type="text"
+                      value={newProduct.distributor_sku}
+                      onChange={(e) => setNewProduct({ ...newProduct, distributor_sku: e.target.value })}
+                      placeholder="SKU"
+                      className="inline-edit-input"
+                    />
                   </td>
                   <td>
                     <input
@@ -948,6 +960,7 @@ function Products() {
                   <td className="product-name">{renderEditableCell(product, 'name', product.name)}</td>
                   <td className="brand-cell">{renderEditableCell(product, 'brand', product.brand)}</td>
                   <td className="distributor-cell">{product.distributor_name}</td>
+                  <td>{product.distributor_sku || ''}</td>
                   <td className="text-center">{renderEditableCell(product, 'pack', product.pack)}</td>
                   <td className="text-center">{renderEditableCell(product, 'size', product.size)}</td>
                   <td className="text-center">{renderEditableCell(product, 'unit_id', product.unit_abbreviation)}</td>
