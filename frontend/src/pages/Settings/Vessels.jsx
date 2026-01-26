@@ -50,7 +50,8 @@ function Vessels() {
   const loadCommonProducts = async () => {
     try {
       const response = await axios.get('/common-products?limit=500');
-      setCommonProducts(response.data.products || []);
+      // API returns array directly, not { products: [] }
+      setCommonProducts(Array.isArray(response.data) ? response.data : []);
     } catch (err) {
       console.error('Error loading common products:', err);
     }
