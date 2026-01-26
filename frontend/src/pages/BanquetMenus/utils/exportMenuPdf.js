@@ -82,13 +82,13 @@ export function exportMenuToPdf(menu, menuCost, guestCount) {
         const prepCost = prepCosts.find(c => c.prep_item_id === prep.id);
         const unitAbbr = prep.unit_abbr || prep.amount_unit || '';
         const guestsPerAmount = prep.guests_per_amount || 1;
-        const perLabel = guestsPerAmount === 1 ? '/pp' : `/${guestsPerAmount}`;
+        const perLabel = guestsPerAmount === 1 ? 'pp' : `${guestsPerAmount}`;
 
         return [
           prep.name,
-          `${prep.amount_per_guest || '--'} ${unitAbbr} ${perLabel}`,
+          `${prep.amount_per_guest || '--'} ${unitAbbr}`,
+          perLabel,
           prepCost ? `${prepCost.calculated_amount.toFixed(1)} ${unitAbbr}` : '--',
-          prep.common_product_name || prep.product_name || prep.recipe_name || '--',
           prepCost ? `$${prepCost.unit_cost.toFixed(2)}` : '--',
           prepCost ? `$${prepCost.total_cost.toFixed(2)}` : '--',
           '' // Notes column
@@ -97,7 +97,7 @@ export function exportMenuToPdf(menu, menuCost, guestCount) {
 
       autoTable(doc, {
         startY: yPos,
-        head: [['Prep Item', 'Amount', 'Qty Req', 'Linked To', 'Unit $', 'Total', 'Notes']],
+        head: [['Prep Item', 'Amount', 'Per', 'Qty Req', 'Unit $', 'Total', 'Notes']],
         body: tableData,
         theme: 'grid',
         styles: {
@@ -111,13 +111,13 @@ export function exportMenuToPdf(menu, menuCost, guestCount) {
           fontSize: 8
         },
         columnStyles: {
-          0: { cellWidth: 35 },  // Prep Item
+          0: { cellWidth: 38 },  // Prep Item
           1: { cellWidth: 25 },  // Amount
-          2: { cellWidth: 22 },  // Qty Req
-          3: { cellWidth: 30 },  // Linked To
+          2: { cellWidth: 15 },  // Per
+          3: { cellWidth: 25 },  // Qty Req
           4: { cellWidth: 18, halign: 'right' },  // Unit $
           5: { cellWidth: 18, halign: 'right' },  // Total
-          6: { cellWidth: 32 }   // Notes - extra space for writing
+          6: { cellWidth: 41 }   // Notes - extra space for writing
         },
         margin: { left: 15, right: 15 }
       });
