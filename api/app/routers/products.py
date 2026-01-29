@@ -113,13 +113,14 @@ def list_products(
     distributor_id: Optional[int] = None,
     common_product_id: Optional[int] = None,
     unmapped_only: bool = False,
+    mapped_only: bool = False,
     outlet_id: Optional[int] = None,
     sort_by: str = Query("name", description="Column to sort by"),
     sort_dir: str = Query("asc", description="Sort direction: asc or desc"),
     current_user: dict = Depends(get_current_user)
 ):
     """
-    List products with optional filtering and sorting .
+    List products with optional filtering and sorting.
 
     - **skip**: Number of records to skip (pagination)
     - **limit**: Maximum number of records to return
@@ -127,6 +128,7 @@ def list_products(
     - **distributor_id**: Filter by distributor
     - **common_product_id**: Filter by common product mapping
     - **unmapped_only**: Show only products not mapped to common_products
+    - **mapped_only**: Show only products mapped to common_products
     - **outlet_id**: Filter by specific outlet (must be one user has access to)
     - **sort_by**: Column to sort by (name, brand, distributor_name, pack, size, case_price, unit_price)
     - **sort_dir**: Sort direction (asc or desc)
@@ -185,6 +187,9 @@ def list_products(
 
         if unmapped_only:
             where_clause += " AND p.common_product_id IS NULL"
+
+        if mapped_only:
+            where_clause += " AND p.common_product_id IS NOT NULL"
 
         # Count total matching products
         count_query = f"""

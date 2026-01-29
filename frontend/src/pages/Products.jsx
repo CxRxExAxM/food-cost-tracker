@@ -33,7 +33,10 @@ function Products() {
   const [commonProducts, setCommonProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [unmappedOnly, setUnmappedOnly] = useState(false);
+  const [mappingFilter, setMappingFilter] = useState('all'); // 'all', 'mapped', 'unmapped'
+  const [distributorFilter, setDistributorFilter] = useState(''); // distributor_id or empty
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize] = useState(100);
   const [editingProductId, setEditingProductId] = useState(null);
   const [mappingInput, setMappingInput] = useState('');
   const [filteredCommonProducts, setFilteredCommonProducts] = useState([]);
@@ -85,17 +88,25 @@ function Products() {
     fetchCommonProducts();
     fetchDistributors();
     fetchUnits();
-  }, [search, unmappedOnly, sortColumn, sortDirection, currentOutlet]);
+  }, [search, mappingFilter, distributorFilter, sortColumn, sortDirection, currentOutlet, currentPage]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, mappingFilter, distributorFilter, sortColumn, sortDirection, currentOutlet]);
 
   const fetchProducts = async () => {
     try {
       setLoading(true);
       const params = {
-        limit: 100,
+        limit: pageSize,
+        skip: (currentPage - 1) * pageSize,
         sort_by: sortColumn,
         sort_dir: sortDirection,
         ...(search && { search }),
-        ...(unmappedOnly && { unmapped_only: true }),
+        ...(mappingFilter === 'unmapped' && { unmapped_only: true }),
+        ...(mappingFilter === 'mapped' && { mapped_only: true }),
+        ...(distributorFilter && { distributor_id: parseInt(distributorFilter) }),
         // Filter by outlet if specific outlet selected (not "All Outlets")
         ...(currentOutlet && currentOutlet.id !== 'all' && { outlet_id: currentOutlet.id })
       };
@@ -801,18 +812,30 @@ function Products() {
           className="search-input"
         />
 
-        <label className="checkbox-label">
-          <input
-            type="checkbox"
-            checked={unmappedOnly}
-            onChange={(e) => setUnmappedOnly(e.target.checked)}
-          />
-          Show unmapped only
-        </label>
+        <select
+          value={mappingFilter}
+          onChange={(e) => setMappingFilter(e.target.value)}
+          className="filter-select"
+        >
+          <option value="all">All Products</option>
+          <option value="mapped">Mapped Only</option>
+          <option value="unmapped">Unmapped Only</option>
+        </select>
+
+        <select
+          value={distributorFilter}
+          onChange={(e) => setDistributorFilter(e.target.value)}
+          className="filter-select"
+        >
+          <option value="">All Distributors</option>
+          {distributors.map(d => (
+            <option key={d.id} value={d.id}>{d.name}</option>
+          ))}
+        </select>
 
         <div className="results-count">
           {!loading && (totalCount > products.length
-            ? `${products.length} of ${totalCount} products`
+            ? `Showing ${(currentPage - 1) * pageSize + 1}-${Math.min(currentPage * pageSize, totalCount)} of ${totalCount}`
             : `${totalCount} products`)}
         </div>
 
@@ -826,6 +849,68 @@ function Products() {
           {showAddProduct ? '✕ Cancel' : '+ Add Product'}
         </button>
       </div>
+
+      {/* Pagination Controls */}
+      {!loading && totalCount > pageSize && (
+        <div className="pagination">
+          <button
+            className="pagination-btn"
+            onClick={() => setCurrentPage(1)}
+            disabled={currentPage === 1}
+          >
+            ««
+          </button>
+          <button
+            className="pagination-btn"
+            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+            disabled={currentPage === 1}
+          >
+            «
+          </button>
+
+          {/* Page numbers */}
+          {(() => {
+            const totalPages = Math.ceil(totalCount / pageSize);
+            const pages = [];
+            let startPage = Math.max(1, currentPage - 2);
+            let endPage = Math.min(totalPages, startPage + 4);
+            if (endPage - startPage < 4) {
+              startPage = Math.max(1, endPage - 4);
+            }
+            for (let i = startPage; i <= endPage; i++) {
+              pages.push(
+                <button
+                  key={i}
+                  className={`pagination-btn ${currentPage === i ? 'active' : ''}`}
+                  onClick={() => setCurrentPage(i)}
+                >
+                  {i}
+                </button>
+              );
+            }
+            return pages;
+          })()}
+
+          <button
+            className="pagination-btn"
+            onClick={() => setCurrentPage(p => Math.min(Math.ceil(totalCount / pageSize), p + 1))}
+            disabled={currentPage >= Math.ceil(totalCount / pageSize)}
+          >
+            »
+          </button>
+          <button
+            className="pagination-btn"
+            onClick={() => setCurrentPage(Math.ceil(totalCount / pageSize))}
+            disabled={currentPage >= Math.ceil(totalCount / pageSize)}
+          >
+            »»
+          </button>
+
+          <span className="pagination-info">
+            Page {currentPage} of {Math.ceil(totalCount / pageSize)}
+          </span>
+        </div>
+      )}
 
       {loading ? (
         <div className="loading">Loading products...</div>
