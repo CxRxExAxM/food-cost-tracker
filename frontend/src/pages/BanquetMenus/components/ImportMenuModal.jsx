@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import axios from '../../../lib/axios';
 
 function ImportMenuModal({ outletId, onClose, onImportComplete }) {
@@ -6,6 +6,27 @@ function ImportMenuModal({ outletId, onClose, onImportComplete }) {
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
+  const [fileName, setFileName] = useState(null);
+  const fileInputRef = useRef(null);
+
+  const handleFileSelect = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setFileName(file.name);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setCsvText(event.target.result);
+    };
+    reader.onerror = () => {
+      setError('Failed to read file');
+    };
+    reader.readAsText(file);
+  };
+
+  const handleBrowseClick = () => {
+    fileInputRef.current?.click();
+  };
 
   const parseCSV = (text) => {
     const lines = text.trim().split('\n');
@@ -172,17 +193,39 @@ function ImportMenuModal({ outletId, onClose, onImportComplete }) {
           ) : (
             <>
               <p className="import-instructions">
-                Paste CSV data with the following columns:
+                Upload a CSV file or paste CSV data with the following columns:
                 <br />
                 <code>meal_period, service_type, menu_name, menu_item, prep_item, choice_count</code>
                 <br />
                 <small>The prep_item and choice_count columns are optional.</small>
               </p>
 
+              <div className="file-upload-row">
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleFileSelect}
+                  accept=".csv,.txt"
+                  style={{ display: 'none' }}
+                />
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={handleBrowseClick}
+                  disabled={importing}
+                >
+                  Browse...
+                </button>
+                {fileName && <span className="file-name">{fileName}</span>}
+              </div>
+
               <textarea
                 className="csv-input"
                 value={csvText}
-                onChange={(e) => setCsvText(e.target.value)}
+                onChange={(e) => {
+                  setCsvText(e.target.value);
+                  setFileName(null);
+                }}
                 placeholder={`meal_period,service_type,menu_name,menu_item,prep_item,choice_count
 Dinner,Buffet,Tuscan Table,Fresh Greens,Mixed Greens,
 Dinner,Buffet,Tuscan Table,Fresh Ceviche – Choose Two,Shrimp Ceviche,2
