@@ -66,6 +66,27 @@ export default function SuperAdminOrganizationDetail() {
     return colors[role] || '#6b7280';
   };
 
+  const formatLastLogin = (lastLogin) => {
+    if (!lastLogin) return 'Never';
+    const date = new Date(lastLogin);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined
+    });
+  };
+
   const openEditUserModal = (user) => {
     setSelectedUser(user);
     setEditUserForm({
@@ -282,6 +303,7 @@ export default function SuperAdminOrganizationDetail() {
                 <th>Full Name</th>
                 <th>Role</th>
                 <th>Outlets</th>
+                <th>Last Login</th>
                 <th>Status</th>
                 <th>Actions</th>
               </tr>
@@ -317,6 +339,15 @@ export default function SuperAdminOrganizationDetail() {
                     ) : (
                       <span className="outlet-badge no-outlets">No Outlets</span>
                     )}
+                  </td>
+                  <td>
+                    <span
+                      className="last-login"
+                      title={user.last_login ? new Date(user.last_login).toLocaleString() : 'Never logged in'}
+                      style={{ fontSize: '0.75rem', color: 'var(--text-secondary, #a3a3a3)', cursor: 'help' }}
+                    >
+                      {formatLastLogin(user.last_login)}
+                    </span>
                   </td>
                   <td>
                     <span className={`status-badge ${user.is_active ? 'active' : 'inactive'}`}>

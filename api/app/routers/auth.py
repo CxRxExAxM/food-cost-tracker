@@ -152,6 +152,14 @@ def login(credentials: UserLogin):
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    # Update last_login timestamp
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE users SET last_login = NOW() WHERE id = %s
+        """, (user["id"],))
+        conn.commit()
+
     access_token = create_access_token(
         data={
             "sub": str(user["id"]),
@@ -204,7 +212,7 @@ def list_users(current_user: dict = Depends(require_admin)):
     with get_db() as conn:
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT id, email, username, full_name, role, is_active, organization_id
+            SELECT id, email, username, full_name, role, is_active, organization_id, last_login
             FROM users
             WHERE organization_id = %s
             ORDER BY username

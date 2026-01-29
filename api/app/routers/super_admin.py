@@ -74,6 +74,7 @@ class UserResponse(BaseModel):
     is_active: bool
     organization_id: int
     assigned_outlet_ids: List[int] = []
+    last_login: Optional[datetime] = None
 
 
 class UserUpdate(BaseModel):
@@ -206,7 +207,7 @@ def get_organization_detail(
 
         # Get all users for this organization
         cursor.execute("""
-            SELECT id, email, username, full_name, role, is_active, organization_id
+            SELECT id, email, username, full_name, role, is_active, organization_id, last_login
             FROM users
             WHERE organization_id = %s
             ORDER BY is_active DESC, role, email
@@ -700,7 +701,8 @@ def list_all_users(
 
         cursor.execute(f"""
             SELECT
-                u.*,
+                u.id, u.email, u.username, u.full_name, u.role, u.is_active,
+                u.organization_id, u.created_at, u.last_login,
                 o.name as organization_name,
                 o.subscription_tier
             FROM users u
