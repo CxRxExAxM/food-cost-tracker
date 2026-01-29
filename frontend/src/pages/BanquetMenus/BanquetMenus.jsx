@@ -6,6 +6,7 @@ import MenuDashboard from './components/MenuDashboard';
 import MenuItemList from './components/MenuItemList';
 import NewMenuModal from './components/NewMenuModal';
 import EditMenuModal from './components/EditMenuModal';
+import ImportMenuModal from './components/ImportMenuModal';
 import './BanquetMenus.css';
 
 // localStorage keys for persisting selection
@@ -79,6 +80,7 @@ function BanquetMenus() {
   const [error, setError] = useState(null);
   const [showNewMenuModal, setShowNewMenuModal] = useState(false);
   const [showEditMenuModal, setShowEditMenuModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
 
   // Save selections to localStorage when they change
   useEffect(() => {
@@ -311,6 +313,17 @@ function BanquetMenus() {
     fetchMenuDetails();
   };
 
+  const handleImportComplete = () => {
+    // Refresh all the data after import
+    fetchMealPeriods();
+    // Reset selections to allow user to navigate to new menus
+    setSelectedMealPeriod('');
+    setSelectedServiceType('');
+    setSelectedMenuId(null);
+    setCurrentMenu(null);
+    setMenuCost(null);
+  };
+
   // Toggle expanded item
   const toggleExpandedItem = (itemId) => {
     setExpandedItems(prev => {
@@ -373,12 +386,20 @@ function BanquetMenus() {
               <h1>Banquet Menus</h1>
               <p>Manage banquet menu items and calculate food costs</p>
             </div>
-            <button
-              className="btn-new-menu"
-              onClick={() => setShowNewMenuModal(true)}
-            >
-              + New Menu
-            </button>
+            <div className="header-buttons">
+              <button
+                className="btn-import"
+                onClick={() => setShowImportModal(true)}
+              >
+                Import CSV
+              </button>
+              <button
+                className="btn-new-menu"
+                onClick={() => setShowNewMenuModal(true)}
+              >
+                + New Menu
+              </button>
+            </div>
           </div>
 
           {/* Cascading Dropdowns */}
@@ -508,6 +529,14 @@ function BanquetMenus() {
             onClose={() => setShowEditMenuModal(false)}
             onMenuUpdated={handleMenuUpdated}
             onMenuDeleted={handleMenuDeleted}
+          />
+        )}
+
+        {showImportModal && (
+          <ImportMenuModal
+            outletId={selectedOutlet.id}
+            onClose={() => setShowImportModal(false)}
+            onImportComplete={handleImportComplete}
           />
         )}
       </main>

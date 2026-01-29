@@ -54,6 +54,7 @@ class MenuItemCreate(BaseModel):
     display_order: Optional[int] = 0
     is_enhancement: Optional[bool] = False
     additional_price: Optional[float] = None
+    choice_count: Optional[int] = None  # For "Choose X" items
 
 
 class MenuItemUpdate(BaseModel):
@@ -62,6 +63,23 @@ class MenuItemUpdate(BaseModel):
     display_order: Optional[int] = None
     is_enhancement: Optional[bool] = None
     additional_price: Optional[float] = None
+    choice_count: Optional[int] = None  # For "Choose X" items
+
+
+class BanquetMenuImportItem(BaseModel):
+    """Single row for bulk import."""
+    meal_period: str
+    service_type: str
+    menu_name: str
+    menu_item: str
+    prep_item: Optional[str] = None
+    choice_count: Optional[int] = None
+
+
+class BanquetMenuImportRequest(BaseModel):
+    """Bulk import request for banquet menus."""
+    outlet_id: int
+    items: List[BanquetMenuImportItem]
 
 
 class PrepItemCreate(BaseModel):
@@ -727,13 +745,13 @@ def create_menu_item(menu_id: int, item: MenuItemCreate, current_user: dict = De
 
         cursor.execute("""
             INSERT INTO banquet_menu_items (
-                banquet_menu_id, name, display_order, is_enhancement, additional_price
+                banquet_menu_id, name, display_order, is_enhancement, additional_price, choice_count
             )
-            VALUES (%s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s)
             RETURNING id
         """, (
             menu_id, item.name, new_order,
-            int(item.is_enhancement), item.additional_price
+            int(item.is_enhancement), item.additional_price, item.choice_count
         ))
 
         item_id = cursor.fetchone()["id"]
@@ -998,3 +1016,168 @@ def reorder_prep_items(items: List[ReorderItem], current_user: dict = Depends(ge
 
         conn.commit()
         return {"message": "Prep items reordered successfully"}
+
+
+# ============================================
+# Bulk Import Endpoint
+# ============================================
+
+@router.post("/import")
+def import_banquet_menus(
+    request: BanquetMenuImportRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Bulk import banquet menus from CSV-like data.
+
+    Handles deduplication at each level:
+    - Menu: unique by (outlet_id, meal_period, service_type, name)
+    - Menu Item: unique by (menu_id, name)
+    - Prep Item: unique by (menu_item_id, name)
+
+    Returns summary of what was created vs skipped.
+    """
+    if not check_outlet_access(current_user, request.outlet_id):
+        raise HTTPException(status_code=403, detail="You don't have access to this outlet")
+
+    org_id = current_user["organization_id"]
+
+    # Track what we created vs skipped
+    stats = {
+        "menus_created": 0,
+        "menus_skipped": 0,
+        "items_created": 0,
+        "items_skipped": 0,
+        "prep_items_created": 0,
+        "prep_items_skipped": 0,
+        "errors": []
+    }
+
+    # Cache for lookups (avoid repeated DB queries)
+    menu_cache = {}  # (meal_period, service_type, name) -> menu_id
+    item_cache = {}  # (menu_id, item_name) -> item_id
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Pre-load existing menus for this outlet
+        cursor.execute("""
+            SELECT id, meal_period, service_type, name
+            FROM banquet_menus
+            WHERE outlet_id = %s AND organization_id = %s AND is_active = 1
+        """, (request.outlet_id, org_id))
+
+        for row in cursor.fetchall():
+            key = (row["meal_period"], row["service_type"], row["name"])
+            menu_cache[key] = row["id"]
+
+        # Process each import item
+        for idx, item in enumerate(request.items):
+            try:
+                # 1. Get or create menu
+                menu_key = (item.meal_period, item.service_type, item.menu_name)
+
+                if menu_key in menu_cache:
+                    menu_id = menu_cache[menu_key]
+                    # Only count as skipped the first time we see this menu
+                    if menu_key not in getattr(import_banquet_menus, '_seen_menus', set()):
+                        stats["menus_skipped"] += 1
+                        if not hasattr(import_banquet_menus, '_seen_menus'):
+                            import_banquet_menus._seen_menus = set()
+                        import_banquet_menus._seen_menus.add(menu_key)
+                else:
+                    # Create new menu
+                    cursor.execute("""
+                        INSERT INTO banquet_menus (
+                            organization_id, outlet_id, meal_period, service_type, name
+                        )
+                        VALUES (%s, %s, %s, %s, %s)
+                        RETURNING id
+                    """, (org_id, request.outlet_id, item.meal_period, item.service_type, item.menu_name))
+
+                    menu_id = cursor.fetchone()["id"]
+                    menu_cache[menu_key] = menu_id
+                    stats["menus_created"] += 1
+
+                # 2. Get or create menu item
+                item_key = (menu_id, item.menu_item)
+
+                if item_key in item_cache:
+                    item_id = item_cache[item_key]
+                    stats["items_skipped"] += 1
+                else:
+                    # Check if item exists in DB (in case cache was pre-populated only with menus)
+                    cursor.execute("""
+                        SELECT id FROM banquet_menu_items
+                        WHERE banquet_menu_id = %s AND name = %s
+                    """, (menu_id, item.menu_item))
+
+                    existing_item = cursor.fetchone()
+                    if existing_item:
+                        item_id = existing_item["id"]
+                        item_cache[item_key] = item_id
+                        stats["items_skipped"] += 1
+                    else:
+                        # Get next display order (at bottom for imports)
+                        cursor.execute("""
+                            SELECT COALESCE(MAX(display_order), 0) + 1 as next_order
+                            FROM banquet_menu_items WHERE banquet_menu_id = %s
+                        """, (menu_id,))
+                        next_order = cursor.fetchone()["next_order"]
+
+                        # Create new menu item
+                        cursor.execute("""
+                            INSERT INTO banquet_menu_items (
+                                banquet_menu_id, name, display_order, choice_count
+                            )
+                            VALUES (%s, %s, %s, %s)
+                            RETURNING id
+                        """, (menu_id, item.menu_item, next_order, item.choice_count))
+
+                        item_id = cursor.fetchone()["id"]
+                        item_cache[item_key] = item_id
+                        stats["items_created"] += 1
+
+                # 3. Create prep item if provided
+                if item.prep_item and item.prep_item.strip():
+                    prep_name = item.prep_item.strip()
+
+                    # Check if prep item exists
+                    cursor.execute("""
+                        SELECT id FROM banquet_prep_items
+                        WHERE banquet_menu_item_id = %s AND name = %s
+                    """, (item_id, prep_name))
+
+                    if cursor.fetchone():
+                        stats["prep_items_skipped"] += 1
+                    else:
+                        # Get next display order
+                        cursor.execute("""
+                            SELECT COALESCE(MAX(display_order), 0) + 1 as next_order
+                            FROM banquet_prep_items WHERE banquet_menu_item_id = %s
+                        """, (item_id,))
+                        next_order = cursor.fetchone()["next_order"]
+
+                        # Create prep item
+                        cursor.execute("""
+                            INSERT INTO banquet_prep_items (
+                                banquet_menu_item_id, name, display_order
+                            )
+                            VALUES (%s, %s, %s)
+                        """, (item_id, prep_name, next_order))
+
+                        stats["prep_items_created"] += 1
+
+            except Exception as e:
+                stats["errors"].append(f"Row {idx + 1}: {str(e)}")
+
+        conn.commit()
+
+        # Clean up the seen_menus tracker
+        if hasattr(import_banquet_menus, '_seen_menus'):
+            del import_banquet_menus._seen_menus
+
+    return {
+        "message": "Import completed",
+        "stats": stats
+    }
