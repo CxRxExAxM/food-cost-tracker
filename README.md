@@ -7,9 +7,9 @@ A comprehensive multi-tenant SaaS platform for F&B operations to manage food cos
 
 ---
 
-## Current Status (December 2024)
+## Current Status (January 2025)
 
-**Food Cost Tracking MVP:** ✅ **COMPLETE** + Enhanced Recipe Editor
+**Food Cost Tracking MVP:** ✅ **COMPLETE** + Banquet Menus & Enhanced Features
 
 All core features implemented and production-ready:
 - ✅ Multi-tenancy & organization management
@@ -19,9 +19,12 @@ All core features implemented and production-ready:
 - ✅ Audit logging and compliance tracking
 - ✅ Recipe costing with real-time price updates
 - ✅ Multi-distributor price tracking
-- 🔥 **NEW:** Excel-like recipe ingredient editing with autocomplete
+- ✅ Excel-like recipe ingredient editing with autocomplete
+- 🔥 **NEW:** Banquet menu management with prep planning & PDF export
+- 🔥 **NEW:** Auto unit conversion for recipe ingredients
+- 🔥 **NEW:** Last login tracking for users
 
-**Latest Update (Dec 18, 2024):** Recipe editor overhaul with inline editing, keyboard navigation, and autocomplete product mapping. See [CHANGELOG.md](CHANGELOG.md) for details.
+**Latest Update (Jan 30, 2025):** Banquet menu system, products page pagination & filters, recipe unit auto-conversion, user last login tracking. See [CHANGELOG.md](CHANGELOG.md) for details.
 
 **Next Steps:** See [FUTURE_PLANS.md](FUTURE_PLANS.md) for post-MVP roadmap (HACCP module, AI recipe parser, advanced features).
 
@@ -87,6 +90,24 @@ All core features implemented and production-ready:
 - 16 allergen flags per ingredient (Vegan, Vegetarian, Gluten, Dairy, etc.)
 - Auto-aggregation from recipe ingredients
 - Compliance-ready allergen reporting
+
+### Banquet Menu Management ✅ *NEW*
+
+**Menu Structure**
+- Hierarchical organization: Meal Period → Service Type → Menu Name
+- Menu items with optional choice counts (e.g., "Choose Two")
+- Prep items linked to common products for cost calculation
+- Drag-and-drop reordering for items and prep items
+
+**Prep Planning**
+- Guest count input for quantity scaling
+- Amount modes: per person, at minimum, fixed
+- Vessel capacity management (e.g., chafing dish holds 18 fish filets)
+- PDF export for prep lists
+
+**Data Import**
+- CSV import with duplicate detection at menu/item/prep levels
+- Preserves existing data while adding new items
 
 ### Super Admin Platform ✅
 
@@ -198,6 +219,7 @@ Clean_Invoices/
 │   │   │   ├── auth.py           # Authentication & users
 │   │   │   ├── products.py       # Product management
 │   │   │   ├── recipes.py        # Recipe management
+│   │   │   ├── banquet_menus.py  # Banquet menu management
 │   │   │   ├── outlets.py        # Outlet management
 │   │   │   ├── super_admin.py    # Super admin features
 │   │   │   └── uploads.py        # CSV import
@@ -210,6 +232,7 @@ Clean_Invoices/
 │   │   ├── pages/                # Page components
 │   │   │   ├── Products.jsx
 │   │   │   ├── Recipes.jsx
+│   │   │   ├── BanquetMenus/     # Banquet menu management
 │   │   │   ├── Outlets.jsx
 │   │   │   └── SuperAdmin/       # Super admin pages
 │   │   ├── components/           # Reusable components

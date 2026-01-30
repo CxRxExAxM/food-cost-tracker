@@ -505,5 +505,5 @@ At the end of each session, provide:
 
 ---
 
-**Last Updated:** December 17, 2024
+**Last Updated:** January 30, 2025
 **Next Review:** When starting HACCP module development

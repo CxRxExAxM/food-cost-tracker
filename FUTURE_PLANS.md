@@ -1,6 +1,6 @@
 # Future Plans: Scaling RestauranTek Platform
 
-**Date:** December 17, 2024
+**Date:** January 30, 2025
 **Status:** Planning Document
 **Timeline:** Post-MVP (After Food Cost Tracking MVP Complete)
 
@@ -110,7 +110,7 @@ Backend suggests matches → User reviews → Import ingredients
 - [ ] Shopping list generation from recipes
 - [ ] Price trend charts per recipe (show cost over time)
 - [ ] Batch cost comparison (compare multiple recipes)
-- [ ] Unit conversions (automatic weight/volume conversion)
+- [x] Unit conversions (automatic weight/volume conversion) ✅ *Completed Jan 2025*
 
 **Product Features:**
 - [ ] Manual product entry form (instead of CSV only)
@@ -957,6 +957,6 @@ Keep using `main` + `dev` until Food Cost MVP is complete. When you start HACCP,
 
 ---
 
-**Document Version:** 1.0
-**Last Updated:** December 17, 2024
-**Next Review:** When Food Cost MVP nears completion
+**Document Version:** 1.1
+**Last Updated:** January 30, 2025
+**Next Review:** When starting HACCP module development

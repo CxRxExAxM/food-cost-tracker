@@ -9,6 +9,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+*No unreleased changes*
+
+---
+
+## [2025-01-30] - Banquet Menus & Quality of Life Updates
+
+### Added
+
+**Banquet Menu System**
+- Complete banquet menu management for event catering
+- Menu structure: Meal Period → Service Type → Menu Name → Menu Items → Prep Items
+- CSV import for bulk menu data with duplicate detection
+- PDF export for banquet prep lists
+- Drag-and-drop reordering for menu items and prep items
+- Guest count scaling for prep quantities
+- Vessel capacity management for prep planning
+- Common product linking for prep items with cost calculation
+
+**User Management**
+- Last login tracking for all users
+- Display last login in admin user list (relative time with full timestamp on hover)
+- Display last login in super admin organization detail
+
+**Products Page Improvements**
+- Pagination with page selector (first/prev/page numbers/next/last)
+- Mapping filter dropdown (All Products / Mapped Only / Unmapped Only)
+- Distributor dropdown filter
+- Shows "Showing X-Y of Z" for current page range
+
+**Recipe Improvements**
+- Auto-convert ingredient quantity when unit changes
+- `GET /recipes/convert-unit` endpoint for unit conversions
+- Uses product-specific conversions when available (e.g., 1 EA chicken = 6 OZ)
+- Falls back to standard weight/volume conversions
+
+### Fixed
+- Common products search now case-insensitive
+- Banquet prep item linking to common products
+
+---
+
+## [2024-12-18] - Recipe Editor Overhaul
+
 ### Added
 - Excel-like inline editing for recipe ingredients table
 - Autocomplete product search while typing ingredient names
@@ -16,26 +59,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Keyboard navigation (Tab, Enter, Escape, Arrow keys) for rapid data entry
 - Auto-select text on focus for instant editing
 - Debug endpoints for troubleshooting cost calculation issues
-  - `/api/recipes/{recipe_id}/cost/debug` - Shows why costs aren't calculating
-  - `/api/recipes/debug/common-product/{id}/products` - Shows product-outlet relationships
 
 ### Changed
 - Removed "Text only" badge in favor of cleaner Mapped? column
 - Ingredients now maintain insertion order (no longer reorder after edits)
 - Recipe costs auto-update when ingredients are mapped to products
-- Recipe `updated_at` timestamp updates when ingredients change
 
 ### Fixed
-- Ingredients showing as "Unknown" after AI parser import (missing `ingredient_name` in INSERT)
-- Ingredient list reordering after edit (added ORDER BY ri.id)
-- Cost not updating when mapping ingredients to products (timestamp tracking)
+- Ingredients showing as "Unknown" after AI parser import
+- Ingredient list reordering after edit
+- Cost not updating when mapping ingredients to products
 - Duplicate field updates in ingredient PATCH endpoint
 
----
-
-## [2024-12-18] - Recipe Editor Overhaul
-
-### Added
+### Technical Details
 - **Inline Editing System**
   - Click any cell to edit directly in table (no modal required)
   - Single-row edit mode with yellow highlight
@@ -123,4 +159,4 @@ See [docs/completed/](docs/completed/) for historical phase documentation.
 
 ---
 
-**Last Updated:** December 18, 2024
+**Last Updated:** January 30, 2025
