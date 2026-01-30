@@ -58,6 +58,52 @@ def list_recipes(
         return recipes
 
 
+@router.get("/convert-unit")
+def convert_unit(
+    quantity: float = Query(..., description="Amount to convert"),
+    from_unit_id: int = Query(..., description="Source unit ID"),
+    to_unit_id: int = Query(..., description="Target unit ID"),
+    common_product_id: Optional[int] = Query(None, description="Common product ID for product-specific conversions"),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Convert a quantity from one unit to another.
+
+    Uses product-specific conversions when available (e.g., 1 EA chicken = 6 OZ),
+    falls back to standard weight/volume conversions.
+
+    Returns the converted quantity rounded to 4 decimal places.
+    """
+    if from_unit_id == to_unit_id:
+        return {"converted_quantity": quantity, "conversion_factor": 1.0}
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+        org_id = current_user["organization_id"]
+
+        # Get conversion factor
+        factor = get_unit_conversion_factor(
+            cursor,
+            common_product_id,
+            from_unit_id,
+            to_unit_id,
+            org_id
+        )
+
+        converted = round(quantity * factor, 4)
+
+        # Clean up trailing zeros for nice display
+        if converted == int(converted):
+            converted = int(converted)
+
+        return {
+            "converted_quantity": converted,
+            "conversion_factor": factor,
+            "from_unit_id": from_unit_id,
+            "to_unit_id": to_unit_id
+        }
+
+
 @router.get("/{recipe_id}", response_model=RecipeWithIngredients)
 def get_recipe(recipe_id: int, current_user: dict = Depends(get_current_user)):
     """

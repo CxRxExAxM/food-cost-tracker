@@ -1132,7 +1132,43 @@ function RecipeIngredients({ recipe, onIngredientsChange }) {
     });
   };
 
-  const handleFieldChange = (field, value) => {
+  const handleFieldChange = async (field, value) => {
+    // If unit is changing, convert the quantity
+    if (field === 'unit_id' && value && editedValues.unit_id && value !== editedValues.unit_id) {
+      const fromUnitId = parseInt(editedValues.unit_id);
+      const toUnitId = parseInt(value);
+      const quantity = parseFloat(editedValues.quantity);
+
+      if (!isNaN(quantity) && quantity > 0) {
+        try {
+          const params = new URLSearchParams({
+            quantity: quantity.toString(),
+            from_unit_id: fromUnitId.toString(),
+            to_unit_id: toUnitId.toString()
+          });
+
+          // Include common_product_id for product-specific conversions
+          if (editedValues.common_product_id) {
+            params.append('common_product_id', editedValues.common_product_id.toString());
+          }
+
+          const response = await axios.get(`${API_URL}/recipes/convert-unit?${params}`);
+          const converted = response.data.converted_quantity;
+
+          // Update both unit and quantity together
+          setEditedValues(prev => ({
+            ...prev,
+            unit_id: value,
+            quantity: converted
+          }));
+          return;
+        } catch (error) {
+          console.error('Error converting unit:', error);
+          // Fall through to normal update if conversion fails
+        }
+      }
+    }
+
     setEditedValues(prev => ({ ...prev, [field]: value }));
   };
 
