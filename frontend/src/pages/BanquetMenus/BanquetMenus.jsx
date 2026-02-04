@@ -83,11 +83,8 @@ function BanquetMenus() {
   const [showImportModal, setShowImportModal] = useState(false);
 
   // Save selections to localStorage when they change
-  useEffect(() => {
-    if (selectedOutlet?.id) {
-      localStorage.setItem(STORAGE_KEYS.outletId, String(selectedOutlet.id));
-    }
-  }, [selectedOutlet?.id]);
+  // Note: outletId is saved in the validation effect below, not here,
+  // to avoid race conditions when switching outlets
 
   useEffect(() => {
     if (selectedMealPeriod) {
