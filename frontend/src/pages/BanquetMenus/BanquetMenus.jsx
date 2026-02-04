@@ -19,6 +19,17 @@ const STORAGE_KEYS = {
   expandedItems: 'banquetMenus_expandedItems'
 };
 
+// Helper to check if saved outlet matches current outlet
+// Used by useState initializers to avoid loading stale data
+const getSavedValueIfOutletMatches = (key, currentOutletId, parser = (v) => v) => {
+  const savedOutletId = localStorage.getItem(STORAGE_KEYS.outletId);
+  if (savedOutletId !== String(currentOutletId)) {
+    return null; // Different outlet, don't restore
+  }
+  const saved = localStorage.getItem(key);
+  return saved ? parser(saved) : null;
+};
+
 function BanquetMenus() {
   const { currentOutlet: selectedOutlet } = useOutlet();
 
@@ -27,16 +38,15 @@ function BanquetMenus() {
   const [serviceTypes, setServiceTypes] = useState([]);
   const [menus, setMenus] = useState([]);
 
-  // Selected values - initialize from localStorage (will be validated when outlet loads)
+  // Selected values - only restore from localStorage if outlet matches
   const [selectedMealPeriod, setSelectedMealPeriod] = useState(() => {
-    return localStorage.getItem(STORAGE_KEYS.mealPeriod) || '';
+    return getSavedValueIfOutletMatches(STORAGE_KEYS.mealPeriod, selectedOutlet?.id) || '';
   });
   const [selectedServiceType, setSelectedServiceType] = useState(() => {
-    return localStorage.getItem(STORAGE_KEYS.serviceType) || '';
+    return getSavedValueIfOutletMatches(STORAGE_KEYS.serviceType, selectedOutlet?.id) || '';
   });
   const [selectedMenuId, setSelectedMenuId] = useState(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.menuId);
-    return saved ? parseInt(saved, 10) : null;
+    return getSavedValueIfOutletMatches(STORAGE_KEYS.menuId, selectedOutlet?.id, (v) => parseInt(v, 10));
   });
 
   // Track if selections have been validated against current outlet
@@ -49,15 +59,14 @@ function BanquetMenus() {
   const [currentMenu, setCurrentMenu] = useState(null);
   const [menuCost, setMenuCost] = useState(null);
   const [guestCount, setGuestCount] = useState(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.guestCount);
-    return saved ? parseInt(saved, 10) : 0;
+    return getSavedValueIfOutletMatches(STORAGE_KEYS.guestCount, selectedOutlet?.id, (v) => parseInt(v, 10)) || 0;
   });
 
-  // Expanded menu items - persisted in localStorage
+  // Expanded menu items - only restore if outlet matches
   const [expandedItems, setExpandedItems] = useState(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEYS.expandedItems);
-      return saved ? new Set(JSON.parse(saved)) : new Set();
+      const saved = getSavedValueIfOutletMatches(STORAGE_KEYS.expandedItems, selectedOutlet?.id, JSON.parse);
+      return saved ? new Set(saved) : new Set();
     } catch {
       return new Set();
     }
@@ -124,21 +133,33 @@ function BanquetMenus() {
       if (!selectionsValidatedRef.current) {
         selectionsValidatedRef.current = true;
         if (!outletMatches) {
-          // Different outlet - clear saved selections
+          // Different outlet - clear saved selections from state AND localStorage
           setSelectedMealPeriod('');
           setSelectedServiceType('');
           setSelectedMenuId(null);
           setCurrentMenu(null);
           setMenuCost(null);
+          setExpandedItems(new Set());
+          localStorage.removeItem(STORAGE_KEYS.mealPeriod);
+          localStorage.removeItem(STORAGE_KEYS.serviceType);
+          localStorage.removeItem(STORAGE_KEYS.menuId);
+          localStorage.removeItem(STORAGE_KEYS.guestCount);
+          localStorage.removeItem(STORAGE_KEYS.expandedItems);
         }
         localStorage.setItem(STORAGE_KEYS.outletId, String(selectedOutlet.id));
       } else if (!outletMatches) {
-        // User changed outlets - reset selections
+        // User changed outlets - reset selections from state AND localStorage
         setSelectedMealPeriod('');
         setSelectedServiceType('');
         setSelectedMenuId(null);
         setCurrentMenu(null);
         setMenuCost(null);
+        setExpandedItems(new Set());
+        localStorage.removeItem(STORAGE_KEYS.mealPeriod);
+        localStorage.removeItem(STORAGE_KEYS.serviceType);
+        localStorage.removeItem(STORAGE_KEYS.menuId);
+        localStorage.removeItem(STORAGE_KEYS.guestCount);
+        localStorage.removeItem(STORAGE_KEYS.expandedItems);
         localStorage.setItem(STORAGE_KEYS.outletId, String(selectedOutlet.id));
       }
 
