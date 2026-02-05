@@ -1872,7 +1872,7 @@ function RecipeCost({ recipe }) {
                     )}
                     {costData.portion_count && (
                       <div>
-                        <label>Portions:</label>
+                        <label># Serving Yield:</label>
                         <span className="cost-value-small">
                           {costData.portion_count % 1 === 0 ? costData.portion_count : costData.portion_count.toFixed(1)}
                         </span>
