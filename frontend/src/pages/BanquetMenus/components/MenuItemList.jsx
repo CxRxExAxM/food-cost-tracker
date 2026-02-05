@@ -20,6 +20,10 @@ function MenuItemList({ menuId, menuItems, itemCosts, guestCount, expandedItems,
     return costData?.cost_per_guest || 0;
   };
 
+  const getItemCostData = (itemId) => {
+    return itemCosts.find(c => c.menu_item_id === itemId) || {};
+  };
+
   const handleDeleteItem = async (itemId, e) => {
     e.stopPropagation();
     if (!confirm('Are you sure you want to delete this menu item? All prep items will also be deleted.')) {
@@ -146,9 +150,26 @@ function MenuItemList({ menuId, menuItems, itemCosts, guestCount, expandedItems,
                 </div>
 
                 <div className="menu-item-right">
-                  <span className="item-cost">
-                    ${getCostForItem(item.id).toFixed(2)}{isRestaurant ? '' : '/guest'}
-                  </span>
+                  {(() => {
+                    const costData = getItemCostData(item.id);
+                    const itemPrice = item.price || costData.price;
+                    const costPct = costData.cost_pct;
+                    return (
+                      <div className="item-cost-info">
+                        {itemPrice && (
+                          <span className="item-price">${itemPrice.toFixed(2)}</span>
+                        )}
+                        <span className="item-cost">
+                          ${getCostForItem(item.id).toFixed(2)}{isRestaurant ? '' : '/guest'}
+                        </span>
+                        {costPct !== null && costPct !== undefined && (
+                          <span className={`item-cost-pct ${costPct > 35 ? 'high' : costPct < 25 ? 'low' : ''}`}>
+                            {costPct.toFixed(1)}%
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })()}
                   <div className="item-actions">
                     <button
                       className="btn-item-action"

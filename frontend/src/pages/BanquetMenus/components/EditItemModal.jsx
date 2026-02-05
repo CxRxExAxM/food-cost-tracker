@@ -5,7 +5,8 @@ function EditItemModal({ item, onClose, onItemUpdated }) {
   const [formData, setFormData] = useState({
     name: item.name || '',
     is_enhancement: item.is_enhancement === 1,
-    additional_price: item.additional_price || ''
+    additional_price: item.additional_price || '',
+    price: item.price || ''
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -32,7 +33,8 @@ function EditItemModal({ item, onClose, onItemUpdated }) {
       const payload = {
         name: formData.name,
         is_enhancement: formData.is_enhancement,
-        additional_price: formData.additional_price ? parseFloat(formData.additional_price) : null
+        additional_price: formData.additional_price ? parseFloat(formData.additional_price) : null,
+        price: formData.price ? parseFloat(formData.price) : null
       };
 
       await axios.put(`/banquet-menus/items/${item.id}`, payload);
@@ -69,6 +71,20 @@ function EditItemModal({ item, onClose, onItemUpdated }) {
                 placeholder="e.g., Oatmeal, Farm Fresh Scrambled Eggs"
                 required
                 autoFocus
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Item Price (for cost % calculation)</label>
+              <input
+                type="number"
+                name="price"
+                className="form-input"
+                value={formData.price}
+                onChange={handleChange}
+                placeholder="52.00"
+                step="0.01"
+                min="0"
               />
             </div>
 

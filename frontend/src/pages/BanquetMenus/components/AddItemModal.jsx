@@ -5,7 +5,8 @@ function AddItemModal({ menuId, onClose, onItemAdded }) {
   const [formData, setFormData] = useState({
     name: '',
     is_enhancement: false,
-    additional_price: ''
+    additional_price: '',
+    price: ''
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -32,7 +33,8 @@ function AddItemModal({ menuId, onClose, onItemAdded }) {
       const payload = {
         name: formData.name,
         is_enhancement: formData.is_enhancement,
-        additional_price: formData.additional_price ? parseFloat(formData.additional_price) : null
+        additional_price: formData.additional_price ? parseFloat(formData.additional_price) : null,
+        price: formData.price ? parseFloat(formData.price) : null
       };
 
       await axios.post(`/banquet-menus/${menuId}/items`, payload);
@@ -69,6 +71,20 @@ function AddItemModal({ menuId, onClose, onItemAdded }) {
                 placeholder="e.g., Oatmeal, Farm Fresh Scrambled Eggs"
                 required
                 autoFocus
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Item Price (for cost % calculation)</label>
+              <input
+                type="number"
+                name="price"
+                className="form-input"
+                value={formData.price}
+                onChange={handleChange}
+                placeholder="52.00"
+                step="0.01"
+                min="0"
               />
             </div>
 

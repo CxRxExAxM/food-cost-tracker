@@ -56,6 +56,7 @@ class MenuItemCreate(BaseModel):
     is_enhancement: Optional[bool] = False
     additional_price: Optional[float] = None
     choice_count: Optional[int] = None  # For "Choose X" items
+    price: Optional[float] = None  # Item price for cost % calculation
 
 
 class MenuItemUpdate(BaseModel):
@@ -65,6 +66,7 @@ class MenuItemUpdate(BaseModel):
     is_enhancement: Optional[bool] = None
     additional_price: Optional[float] = None
     choice_count: Optional[int] = None  # For "Choose X" items
+    price: Optional[float] = None  # Item price for cost % calculation
 
 
 class BanquetMenuImportItem(BaseModel):
@@ -602,12 +604,18 @@ def calculate_menu_cost(
             if item.get("is_enhancement") and item.get("additional_price"):
                 item_cost += Decimal(str(item["additional_price"])) * guests
 
+            # Calculate item cost percentage if item has a price
+            item_price = Decimal(str(item.get("price") or 0))
+            item_cost_pct = (item_cost / item_price * 100) if item_price > 0 else None
+
             item_costs.append({
                 "menu_item_id": item["id"],
                 "name": item["name"],
                 "is_enhancement": bool(item.get("is_enhancement")),
+                "price": float(item_price) if item_price > 0 else None,
                 "cost_per_guest": float(item_cost / guests) if guests > 0 else 0,
                 "total_cost": float(item_cost),
+                "cost_pct": float(item_cost_pct) if item_cost_pct is not None else None,
                 "prep_costs": prep_costs
             })
 
@@ -780,13 +788,13 @@ def create_menu_item(menu_id: int, item: MenuItemCreate, current_user: dict = De
 
         cursor.execute("""
             INSERT INTO banquet_menu_items (
-                banquet_menu_id, name, display_order, is_enhancement, additional_price, choice_count
+                banquet_menu_id, name, display_order, is_enhancement, additional_price, choice_count, price
             )
-            VALUES (%s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
             RETURNING id
         """, (
             menu_id, item.name, new_order,
-            int(item.is_enhancement), item.additional_price, item.choice_count
+            int(item.is_enhancement), item.additional_price, item.choice_count, item.price
         ))
 
         item_id = cursor.fetchone()["id"]
