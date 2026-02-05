@@ -3,7 +3,8 @@ import axios from '../../../lib/axios';
 import UnitSelect from '../../../components/UnitSelect';
 import VesselSelect from '../../../components/VesselSelect';
 
-function AddPrepItemModal({ menuItemId, onClose, onPrepItemAdded }) {
+function AddPrepItemModal({ menuItemId, onClose, onPrepItemAdded, menuType = 'banquet' }) {
+  const isRestaurant = menuType === 'restaurant';
   const [formData, setFormData] = useState({
     name: '',
     useVessel: false,
@@ -150,7 +151,7 @@ function AddPrepItemModal({ menuItemId, onClose, onPrepItemAdded }) {
                     fontSize: 'var(--text-sm)'
                   }}
                 >
-                  Per Guests
+                  {isRestaurant ? 'Fixed Amount' : 'Per Guests'}
                 </button>
                 <button
                   type="button"
@@ -173,10 +174,10 @@ function AddPrepItemModal({ menuItemId, onClose, onPrepItemAdded }) {
               </div>
             </div>
 
-            {/* Standard Amount Fields (per X guests) */}
+            {/* Standard Amount Fields (per X guests for banquet, fixed for restaurant) */}
             {!formData.useVessel && (
               <div className="form-group">
-                <label>Amount</label>
+                <label>Amount{isRestaurant ? ' (per portion)' : ''}</label>
                 <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center', flexWrap: 'wrap' }}>
                   <input
                     type="number"
@@ -196,22 +197,28 @@ function AddPrepItemModal({ menuItemId, onClose, onPrepItemAdded }) {
                       name="unit_id"
                     />
                   </div>
-                  <span style={{ color: 'var(--text-secondary)' }}>per</span>
-                  <input
-                    type="number"
-                    name="guests_per_amount"
-                    className="form-input"
-                    style={{ width: '60px' }}
-                    value={formData.guests_per_amount}
-                    onChange={handleChange}
-                    placeholder="1"
-                    min="1"
-                  />
-                  <span style={{ color: 'var(--text-secondary)' }}>guest(s)</span>
+                  {!isRestaurant && (
+                    <>
+                      <span style={{ color: 'var(--text-secondary)' }}>per</span>
+                      <input
+                        type="number"
+                        name="guests_per_amount"
+                        className="form-input"
+                        style={{ width: '60px' }}
+                        value={formData.guests_per_amount}
+                        onChange={handleChange}
+                        placeholder="1"
+                        min="1"
+                      />
+                      <span style={{ color: 'var(--text-secondary)' }}>guest(s)</span>
+                    </>
+                  )}
                 </div>
-                <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', marginTop: 'var(--space-1)' }}>
-                  e.g., "2 OZ per 1 guest" or "1 bottle per 10 guests"
-                </p>
+                {!isRestaurant && (
+                  <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', marginTop: 'var(--space-1)' }}>
+                    e.g., "2 OZ per 1 guest" or "1 bottle per 10 guests"
+                  </p>
+                )}
               </div>
             )}
 

@@ -35,6 +35,7 @@ class BanquetMenuCreate(BaseModel):
     under_min_surcharge: Optional[float] = None
     target_food_cost_pct: Optional[float] = None
     outlet_id: int
+    menu_type: Optional[str] = 'banquet'  # 'banquet' or 'restaurant'
 
 
 class BanquetMenuUpdate(BaseModel):
@@ -135,6 +136,7 @@ def list_banquet_menus(
     outlet_id: Optional[int] = None,
     meal_period: Optional[str] = None,
     service_type: Optional[str] = None,
+    menu_type: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
     """
@@ -143,6 +145,7 @@ def list_banquet_menus(
     - **outlet_id**: Filter by specific outlet (required unless admin)
     - **meal_period**: Filter by meal period
     - **service_type**: Filter by service type
+    - **menu_type**: Filter by menu type ('banquet' or 'restaurant')
     """
     with get_db() as conn:
         cursor = conn.cursor()
@@ -171,6 +174,10 @@ def list_banquet_menus(
             where_clauses.append("bm.service_type = %s")
             params.append(service_type)
 
+        if menu_type:
+            where_clauses.append("bm.menu_type = %s")
+            params.append(menu_type)
+
         where_clause = " AND ".join(where_clauses)
 
         query = f"""
@@ -193,21 +200,30 @@ def list_banquet_menus(
 @router.get("/meal-periods")
 def get_meal_periods(
     outlet_id: int,
+    menu_type: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
-    """Get distinct meal periods for an outlet."""
+    """Get distinct meal periods for an outlet, optionally filtered by menu type."""
     if not check_outlet_access(current_user, outlet_id):
         raise HTTPException(status_code=403, detail="You don't have access to this outlet")
 
     with get_db() as conn:
         cursor = conn.cursor()
 
-        cursor.execute("""
+        query = """
             SELECT DISTINCT meal_period
             FROM banquet_menus
             WHERE outlet_id = %s AND is_active = 1
-            ORDER BY meal_period
-        """, (outlet_id,))
+        """
+        params = [outlet_id]
+
+        if menu_type:
+            query += " AND menu_type = %s"
+            params.append(menu_type)
+
+        query += " ORDER BY meal_period"
+
+        cursor.execute(query, params)
 
         periods = [row["meal_period"] for row in cursor.fetchall()]
         return {"meal_periods": periods}
@@ -217,9 +233,10 @@ def get_meal_periods(
 def get_service_types(
     outlet_id: int,
     meal_period: Optional[str] = None,
+    menu_type: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
-    """Get distinct service types for an outlet, optionally filtered by meal period."""
+    """Get distinct service types for an outlet, optionally filtered by meal period and menu type."""
     if not check_outlet_access(current_user, outlet_id):
         raise HTTPException(status_code=403, detail="You don't have access to this outlet")
 
@@ -236,6 +253,10 @@ def get_service_types(
         if meal_period:
             query += " AND meal_period = %s"
             params.append(meal_period)
+
+        if menu_type:
+            query += " AND menu_type = %s"
+            params.append(menu_type)
 
         query += " ORDER BY service_type"
 
@@ -339,10 +360,14 @@ def get_banquet_menu(menu_id: int, current_user: dict = Depends(get_current_user
 @router.get("/{menu_id}/cost")
 def calculate_menu_cost(
     menu_id: int,
-    guests: int = Query(50, ge=1),
+    guests: Optional[int] = Query(None, ge=1),
     current_user: dict = Depends(get_current_user)
 ):
-    """Calculate menu cost for a given number of guests."""
+    """Calculate menu cost for a given number of guests.
+
+    For restaurant menus, guests is always 1 (single portion).
+    For banquet menus, guests defaults to 50 if not specified.
+    """
     with get_db() as conn:
         cursor = conn.cursor()
 
@@ -358,6 +383,13 @@ def calculate_menu_cost(
         menu = dict_from_row(cursor.fetchone())
         if not menu:
             raise HTTPException(status_code=404, detail="Menu not found or you don't have access")
+
+        # For restaurant menus, always use guests=1
+        is_restaurant = menu.get('menu_type') == 'restaurant'
+        if is_restaurant:
+            guests = 1
+        elif guests is None:
+            guests = 50  # Default for banquet
 
         # Calculate costs
         total_cost = Decimal("0")
@@ -587,7 +619,8 @@ def calculate_menu_cost(
         surcharge_per_person = Decimal(str(menu.get("under_min_surcharge") or 0))
 
         surcharge = Decimal("0")
-        if guests < min_guests and surcharge_per_person > 0:
+        # Surcharge only applies to banquet menus
+        if not is_restaurant and guests < min_guests and surcharge_per_person > 0:
             surcharge = surcharge_per_person * guests
 
         revenue = (price_per_person * guests) + surcharge
@@ -599,11 +632,12 @@ def calculate_menu_cost(
 
         return {
             "menu_id": menu_id,
+            "menu_type": menu.get("menu_type", "banquet"),
             "guests": guests,
             "price_per_person": float(price_per_person),
-            "min_guest_count": min_guests,
-            "surcharge_per_person": float(surcharge_per_person),
-            "surcharge_total": float(surcharge),
+            "min_guest_count": min_guests if not is_restaurant else None,
+            "surcharge_per_person": float(surcharge_per_person) if not is_restaurant else None,
+            "surcharge_total": float(surcharge) if not is_restaurant else None,
             "menu_cost_per_guest": float(cost_per_guest),
             "total_menu_cost": float(total_cost),
             "total_revenue": float(revenue),
@@ -628,14 +662,15 @@ def create_banquet_menu(menu: BanquetMenuCreate, current_user: dict = Depends(ge
             cursor.execute("""
                 INSERT INTO banquet_menus (
                     organization_id, outlet_id, meal_period, service_type, name,
-                    price_per_person, min_guest_count, under_min_surcharge, target_food_cost_pct
+                    price_per_person, min_guest_count, under_min_surcharge, target_food_cost_pct,
+                    menu_type
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
             """, (
                 org_id, menu.outlet_id, menu.meal_period, menu.service_type, menu.name,
                 menu.price_per_person, menu.min_guest_count, menu.under_min_surcharge,
-                menu.target_food_cost_pct
+                menu.target_food_cost_pct, menu.menu_type or 'banquet'
             ))
 
             menu_id = cursor.fetchone()["id"]

@@ -5,7 +5,8 @@ import PrepItemTable from './PrepItemTable';
 import AddItemModal from './AddItemModal';
 import EditItemModal from './EditItemModal';
 
-function MenuItemList({ menuId, menuItems, itemCosts, guestCount, expandedItems, onToggleExpand, onItemsChanged, onInlineEdit }) {
+function MenuItemList({ menuId, menuItems, itemCosts, guestCount, expandedItems, onToggleExpand, onItemsChanged, onInlineEdit, menuType = 'banquet' }) {
+  const isRestaurant = menuType === 'restaurant';
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
 
@@ -146,7 +147,7 @@ function MenuItemList({ menuId, menuItems, itemCosts, guestCount, expandedItems,
 
                 <div className="menu-item-right">
                   <span className="item-cost">
-                    ${getCostForItem(item.id).toFixed(2)}/guest
+                    ${getCostForItem(item.id).toFixed(2)}{isRestaurant ? '' : '/guest'}
                   </span>
                   <div className="item-actions">
                     <button
@@ -178,6 +179,7 @@ function MenuItemList({ menuId, menuItems, itemCosts, guestCount, expandedItems,
                   guestCount={guestCount}
                   onPrepItemsChanged={onItemsChanged}
                   onInlineEdit={onInlineEdit}
+                  menuType={menuType}
                 />
               )}
             </li>

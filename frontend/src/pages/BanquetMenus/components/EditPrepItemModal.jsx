@@ -10,7 +10,15 @@ const AMOUNT_MODES = [
   { value: 'vessel', label: 'By Vessel', description: 'Based on vessel capacity' }
 ];
 
-function EditPrepItemModal({ prepItem, onClose, onPrepItemUpdated }) {
+// Restaurant mode only shows Fixed and By Vessel modes
+const RESTAURANT_AMOUNT_MODES = [
+  { value: 'fixed', label: 'Fixed Amount', description: 'Amount per portion' },
+  { value: 'vessel', label: 'By Vessel', description: 'Based on vessel capacity' }
+];
+
+function EditPrepItemModal({ prepItem, onClose, onPrepItemUpdated, menuType = 'banquet' }) {
+  const isRestaurant = menuType === 'restaurant';
+  const availableModes = isRestaurant ? RESTAURANT_AMOUNT_MODES : AMOUNT_MODES;
   // Determine initial mode based on existing data
   const getInitialMode = () => {
     if (prepItem.vessel_id && prepItem.vessel_count) {
@@ -188,7 +196,7 @@ function EditPrepItemModal({ prepItem, onClose, onPrepItemUpdated }) {
             <div className="form-group">
               <label>Amount Type</label>
               <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
-                {AMOUNT_MODES.map(mode => (
+                {availableModes.map(mode => (
                   <button
                     key={mode.value}
                     type="button"
@@ -212,7 +220,7 @@ function EditPrepItemModal({ prepItem, onClose, onPrepItemUpdated }) {
                 ))}
               </div>
               <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', marginTop: 'var(--space-1)' }}>
-                {AMOUNT_MODES.find(m => m.value === formData.amount_mode)?.description}
+                {availableModes.find(m => m.value === formData.amount_mode)?.description}
               </p>
             </div>
 

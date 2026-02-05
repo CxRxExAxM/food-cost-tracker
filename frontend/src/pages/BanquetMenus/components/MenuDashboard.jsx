@@ -1,7 +1,8 @@
 import { Settings, FileDown } from 'lucide-react';
 import { exportMenuToPdf } from '../utils/exportMenuPdf';
 
-function MenuDashboard({ menu, menuCost, guestCount, onGuestCountChange, onEditClick }) {
+function MenuDashboard({ menu, menuCost, guestCount, onGuestCountChange, onEditClick, menuType = 'banquet' }) {
+  const isRestaurant = menuType === 'restaurant';
   const handleExportPdf = () => {
     if (menu) {
       exportMenuToPdf(menu, menuCost, guestCount);
@@ -44,16 +45,16 @@ function MenuDashboard({ menu, menuCost, guestCount, onGuestCountChange, onEditC
 
       <div className="dashboard-stats">
         <div className="stat-card">
-          <div className="stat-label">Menu Price</div>
+          <div className="stat-label">{isRestaurant ? 'Menu Price' : 'Menu Price'}</div>
           <div className="stat-value">
-            {formatCurrency(menu?.price_per_person)}/pp
+            {formatCurrency(menu?.price_per_person)}{isRestaurant ? '' : '/pp'}
           </div>
         </div>
 
         <div className="stat-card">
-          <div className="stat-label">Menu Cost</div>
+          <div className="stat-label">{isRestaurant ? 'Menu Cost' : 'Menu Cost'}</div>
           <div className="stat-value">
-            {formatCurrency(menuCost?.menu_cost_per_guest)}/pp
+            {formatCurrency(menuCost?.menu_cost_per_guest)}{isRestaurant ? '' : '/pp'}
           </div>
         </div>
 
@@ -88,38 +89,41 @@ function MenuDashboard({ menu, menuCost, guestCount, onGuestCountChange, onEditC
         </div>
       </div>
 
-      <div className="dashboard-guest-row">
-        <div className="guest-input-group">
-          <label>Guest Count:</label>
-          <input
-            type="number"
-            className="guest-input"
-            value={guestCount}
-            onChange={onGuestCountChange}
-            min="0"
-          />
-        </div>
+      {/* Guest row - only show for banquet menus */}
+      {!isRestaurant && (
+        <div className="dashboard-guest-row">
+          <div className="guest-input-group">
+            <label>Guest Count:</label>
+            <input
+              type="number"
+              className="guest-input"
+              value={guestCount}
+              onChange={onGuestCountChange}
+              min="0"
+            />
+          </div>
 
-        <div className="guest-input-group">
-          <label>Min Guests:</label>
-          <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
-            {menu?.min_guest_count || '--'}
-          </span>
-        </div>
+          <div className="guest-input-group">
+            <label>Min Guests:</label>
+            <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
+              {menu?.min_guest_count || '--'}
+            </span>
+          </div>
 
-        <div className={`surcharge-info ${isBelowMinimum ? 'active' : ''}`}>
-          {isBelowMinimum ? (
-            <>
-              Surcharge: {formatCurrency(menuCost?.surcharge_total)}
-              ({formatCurrency(menu?.under_min_surcharge)}/pp)
-            </>
-          ) : (
-            menu?.under_min_surcharge
-              ? `Surcharge ${formatCurrency(menu?.under_min_surcharge)}/pp applies below ${menu?.min_guest_count} guests`
-              : 'No minimum guest surcharge configured'
-          )}
+          <div className={`surcharge-info ${isBelowMinimum ? 'active' : ''}`}>
+            {isBelowMinimum ? (
+              <>
+                Surcharge: {formatCurrency(menuCost?.surcharge_total)}
+                ({formatCurrency(menu?.under_min_surcharge)}/pp)
+              </>
+            ) : (
+              menu?.under_min_surcharge
+                ? `Surcharge ${formatCurrency(menu?.under_min_surcharge)}/pp applies below ${menu?.min_guest_count} guests`
+                : 'No minimum guest surcharge configured'
+            )}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import axios from '../../../lib/axios';
 
-function NewMenuModal({ outletId, onClose, onMenuCreated }) {
+function NewMenuModal({ outletId, onClose, onMenuCreated, menuType = 'banquet' }) {
+  const isRestaurant = menuType === 'restaurant';
   const [formData, setFormData] = useState({
     meal_period: '',
     service_type: '',
@@ -36,9 +37,10 @@ function NewMenuModal({ outletId, onClose, onMenuCreated }) {
         service_type: formData.service_type,
         name: formData.name,
         price_per_person: formData.price_per_person ? parseFloat(formData.price_per_person) : null,
-        min_guest_count: formData.min_guest_count ? parseInt(formData.min_guest_count, 10) : null,
-        under_min_surcharge: formData.under_min_surcharge ? parseFloat(formData.under_min_surcharge) : null,
-        target_food_cost_pct: formData.target_food_cost_pct ? parseFloat(formData.target_food_cost_pct) : null
+        min_guest_count: isRestaurant ? null : (formData.min_guest_count ? parseInt(formData.min_guest_count, 10) : null),
+        under_min_surcharge: isRestaurant ? null : (formData.under_min_surcharge ? parseFloat(formData.under_min_surcharge) : null),
+        target_food_cost_pct: formData.target_food_cost_pct ? parseFloat(formData.target_food_cost_pct) : null,
+        menu_type: menuType
       };
 
       const response = await axios.post('/banquet-menus', payload);
@@ -61,7 +63,7 @@ function NewMenuModal({ outletId, onClose, onMenuCreated }) {
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h2>New Banquet Menu</h2>
+          <h2>New {isRestaurant ? 'Restaurant' : 'Banquet'} Menu</h2>
           <button className="modal-close" onClick={onClose}>&times;</button>
         </div>
 
@@ -110,14 +112,14 @@ function NewMenuModal({ outletId, onClose, onMenuCreated }) {
 
             <div className="form-row">
               <div className="form-group">
-                <label>Price Per Person</label>
+                <label>{isRestaurant ? 'Menu Price' : 'Price Per Person'}</label>
                 <input
                   type="number"
                   name="price_per_person"
                   className="form-input"
                   value={formData.price_per_person}
                   onChange={handleChange}
-                  placeholder="80.00"
+                  placeholder={isRestaurant ? '52.00' : '80.00'}
                   step="0.01"
                   min="0"
                 />
@@ -139,34 +141,37 @@ function NewMenuModal({ outletId, onClose, onMenuCreated }) {
               </div>
             </div>
 
-            <div className="form-row">
-              <div className="form-group">
-                <label>Minimum Guests</label>
-                <input
-                  type="number"
-                  name="min_guest_count"
-                  className="form-input"
-                  value={formData.min_guest_count}
-                  onChange={handleChange}
-                  placeholder="50"
-                  min="1"
-                />
-              </div>
+            {/* Min guests and surcharge only for banquet menus */}
+            {!isRestaurant && (
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Minimum Guests</label>
+                  <input
+                    type="number"
+                    name="min_guest_count"
+                    className="form-input"
+                    value={formData.min_guest_count}
+                    onChange={handleChange}
+                    placeholder="50"
+                    min="1"
+                  />
+                </div>
 
-              <div className="form-group">
-                <label>Surcharge (per person)</label>
-                <input
-                  type="number"
-                  name="under_min_surcharge"
-                  className="form-input"
-                  value={formData.under_min_surcharge}
-                  onChange={handleChange}
-                  placeholder="10.00"
-                  step="0.01"
-                  min="0"
-                />
+                <div className="form-group">
+                  <label>Surcharge (per person)</label>
+                  <input
+                    type="number"
+                    name="under_min_surcharge"
+                    className="form-input"
+                    value={formData.under_min_surcharge}
+                    onChange={handleChange}
+                    placeholder="10.00"
+                    step="0.01"
+                    min="0"
+                  />
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
           <div className="modal-footer">

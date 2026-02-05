@@ -16,7 +16,8 @@ const STORAGE_KEYS = {
   menuId: 'banquetMenus_menuId',
   outletId: 'banquetMenus_outletId',
   guestCount: 'banquetMenus_guestCount',
-  expandedItems: 'banquetMenus_expandedItems'
+  expandedItems: 'banquetMenus_expandedItems',
+  menuMode: 'banquetMenus_menuMode'
 };
 
 // Helper to check if saved outlet matches current outlet
@@ -32,6 +33,11 @@ const getSavedValueIfOutletMatches = (key, currentOutletId, parser = (v) => v) =
 
 function BanquetMenus() {
   const { currentOutlet: selectedOutlet } = useOutlet();
+
+  // Menu mode: 'banquet' or 'restaurant'
+  const [menuMode, setMenuMode] = useState(() => {
+    return localStorage.getItem(STORAGE_KEYS.menuMode) || 'banquet';
+  });
 
   // Dropdown options
   const [mealPeriods, setMealPeriods] = useState([]);
@@ -122,6 +128,27 @@ function BanquetMenus() {
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.expandedItems, JSON.stringify([...expandedItems]));
   }, [expandedItems]);
+
+  // Persist menu mode
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.menuMode, menuMode);
+  }, [menuMode]);
+
+  // Reset selections and fetch data when menu mode changes
+  useEffect(() => {
+    if (selectedOutlet?.id && selectedOutlet.id !== 'all') {
+      // Reset cascade selections when mode changes
+      setSelectedMealPeriod('');
+      setSelectedServiceType('');
+      setSelectedMenuId(null);
+      setCurrentMenu(null);
+      setMenuCost(null);
+      setMenus([]);
+      setServiceTypes([]);
+      // Fetch meal periods for new mode
+      fetchMealPeriods();
+    }
+  }, [menuMode]);
 
   // Validate and fetch when outlet becomes available
   useEffect(() => {
@@ -229,7 +256,7 @@ function BanquetMenus() {
 
     try {
       const response = await axios.get('/banquet-menus/meal-periods', {
-        params: { outlet_id: outletId }
+        params: { outlet_id: outletId, menu_type: menuMode }
       });
       setMealPeriods(response.data.meal_periods || []);
     } catch (err) {
@@ -246,7 +273,8 @@ function BanquetMenus() {
       const response = await axios.get('/banquet-menus/service-types', {
         params: {
           outlet_id: outletId,
-          meal_period: selectedMealPeriod
+          meal_period: selectedMealPeriod,
+          menu_type: menuMode
         }
       });
       setServiceTypes(response.data.service_types || []);
@@ -265,7 +293,8 @@ function BanquetMenus() {
         params: {
           outlet_id: outletId,
           meal_period: selectedMealPeriod,
-          service_type: selectedServiceType
+          service_type: selectedServiceType,
+          menu_type: menuMode
         }
       });
       setMenus(response.data.menus || []);
@@ -374,6 +403,12 @@ function BanquetMenus() {
     }
   };
 
+  const handleMenuModeChange = (mode) => {
+    if (mode !== menuMode) {
+      setMenuMode(mode);
+    }
+  };
+
   if (!selectedOutlet?.id || selectedOutlet.id === 'all') {
     return (
       <div className="app-container">
@@ -381,12 +416,12 @@ function BanquetMenus() {
         <main className="main-content">
           <div className="banquet-menus-page">
             <div className="page-header">
-              <h1>Banquet Menus</h1>
+              <h1>Menus</h1>
             </div>
             <div className="empty-state">
               {selectedOutlet?.id === 'all'
-                ? 'Please select a specific outlet to view banquet menus. Banquet menus are managed per outlet.'
-                : 'Please select an outlet to view banquet menus.'}
+                ? 'Please select a specific outlet to view menus. Menus are managed per outlet.'
+                : 'Please select an outlet to view menus.'}
             </div>
           </div>
         </main>
@@ -401,8 +436,8 @@ function BanquetMenus() {
         <div className="banquet-menus-page">
           <div className="page-header">
             <div className="header-content">
-              <h1>Banquet Menus</h1>
-              <p>Manage banquet menu items and calculate food costs</p>
+              <h1>Menus</h1>
+              <p>Manage {menuMode === 'restaurant' ? 'restaurant' : 'banquet'} menu items and calculate food costs</p>
             </div>
             <div className="header-buttons">
               <button
@@ -418,6 +453,22 @@ function BanquetMenus() {
                 + New Menu
               </button>
             </div>
+          </div>
+
+          {/* Menu Type Toggle */}
+          <div className="menu-type-toggle">
+            <button
+              className={`toggle-btn ${menuMode === 'banquet' ? 'active' : ''}`}
+              onClick={() => handleMenuModeChange('banquet')}
+            >
+              Banquet
+            </button>
+            <button
+              className={`toggle-btn ${menuMode === 'restaurant' ? 'active' : ''}`}
+              onClick={() => handleMenuModeChange('restaurant')}
+            >
+              Restaurant
+            </button>
           </div>
 
           {/* Cascading Dropdowns */}
@@ -491,6 +542,7 @@ function BanquetMenus() {
                 guestCount={guestCount}
                 onGuestCountChange={handleGuestCountChange}
                 onEditClick={() => setShowEditMenuModal(true)}
+                menuType={menuMode}
               />
 
               {/* Menu Items */}
@@ -503,6 +555,7 @@ function BanquetMenus() {
                 onToggleExpand={toggleExpandedItem}
                 onItemsChanged={handleMenuItemsChanged}
                 onInlineEdit={debouncedCostRefresh}
+                menuType={menuMode}
               />
             </>
           )}
@@ -538,6 +591,7 @@ function BanquetMenus() {
             outletId={selectedOutlet.id}
             onClose={() => setShowNewMenuModal(false)}
             onMenuCreated={handleMenuCreated}
+            menuType={menuMode}
           />
         )}
 
@@ -547,6 +601,7 @@ function BanquetMenus() {
             onClose={() => setShowEditMenuModal(false)}
             onMenuUpdated={handleMenuUpdated}
             onMenuDeleted={handleMenuDeleted}
+            menuType={menuMode}
           />
         )}
 

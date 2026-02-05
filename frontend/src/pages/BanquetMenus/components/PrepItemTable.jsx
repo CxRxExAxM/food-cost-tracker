@@ -4,7 +4,8 @@ import { Trash2, Link, GripVertical } from 'lucide-react';
 import AddPrepItemModal from './AddPrepItemModal';
 import LinkPrepItemModal from './LinkPrepItemModal';
 
-function PrepItemTable({ menuItemId, prepItems, itemCosts, guestCount, onPrepItemsChanged, onInlineEdit }) {
+function PrepItemTable({ menuItemId, prepItems, itemCosts, guestCount, onPrepItemsChanged, onInlineEdit, menuType = 'banquet' }) {
+  const isRestaurant = menuType === 'restaurant';
   const [showAddModal, setShowAddModal] = useState(false);
   const [linkingPrepItem, setLinkingPrepItem] = useState(null);
   const [units, setUnits] = useState([]);
@@ -307,8 +308,8 @@ function PrepItemTable({ menuItemId, prepItems, itemCosts, guestCount, onPrepIte
               <th className="drag-col"></th>
               <th>Prep Item</th>
               <th className="text-center">Amount</th>
-              <th className="text-center">Per</th>
-              <th className="text-right">Qty Req</th>
+              {!isRestaurant && <th className="text-center">Per</th>}
+              {!isRestaurant && <th className="text-right">Qty Req</th>}
               <th>Linked To</th>
               <th className="text-right">Unit Cost</th>
               <th className="text-right">Total</th>
@@ -349,16 +350,20 @@ function PrepItemTable({ menuItemId, prepItems, itemCosts, guestCount, onPrepIte
                       {renderEditableCell(prep, 'unit_id', unitAbbr || '--', 'text', 'amount-unit')}
                     </span>
                   </td>
-                  <td className="text-center">
-                    {renderEditableCell(prep, 'guests_per_amount', formatPerGuests(guestsPerAmount), 'number', 'prep-per-badge')}
-                  </td>
-                  <td className="text-right prep-qty-cell">
-                    {qtyRequired > 0 ? (
-                      <span className="qty-required">
-                        {qtyRequired % 1 === 0 ? qtyRequired : qtyRequired.toFixed(2)} {unitAbbr}
-                      </span>
-                    ) : '--'}
-                  </td>
+                  {!isRestaurant && (
+                    <td className="text-center">
+                      {renderEditableCell(prep, 'guests_per_amount', formatPerGuests(guestsPerAmount), 'number', 'prep-per-badge')}
+                    </td>
+                  )}
+                  {!isRestaurant && (
+                    <td className="text-right prep-qty-cell">
+                      {qtyRequired > 0 ? (
+                        <span className="qty-required">
+                          {qtyRequired % 1 === 0 ? qtyRequired : qtyRequired.toFixed(2)} {unitAbbr}
+                        </span>
+                      ) : '--'}
+                    </td>
+                  )}
                   <td className="prep-link-cell">
                     {linkInfo ? (
                       <span
@@ -410,6 +415,7 @@ function PrepItemTable({ menuItemId, prepItems, itemCosts, guestCount, onPrepIte
             setShowAddModal(false);
             onPrepItemsChanged();
           }}
+          menuType={menuType}
         />
       )}
 
