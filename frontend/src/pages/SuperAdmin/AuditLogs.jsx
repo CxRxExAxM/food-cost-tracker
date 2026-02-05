@@ -92,13 +92,13 @@ export default function SuperAdminAuditLogs() {
     <div className="super-admin-audit-logs">
       <div className="super-admin-nav">
         <div className="super-admin-tabs">
-          <Link to="/super-admin" className="super-admin-tab">
+          <Link to="/settings/super-admin" className="super-admin-tab">
             Dashboard
           </Link>
-          <Link to="/super-admin/organizations" className="super-admin-tab">
+          <Link to="/settings/super-admin/organizations" className="super-admin-tab">
             Organizations
           </Link>
-          <Link to="/super-admin/audit-logs" className="super-admin-tab active">
+          <Link to="/settings/super-admin/audit-logs" className="super-admin-tab active">
             Audit Logs
           </Link>
         </div>

@@ -7,7 +7,7 @@ import UnitSelect from '../../components/UnitSelect';
 import axios from '../../lib/axios';
 import './Vessels.css';
 
-function Vessels() {
+function Vessels({ embedded = false }) {
   const { isAdmin } = useAuth();
   const navigate = useNavigate();
 
@@ -116,8 +116,8 @@ function Vessels() {
   }
 
   return (
-    <div className="page-container">
-      <Navigation />
+    <div className={`page-container ${embedded ? 'embedded' : ''}`}>
+      {!embedded && <Navigation />}
 
       <div className="vessels-container">
         <div className="vessels-header">

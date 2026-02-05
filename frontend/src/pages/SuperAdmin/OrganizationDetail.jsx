@@ -41,7 +41,7 @@ export default function SuperAdminOrganizationDetail() {
     } catch (error) {
       console.error('Error fetching organization detail:', error);
       alert('Error loading organization');
-      navigate('/super-admin/organizations');
+      navigate('/settings/super-admin/organizations');
     } finally {
       setLoading(false);
     }
@@ -218,7 +218,7 @@ export default function SuperAdminOrganizationDetail() {
     <div className="super-admin-organization-detail">
       <div className="detail-header">
         <div>
-          <Link to="/super-admin/organizations" className="back-link">
+          <Link to="/settings/super-admin/organizations" className="back-link">
             ← Back to Organizations
           </Link>
           <h1>{organization.name}</h1>

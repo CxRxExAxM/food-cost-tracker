@@ -175,20 +175,20 @@ export default function SuperAdminOrganizations() {
       <div className="super-admin-nav">
         <div className="super-admin-tabs">
           <Link
-            to="/super-admin"
-            className={`super-admin-tab ${location.pathname === '/super-admin' ? 'active' : ''}`}
+            to="/settings/super-admin"
+            className={`super-admin-tab ${location.pathname === '/settings/super-admin' ? 'active' : ''}`}
           >
             Dashboard
           </Link>
           <Link
-            to="/super-admin/organizations"
-            className={`super-admin-tab ${location.pathname === '/super-admin/organizations' ? 'active' : ''}`}
+            to="/settings/super-admin/organizations"
+            className={`super-admin-tab ${location.pathname.includes('/settings/super-admin/organizations') ? 'active' : ''}`}
           >
             Organizations
           </Link>
           <Link
-            to="/super-admin/audit-logs"
-            className={`super-admin-tab ${location.pathname === '/super-admin/audit-logs' ? 'active' : ''}`}
+            to="/settings/super-admin/audit-logs"
+            className={`super-admin-tab ${location.pathname === '/settings/super-admin/audit-logs' ? 'active' : ''}`}
           >
             Audit Logs
           </Link>

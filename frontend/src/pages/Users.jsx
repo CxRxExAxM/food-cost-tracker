@@ -7,7 +7,7 @@ import './Users.css';
 
 const API_URL = import.meta.env.VITE_API_URL ?? '';
 
-function Users() {
+function Users({ embedded = false }) {
   const { user, getAuthHeader, logout, isAdmin } = useAuth();
   const navigate = useNavigate();
   const [users, setUsers] = useState([]);
@@ -204,8 +204,8 @@ function Users() {
 
   return (
     <>
-      <Navigation />
-      <div className="users-page">
+      {!embedded && <Navigation />}
+      <div className={`users-page ${embedded ? 'embedded' : ''}`}>
         <header className="users-header">
           <h1>User Management</h1>
         </header>

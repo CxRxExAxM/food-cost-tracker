@@ -7,7 +7,7 @@ import OutletCard from '../components/outlets/OutletCard';
 import CreateOutletModal from '../components/outlets/CreateOutletModal';
 import './Outlets.css';
 
-export default function Outlets() {
+export default function Outlets({ embedded = false }) {
   const { isAdmin } = useAuth();
   const { outlets, loading, fetchOutlets } = useOutlet();
   const [searchTerm, setSearchTerm] = useState('');
@@ -35,8 +35,8 @@ export default function Outlets() {
   };
 
   return (
-    <div className="page-container">
-      <Navigation />
+    <div className={`page-container ${embedded ? 'embedded' : ''}`}>
+      {!embedded && <Navigation />}
 
       <div className="page-content">
         <div className="page-header">

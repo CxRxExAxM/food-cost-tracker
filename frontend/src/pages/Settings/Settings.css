@@ -1,0 +1,121 @@
+.settings-page {
+  min-height: 100vh;
+  background-color: var(--bg-color);
+}
+
+.settings-layout {
+  display: flex;
+  max-width: 1600px;
+  margin: 0 auto;
+  padding: var(--space-4);
+  gap: var(--space-4);
+}
+
+.settings-sidebar {
+  width: 220px;
+  flex-shrink: 0;
+  background: var(--surface-color);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  height: fit-content;
+  position: sticky;
+  top: calc(60px + var(--space-4));
+}
+
+.settings-sidebar-title {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 var(--space-4) 0;
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.settings-nav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.settings-nav-link {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-3);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  transition: all 0.15s ease;
+}
+
+.settings-nav-link:hover {
+  background-color: var(--surface-secondary);
+  color: var(--text-primary);
+}
+
+.settings-nav-link.active {
+  background-color: var(--primary-light);
+  color: var(--primary);
+}
+
+.settings-nav-link.active svg {
+  color: var(--primary);
+}
+
+.settings-nav-link.super-admin {
+  color: var(--warning-text);
+}
+
+.settings-nav-link.super-admin:hover {
+  background-color: rgba(245, 158, 11, 0.1);
+}
+
+.settings-nav-link.super-admin.active {
+  background-color: rgba(245, 158, 11, 0.15);
+  color: var(--warning-text);
+}
+
+.settings-content {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Remove padding/margins from child pages since Settings provides the layout */
+.settings-content .page-container {
+  padding: 0;
+  max-width: none;
+}
+
+.settings-content .page-header {
+  margin-bottom: var(--space-4);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .settings-layout {
+    flex-direction: column;
+  }
+
+  .settings-sidebar {
+    width: 100%;
+    position: static;
+  }
+
+  .settings-nav {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  .settings-nav-link {
+    flex: 1;
+    min-width: 100px;
+    justify-content: center;
+  }
+
+  .settings-nav-link span {
+    display: none;
+  }
+}

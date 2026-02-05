@@ -6,7 +6,7 @@ import UnitSelect from '../../components/UnitSelect';
 import axios from '../../lib/axios';
 import './BaseConversions.css';
 
-function BaseConversions() {
+function BaseConversions({ embedded = false }) {
   const { currentOutlet } = useAuth();
 
   const [conversions, setConversions] = useState([]);
@@ -101,8 +101,8 @@ function BaseConversions() {
   }
 
   return (
-    <div className="page-container">
-      <Navigation />
+    <div className={`page-container ${embedded ? 'embedded' : ''}`}>
+      {!embedded && <Navigation />}
 
       <div className="conversions-container">
         <div className="conversions-header">

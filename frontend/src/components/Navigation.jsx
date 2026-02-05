@@ -36,6 +36,10 @@ function Navigation() {
     return location.pathname === path;
   };
 
+  const isSettingsActive = () => {
+    return location.pathname.startsWith('/settings');
+  };
+
   // Get organization name from user object
   // Note: We'll need to add organization info to the user object from AuthContext
   const organizationName = user?.organization_name || 'Organization';
@@ -67,33 +71,8 @@ function Navigation() {
               Menus
             </Link>
             {isAdmin() && (
-              <Link to="/users" className={`nav-link ${isActivePath('/users') ? 'active' : ''}`}>
-                Users
-              </Link>
-            )}
-            {isAdmin() && (
-              <Link to="/outlets" className={`nav-link ${isActivePath('/outlets') ? 'active' : ''}`}>
-                Outlets
-              </Link>
-            )}
-            {isAdmin() && (
-              <Link to="/admin" className={`nav-link ${isActivePath('/admin') ? 'active' : ''}`}>
-                Admin
-              </Link>
-            )}
-            {isAdmin() && (
-              <Link to="/settings/vessels" className={`nav-link ${isActivePath('/settings/vessels') ? 'active' : ''}`}>
-                Vessels
-              </Link>
-            )}
-            {isAdmin() && (
-              <Link to="/settings/conversions" className={`nav-link ${isActivePath('/settings/conversions') ? 'active' : ''}`}>
-                Conversions
-              </Link>
-            )}
-            {user?.is_super_admin && (
-              <Link to="/super-admin" className={`nav-link super-admin-link ${isActivePath('/super-admin') || isActivePath('/super-admin/organizations') ? 'active' : ''}`}>
-                Super Admin
+              <Link to="/settings" className={`nav-link ${isSettingsActive() ? 'active' : ''}`}>
+                Settings
               </Link>
             )}
           </div>

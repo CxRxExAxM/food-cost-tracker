@@ -6,7 +6,7 @@ import Navigation from '../components/Navigation';
 import axios from '../lib/axios';
 import './Admin.css';
 
-function Admin() {
+function Admin({ embedded = false }) {
   const { user, logout, isAdmin } = useAuth();
   const navigate = useNavigate();
 
@@ -145,8 +145,8 @@ function Admin() {
   }
 
   return (
-    <div className="page-container">
-      <Navigation onLogout={handleLogout} />
+    <div className={`page-container ${embedded ? 'embedded' : ''}`}>
+      {!embedded && <Navigation onLogout={handleLogout} />}
 
       <div className="admin-container">
         <div className="admin-header">

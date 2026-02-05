@@ -8,6 +8,7 @@ import Users from './pages/Users';
 import Admin from './pages/Admin';
 import Outlets from './pages/Outlets';
 import Login from './pages/Login';
+import Settings from './pages/Settings/Settings';
 import SuperAdminDashboard from './pages/SuperAdmin/Dashboard';
 import SuperAdminOrganizations from './pages/SuperAdmin/Organizations';
 import SuperAdminOrganizationDetail from './pages/SuperAdmin/OrganizationDetail';
@@ -61,6 +62,30 @@ function PublicRoute({ children }) {
   }
 
   if (user) {
+    return <Navigate to="/" replace />;
+  }
+
+  return children;
+}
+
+// Admin route - requires admin access
+function AdminRoute({ children }) {
+  const { user, loading, isAdmin } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="loading-screen">
+        <div className="loading-spinner"></div>
+        <p>Loading...</p>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (!isAdmin()) {
     return <Navigate to="/" replace />;
   }
 
@@ -127,30 +152,6 @@ function AppRoutes() {
         }
       />
       <Route
-        path="/users"
-        element={
-          <ProtectedRoute>
-            <Users />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/outlets"
-        element={
-          <ProtectedRoute>
-            <Outlets />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/admin"
-        element={
-          <ProtectedRoute>
-            <Admin />
-          </ProtectedRoute>
-        }
-      />
-      <Route
         path="/banquet-menus"
         element={
           <ProtectedRoute>
@@ -158,54 +159,34 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
+
+      {/* Settings - nested routes */}
       <Route
-        path="/settings/vessels"
+        path="/settings"
         element={
-          <ProtectedRoute>
-            <Vessels />
-          </ProtectedRoute>
+          <AdminRoute>
+            <Settings />
+          </AdminRoute>
         }
-      />
-      <Route
-        path="/settings/conversions"
-        element={
-          <ProtectedRoute>
-            <BaseConversions />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/super-admin"
-        element={
-          <SuperAdminRoute>
-            <SuperAdminDashboard />
-          </SuperAdminRoute>
-        }
-      />
-      <Route
-        path="/super-admin/organizations"
-        element={
-          <SuperAdminRoute>
-            <SuperAdminOrganizations />
-          </SuperAdminRoute>
-        }
-      />
-      <Route
-        path="/super-admin/organizations/:orgId"
-        element={
-          <SuperAdminRoute>
-            <SuperAdminOrganizationDetail />
-          </SuperAdminRoute>
-        }
-      />
-      <Route
-        path="/super-admin/audit-logs"
-        element={
-          <SuperAdminRoute>
-            <SuperAdminAuditLogs />
-          </SuperAdminRoute>
-        }
-      />
+      >
+        <Route path="users" element={<Users embedded />} />
+        <Route path="outlets" element={<Outlets embedded />} />
+        <Route path="vessels" element={<Vessels embedded />} />
+        <Route path="conversions" element={<BaseConversions embedded />} />
+        <Route path="admin" element={<Admin embedded />} />
+        {/* Super Admin nested routes */}
+        <Route path="super-admin" element={<SuperAdminDashboard />} />
+        <Route path="super-admin/organizations" element={<SuperAdminOrganizations />} />
+        <Route path="super-admin/organizations/:orgId" element={<SuperAdminOrganizationDetail />} />
+        <Route path="super-admin/audit-logs" element={<SuperAdminAuditLogs />} />
+      </Route>
+
+      {/* Legacy routes - redirect to new settings paths */}
+      <Route path="/users" element={<Navigate to="/settings/users" replace />} />
+      <Route path="/outlets" element={<Navigate to="/settings/outlets" replace />} />
+      <Route path="/admin" element={<Navigate to="/settings/admin" replace />} />
+      <Route path="/super-admin" element={<Navigate to="/settings/super-admin" replace />} />
+      <Route path="/super-admin/*" element={<Navigate to="/settings/super-admin" replace />} />
     </Routes>
   );
 }
