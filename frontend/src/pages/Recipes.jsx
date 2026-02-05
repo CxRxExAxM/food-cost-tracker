@@ -801,13 +801,13 @@ function RecipeMetadata({ recipe, editedRecipe, onFieldChange }) {
           </select>
         </div>
         <div className="metadata-field servings-field">
-          <label>Servings:</label>
+          <label>{currentServingUnit ? 'Serving Size:' : 'Servings:'}</label>
           <input
             type="number"
             className="metadata-input"
             value={currentServings || ''}
             onChange={(e) => onFieldChange('servings', parseFloat(e.target.value) || null)}
-            placeholder="8"
+            placeholder={currentServingUnit ? "2" : "8"}
             step={currentServingUnit ? "0.1" : "1"}
             min="0.1"
           />
@@ -1844,7 +1844,7 @@ function RecipeCost({ recipe }) {
                   <span className="cost-value">{formatCurrency(costData.total_cost)}</span>
                 </div>
                 <div className="cost-item">
-                  <label>Cost per {costData.serving_unit_abbreviation || 'Serving'}:</label>
+                  <label>Cost per {costData.serving_unit_abbreviation ? `${costData.servings} ${costData.serving_unit_abbreviation} Portion` : 'Serving'}:</label>
                   <span className="cost-value">
                     {costData.cost_per_serving !== null
                       ? formatCurrency(costData.cost_per_serving)
@@ -1852,7 +1852,7 @@ function RecipeCost({ recipe }) {
                     }
                   </span>
                 </div>
-                {(costData.yield_amount || costData.servings) && (
+                {(costData.yield_amount || costData.servings || costData.portion_count) && (
                   <div className="cost-item cost-yield">
                     {costData.yield_amount && costData.yield_unit_abbreviation && (
                       <div>
@@ -1862,11 +1862,27 @@ function RecipeCost({ recipe }) {
                         </span>
                       </div>
                     )}
-                    {costData.servings && (
+                    {costData.servings && costData.serving_unit_abbreviation && (
+                      <div>
+                        <label>Serving Size:</label>
+                        <span className="cost-value-small">
+                          {costData.servings} {costData.serving_unit_abbreviation}
+                        </span>
+                      </div>
+                    )}
+                    {costData.portion_count && (
+                      <div>
+                        <label>Portions:</label>
+                        <span className="cost-value-small">
+                          {costData.portion_count % 1 === 0 ? costData.portion_count : costData.portion_count.toFixed(1)}
+                        </span>
+                      </div>
+                    )}
+                    {costData.servings && !costData.serving_unit_abbreviation && (
                       <div>
                         <label>Servings:</label>
                         <span className="cost-value-small">
-                          {costData.servings} {costData.serving_unit_abbreviation || 'portions'}
+                          {costData.servings} portions
                         </span>
                       </div>
                     )}

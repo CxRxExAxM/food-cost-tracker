@@ -497,11 +497,36 @@ def calculate_recipe_cost(recipe_id: int, current_user: dict = Depends(get_curre
             org_id=current_user["organization_id"]
         )
 
-        # Calculate cost per serving (use servings field, fallback to yield_amount for backwards compat)
+        # Calculate cost per serving
+        # If serving_unit_id is set, 'servings' represents serving SIZE (e.g., 2oz per portion)
+        # and we calculate portion count from yield
+        # If serving_unit_id is null, 'servings' is the portion count directly
         cost_per_serving = None
-        servings = recipe.get('servings') or recipe.get('yield_amount')
-        if servings and servings > 0:
-            cost_per_serving = total_cost / servings
+        portion_count = None
+        serving_size = recipe.get('servings')
+        serving_unit_id = recipe.get('serving_unit_id')
+        yield_amount = recipe.get('yield_amount')
+        yield_unit_id = recipe.get('yield_unit_id')
+
+        if serving_unit_id and serving_size and serving_size > 0 and yield_amount and yield_amount > 0:
+            # Serving size mode: calculate portion count from yield
+            # Convert yield to serving unit, then divide by serving size
+            if yield_unit_id and yield_unit_id != serving_unit_id:
+                # Convert yield to serving unit (e.g., 5 GAL → 640 FL OZ)
+                conversion_factor = get_unit_conversion_factor(
+                    cursor, None, yield_unit_id, serving_unit_id,
+                    current_user["organization_id"]
+                )
+                yield_in_serving_unit = yield_amount * conversion_factor
+            else:
+                yield_in_serving_unit = yield_amount
+
+            portion_count = yield_in_serving_unit / serving_size
+            cost_per_serving = total_cost / portion_count if portion_count > 0 else None
+        elif serving_size and serving_size > 0:
+            # Legacy mode: servings is the portion count directly
+            portion_count = serving_size
+            cost_per_serving = total_cost / portion_count
 
         # Add percentage of total to each ingredient
         for ing in ingredients_with_costs:
@@ -517,6 +542,7 @@ def calculate_recipe_cost(recipe_id: int, current_user: dict = Depends(get_curre
             **recipe,
             "total_cost": round(total_cost, 2),
             "cost_per_serving": round(cost_per_serving, 2) if cost_per_serving else None,
+            "portion_count": round(portion_count, 1) if portion_count else None,
             "ingredients": ingredients_with_costs,
             "allergens": allergen_summary
         }
