@@ -501,3 +501,23 @@ class MonthlyLimitErrorResponse(BaseModel):
     detail: str
     usage: UsageStats
     upgrade_url: str = "/settings/subscription"
+
+
+# ============================================
+# Common Product Merge Schemas
+# ============================================
+
+class MergeCommonProductsRequest(BaseModel):
+    """Request to merge common products."""
+    source_ids: List[int] = Field(..., description="IDs of common products to merge into target")
+    target_id: int = Field(..., description="ID of the target common product to keep")
+
+
+class MergeCommonProductsResponse(BaseModel):
+    """Response from merge operation."""
+    target_id: int
+    sources_merged: int
+    products_remapped: int
+    ingredients_remapped: int
+    merged_allergens: List[str]
+    message: str

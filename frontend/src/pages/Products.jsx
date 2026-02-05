@@ -3,6 +3,7 @@ import axios from '../lib/axios';
 import Navigation from '../components/Navigation';
 import { useOutlet } from '../contexts/OutletContext';
 import OutletBadge from '../components/outlets/OutletBadge';
+import CommonProductsTable from './Products/CommonProductsTable';
 import './Products.css';
 
 const API_URL = import.meta.env.VITE_API_URL ?? '';
@@ -29,6 +30,7 @@ const ALLERGENS = [
 
 function Products() {
   const { currentOutlet, outlets } = useOutlet();
+  const [activeTab, setActiveTab] = useState('products');
   const [products, setProducts] = useState([]);
   const [commonProducts, setCommonProducts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -682,6 +684,26 @@ function Products() {
         </button>
       </div>
 
+      {/* Tab Navigation */}
+      <div className="products-tabs">
+        <button
+          className={`products-tab ${activeTab === 'products' ? 'active' : ''}`}
+          onClick={() => setActiveTab('products')}
+        >
+          Products
+        </button>
+        <button
+          className={`products-tab ${activeTab === 'common' ? 'active' : ''}`}
+          onClick={() => setActiveTab('common')}
+        >
+          Common Products
+        </button>
+      </div>
+
+      {activeTab === 'common' ? (
+        <CommonProductsTable />
+      ) : (
+      <>
       {/* Upload Section */}
       {showUpload && (
         <div className="upload-section">
@@ -1194,6 +1216,8 @@ function Products() {
           onClose={() => setAllergenModalProduct(null)}
           onUpdate={handleUpdateAllergens}
         />
+      )}
+      </>
       )}
       </div>
     </>

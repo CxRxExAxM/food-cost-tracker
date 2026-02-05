@@ -1,44 +1,105 @@
 from fastapi import APIRouter, HTTPException, Query, Depends, Request, Body
 from typing import Optional
 from ..database import get_db, dicts_from_rows, dict_from_row
-from ..schemas import CommonProduct, CommonProductCreate, CommonProductUpdate, QuickCreateProductRequest, QuickCreateProductResponse
+from ..schemas import CommonProduct, CommonProductCreate, CommonProductUpdate, QuickCreateProductRequest, QuickCreateProductResponse, MergeCommonProductsRequest, MergeCommonProductsResponse
 from ..auth import get_current_user
 from ..audit import log_audit
 
 router = APIRouter(prefix="/common-products", tags=["common-products"])
 
 
-@router.get("", response_model=list[CommonProduct])
+@router.get("/categories")
+def get_categories(current_user: dict = Depends(get_current_user)):
+    """Get distinct categories for common products."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT DISTINCT category
+            FROM common_products
+            WHERE is_active = 1
+              AND organization_id = %s
+              AND category IS NOT NULL
+              AND category != ''
+            ORDER BY category
+        """, (current_user["organization_id"],))
+        rows = cursor.fetchall()
+        return [row["category"] for row in rows]
+
+
+@router.get("")
 def list_common_products(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=10000),
     search: Optional[str] = None,
     category: Optional[str] = None,
+    allergen: Optional[str] = None,
+    include_linked_count: bool = Query(False),
     current_user: dict = Depends(get_current_user)
 ):
     """
-    List common products with optional filtering .
+    List common products with optional filtering.
 
     - **skip**: Number of records to skip (pagination)
     - **limit**: Maximum number of records to return
     - **search**: Search in common product name
     - **category**: Filter by category
+    - **allergen**: Filter by allergen (e.g., 'allergen_gluten', 'allergen_dairy')
+    - **include_linked_count**: Include count of linked products
     """
     with get_db() as conn:
         cursor = conn.cursor()
 
-        query = "SELECT * FROM common_products WHERE is_active = 1 AND organization_id = %s"
+        if include_linked_count:
+            query = """
+                SELECT cp.*,
+                       COALESCE(pc.linked_count, 0) as linked_products_count
+                FROM common_products cp
+                LEFT JOIN (
+                    SELECT common_product_id, COUNT(*) as linked_count
+                    FROM products
+                    WHERE is_active = 1
+                    GROUP BY common_product_id
+                ) pc ON pc.common_product_id = cp.id
+                WHERE cp.is_active = 1 AND cp.organization_id = %s
+            """
+        else:
+            query = "SELECT * FROM common_products WHERE is_active = 1 AND organization_id = %s"
         params = [current_user["organization_id"]]
 
         if search:
-            query += " AND common_name ILIKE %s"
+            if include_linked_count:
+                query += " AND cp.common_name ILIKE %s"
+            else:
+                query += " AND common_name ILIKE %s"
             params.append(f"%{search}%")
 
         if category:
-            query += " AND category = %s"
+            if include_linked_count:
+                query += " AND cp.category = %s"
+            else:
+                query += " AND category = %s"
             params.append(category)
 
-        query += " ORDER BY common_name LIMIT %s OFFSET %s"
+        if allergen:
+            # Validate allergen field name to prevent SQL injection
+            valid_allergens = [
+                'allergen_vegan', 'allergen_vegetarian', 'allergen_gluten',
+                'allergen_crustation', 'allergen_egg', 'allergen_mollusk',
+                'allergen_fish', 'allergen_lupin', 'allergen_dairy',
+                'allergen_tree_nuts', 'allergen_peanuts', 'allergen_sesame',
+                'allergen_soy', 'allergen_sulphur_dioxide', 'allergen_mustard',
+                'allergen_celery'
+            ]
+            if allergen in valid_allergens:
+                if include_linked_count:
+                    query += f" AND cp.{allergen} = 1"
+                else:
+                    query += f" AND {allergen} = 1"
+
+        if include_linked_count:
+            query += " ORDER BY cp.common_name LIMIT %s OFFSET %s"
+        else:
+            query += " ORDER BY common_name LIMIT %s OFFSET %s"
         params.extend([limit, skip])
 
         cursor.execute(query, params)
@@ -556,6 +617,142 @@ def convert_quantity(
             "converted_unit_id": to_unit_id,
             "conversion_factor": conversion['conversion_factor']
         }
+
+
+@router.post("/merge", response_model=MergeCommonProductsResponse)
+def merge_common_products(
+    request: MergeCommonProductsRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Merge multiple common products into one target.
+
+    - Remaps all products from source common products to target
+    - Remaps recipe ingredients from sources to target
+    - Merges allergens using OR logic (if any source has allergen, target gets it)
+    - Soft-deletes source common products
+    """
+    if current_user['role'] not in ['chef', 'admin']:
+        raise HTTPException(
+            status_code=403,
+            detail="Only Chef and Admin roles can merge products"
+        )
+
+    if request.target_id in request.source_ids:
+        raise HTTPException(
+            status_code=400,
+            detail="Target cannot be in source list"
+        )
+
+    if len(request.source_ids) < 1:
+        raise HTTPException(
+            status_code=400,
+            detail="At least one source product is required"
+        )
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+        organization_id = current_user["organization_id"]
+
+        # Verify target exists and belongs to organization
+        cursor.execute("""
+            SELECT * FROM common_products
+            WHERE id = %s AND organization_id = %s AND is_active = 1
+        """, (request.target_id, organization_id))
+        target = dict_from_row(cursor.fetchone())
+        if not target:
+            raise HTTPException(status_code=404, detail="Target product not found")
+
+        # Verify all sources exist and belong to organization
+        placeholders = ', '.join(['%s'] * len(request.source_ids))
+        cursor.execute(f"""
+            SELECT * FROM common_products
+            WHERE id IN ({placeholders})
+              AND organization_id = %s
+              AND is_active = 1
+        """, (*request.source_ids, organization_id))
+        sources = dicts_from_rows(cursor.fetchall())
+
+        if len(sources) != len(request.source_ids):
+            raise HTTPException(status_code=404, detail="One or more source products not found")
+
+        # Count products that will be remapped
+        cursor.execute(f"""
+            SELECT COUNT(*) as count FROM products
+            WHERE common_product_id IN ({placeholders})
+              AND organization_id = %s
+        """, (*request.source_ids, organization_id))
+        products_remapped = dict_from_row(cursor.fetchone())['count']
+
+        # Count recipe ingredients that will be remapped
+        cursor.execute(f"""
+            SELECT COUNT(*) as count FROM recipe_ingredients
+            WHERE common_product_id IN ({placeholders})
+        """, request.source_ids)
+        ingredients_remapped = dict_from_row(cursor.fetchone())['count']
+
+        # Remap products from sources to target
+        cursor.execute(f"""
+            UPDATE products
+            SET common_product_id = %s
+            WHERE common_product_id IN ({placeholders})
+              AND organization_id = %s
+        """, (request.target_id, *request.source_ids, organization_id))
+
+        # Remap recipe ingredients from sources to target
+        cursor.execute(f"""
+            UPDATE recipe_ingredients
+            SET common_product_id = %s
+            WHERE common_product_id IN ({placeholders})
+        """, (request.target_id, *request.source_ids))
+
+        # Merge allergens using OR logic
+        allergen_fields = [
+            'allergen_vegan', 'allergen_vegetarian', 'allergen_gluten',
+            'allergen_crustation', 'allergen_egg', 'allergen_mollusk',
+            'allergen_fish', 'allergen_lupin', 'allergen_dairy',
+            'allergen_tree_nuts', 'allergen_peanuts', 'allergen_sesame',
+            'allergen_soy', 'allergen_sulphur_dioxide', 'allergen_mustard',
+            'allergen_celery'
+        ]
+
+        merged_allergens = {}
+        for field in allergen_fields:
+            # Target starts with its own value, OR with all sources
+            value = target.get(field, 0)
+            for source in sources:
+                value = value or source.get(field, 0)
+            merged_allergens[field] = 1 if value else 0
+
+        # Update target with merged allergens
+        update_parts = [f"{field} = %s" for field in allergen_fields]
+        cursor.execute(f"""
+            UPDATE common_products
+            SET {', '.join(update_parts)}
+            WHERE id = %s
+        """, (*merged_allergens.values(), request.target_id))
+
+        # Soft-delete source common products
+        cursor.execute(f"""
+            UPDATE common_products
+            SET is_active = 0
+            WHERE id IN ({placeholders})
+        """, request.source_ids)
+
+        conn.commit()
+
+        # Get updated target
+        cursor.execute("SELECT * FROM common_products WHERE id = %s", (request.target_id,))
+        updated_target = dict_from_row(cursor.fetchone())
+
+        return MergeCommonProductsResponse(
+            target_id=request.target_id,
+            sources_merged=len(request.source_ids),
+            products_remapped=products_remapped,
+            ingredients_remapped=ingredients_remapped,
+            merged_allergens=[k for k, v in merged_allergens.items() if v],
+            message=f"Successfully merged {len(request.source_ids)} products into '{updated_target['common_name']}'"
+        )
 
 
 @router.post("/quick-create", response_model=QuickCreateProductResponse, status_code=201)

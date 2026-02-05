@@ -1,5 +1,37 @@
 /* Products Page - Dark Cyberpunk Theme */
 
+/* Tab Navigation */
+.products-tabs {
+  display: flex;
+  gap: var(--space-1);
+  margin-bottom: var(--space-6);
+  border-bottom: 2px solid var(--border-default);
+}
+
+.products-tab {
+  padding: var(--space-3) var(--space-6);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  color: var(--text-secondary);
+  font-size: var(--text-base);
+  font-weight: var(--font-weight-medium);
+  font-family: var(--font-primary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.products-tab:hover {
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+}
+
+.products-tab.active {
+  color: var(--color-yellow);
+  border-bottom-color: var(--color-yellow);
+}
+
 .filters {
   display: flex;
   gap: var(--space-4);
