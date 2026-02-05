@@ -233,12 +233,12 @@ function BanquetMenus() {
     }
   }, [selectedMenuId]);
 
-  // Recalculate costs when guest count changes
+  // Recalculate costs when guest count changes (or for restaurant mode)
   useEffect(() => {
-    if (selectedMenuId && guestCount > 0) {
+    if (selectedMenuId && (menuMode === 'restaurant' || guestCount > 0)) {
       fetchMenuCost();
     }
-  }, [guestCount, selectedMenuId]);
+  }, [guestCount, selectedMenuId, menuMode]);
 
   // Get outlet ID for API calls (null if 'all' selected)
   const getOutletIdParam = () => {
@@ -322,11 +322,13 @@ function BanquetMenus() {
   };
 
   const fetchMenuCost = async () => {
-    if (!selectedMenuId || guestCount < 1) return;
+    if (!selectedMenuId) return;
+    // For banquet mode, require guest count >= 1; for restaurant mode, backend uses guests=1
+    if (menuMode === 'banquet' && guestCount < 1) return;
 
     try {
       const response = await axios.get(`/banquet-menus/${selectedMenuId}/cost`, {
-        params: { guests: guestCount }
+        params: { guests: menuMode === 'restaurant' ? 1 : guestCount }
       });
       setMenuCost(response.data);
     } catch (err) {
