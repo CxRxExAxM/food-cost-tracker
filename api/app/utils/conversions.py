@@ -179,6 +179,16 @@ def get_unit_conversion_factor(cursor, common_product_id: int, from_unit_id: int
         if from_abbr in volume_to_floz and to_abbr in volume_to_floz:
             return volume_to_floz[from_abbr] / volume_to_floz[to_abbr]
 
+        # Cross-conversion: Treat "OZ" as fluid ounces when used with volume units
+        # This is common in culinary contexts where "oz" for liquids means fluid ounces
+        if from_abbr == 'OZ' and to_abbr in volume_to_floz:
+            # Treat OZ as FL OZ (1 fl oz)
+            return 1.0 / volume_to_floz[to_abbr]
+
+        if from_abbr in volume_to_floz and to_abbr == 'OZ':
+            # Treat OZ as FL OZ (1 fl oz)
+            return volume_to_floz[from_abbr] / 1.0
+
     # No conversion found - return 1.0 (assumes same unit or incompatible)
     return 1.0
 
