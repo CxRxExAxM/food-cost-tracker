@@ -12,11 +12,11 @@ from passlib.context import CryptContext
 from pydantic import BaseModel
 
 from .database import get_db, dict_from_row
+from .config import ACCESS_TOKEN_EXPIRE_MINUTES
 
 # Configuration - use environment variable in production
 SECRET_KEY = os.getenv("JWT_SECRET_KEY", "dev-secret-key-change-in-production")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 hours
 
 # Password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")

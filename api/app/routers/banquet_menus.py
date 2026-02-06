@@ -11,6 +11,7 @@ from decimal import Decimal
 from ..database import get_db, dicts_from_rows, dict_from_row
 from ..auth import get_current_user, build_outlet_filter, check_outlet_access
 from ..utils.conversions import get_unit_conversion_factor, get_base_conversion_factor, get_unit_id_from_abbreviation
+from ..config import DEFAULT_GUEST_COUNT
 
 router = APIRouter(prefix="/banquet-menus", tags=["banquet-menus"])
 
@@ -391,7 +392,7 @@ def calculate_menu_cost(
         if is_restaurant:
             guests = 1
         elif guests is None:
-            guests = 50  # Default for banquet
+            guests = DEFAULT_GUEST_COUNT
 
         # Calculate costs
         total_cost = Decimal("0")

@@ -4,6 +4,7 @@ from typing import Optional
 from ..database import get_db, dicts_from_rows, dict_from_row
 from ..schemas import Product, ProductWithPrice
 from ..auth import get_current_user, build_outlet_filter, check_outlet_access
+from ..config import DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT
 
 router = APIRouter(prefix="/products", tags=["products"])
 
@@ -108,7 +109,7 @@ class ProductListResponse(BaseModel):
 @router.get("", response_model=ProductListResponse)
 def list_products(
     skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=500),
+    limit: int = Query(DEFAULT_PAGE_LIMIT, ge=1, le=MAX_PAGE_LIMIT),
     search: Optional[str] = None,
     distributor_id: Optional[int] = None,
     common_product_id: Optional[int] = None,

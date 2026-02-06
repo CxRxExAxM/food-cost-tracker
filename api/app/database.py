@@ -13,11 +13,8 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
     raise RuntimeError("DATABASE_URL environment variable is required")
 
-# Connection pool settings
-# minconn: minimum connections to keep open
-# maxconn: maximum connections allowed (Render free tier allows ~20)
-MIN_CONNECTIONS = 2
-MAX_CONNECTIONS = 10
+# Connection pool settings from centralized config
+from .config import DB_MIN_CONNECTIONS, DB_MAX_CONNECTIONS
 
 # Initialize the connection pool
 _pool = None
@@ -28,8 +25,8 @@ def get_pool():
     global _pool
     if _pool is None:
         _pool = ThreadedConnectionPool(
-            minconn=MIN_CONNECTIONS,
-            maxconn=MAX_CONNECTIONS,
+            minconn=DB_MIN_CONNECTIONS,
+            maxconn=DB_MAX_CONNECTIONS,
             dsn=DATABASE_URL
         )
     return _pool

@@ -4,6 +4,7 @@ from ..database import get_db, dicts_from_rows, dict_from_row
 from ..schemas import Recipe, RecipeCreate, RecipeWithIngredients, RecipeWithCost
 from ..auth import get_current_user, build_outlet_filter, check_outlet_access
 from ..utils.conversions import get_unit_conversion_factor
+from ..config import DEFAULT_PAGE_LIMIT_LARGE, MAX_PAGE_LIMIT_LARGE
 import json
 
 router = APIRouter(prefix="/recipes", tags=["recipes"])
@@ -12,7 +13,7 @@ router = APIRouter(prefix="/recipes", tags=["recipes"])
 @router.get("", response_model=list[Recipe])
 def list_recipes(
     skip: int = Query(0, ge=0),
-    limit: int = Query(1000, ge=1, le=10000),
+    limit: int = Query(DEFAULT_PAGE_LIMIT_LARGE, ge=1, le=MAX_PAGE_LIMIT_LARGE),
     search: Optional[str] = None,
     category_path: Optional[str] = None,
     outlet_id: Optional[int] = None,

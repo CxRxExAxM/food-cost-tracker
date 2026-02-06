@@ -4,6 +4,7 @@ from ..database import get_db, dicts_from_rows, dict_from_row
 from ..schemas import CommonProduct, CommonProductCreate, CommonProductUpdate, QuickCreateProductRequest, QuickCreateProductResponse, MergeCommonProductsRequest, MergeCommonProductsResponse
 from ..auth import get_current_user
 from ..audit import log_audit
+from ..config import DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT_LARGE
 
 router = APIRouter(prefix="/common-products", tags=["common-products"])
 
@@ -29,7 +30,7 @@ def get_categories(current_user: dict = Depends(get_current_user)):
 @router.get("")
 def list_common_products(
     skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=10000),
+    limit: int = Query(DEFAULT_PAGE_LIMIT, ge=1, le=MAX_PAGE_LIMIT_LARGE),
     search: Optional[str] = None,
     category: Optional[str] = None,
     allergen: Optional[str] = None,
