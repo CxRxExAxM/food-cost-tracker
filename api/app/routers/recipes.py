@@ -414,6 +414,42 @@ def debug_recipe_cost(recipe_id: int, current_user: dict = Depends(get_current_u
         ingredients = dicts_from_rows(cursor.fetchall())
         debug_info = []
 
+        # Collect all common_product_ids for batch query (fixes N+1)
+        common_product_ids = [
+            ing['common_product_id'] for ing in ingredients
+            if ing.get('common_product_id')
+        ]
+
+        # Fetch ALL products for ALL common products in ONE query
+        products_by_common = {}
+        if common_product_ids:
+            cursor.execute("""
+                SELECT
+                    p.common_product_id,
+                    p.id as product_id,
+                    p.name as product_name,
+                    p.outlet_id,
+                    d.name as distributor_name,
+                    ph.unit_price,
+                    ph.effective_date
+                FROM products p
+                JOIN distributor_products dp ON dp.product_id = p.id
+                JOIN distributors d ON d.id = dp.distributor_id
+                LEFT JOIN (
+                    SELECT distributor_product_id, unit_price, effective_date,
+                           ROW_NUMBER() OVER (PARTITION BY distributor_product_id ORDER BY effective_date DESC) as rn
+                    FROM price_history
+                ) ph ON ph.distributor_product_id = dp.id AND ph.rn = 1
+                WHERE p.common_product_id = ANY(%s) AND p.outlet_id = %s
+                ORDER BY p.common_product_id, ph.unit_price ASC NULLS LAST
+            """, (common_product_ids, recipe['outlet_id']))
+
+            all_products = dicts_from_rows(cursor.fetchall())
+
+            # Group by common_product_id
+            from ..utils.db_helpers import group_by_key
+            products_by_common = group_by_key(all_products, "common_product_id")
+
         for ing in ingredients:
             ing_debug = {
                 "ingredient_id": ing['id'],
@@ -424,28 +460,7 @@ def debug_recipe_cost(recipe_id: int, current_user: dict = Depends(get_current_u
             }
 
             if ing.get('common_product_id'):
-                # Check what products exist for this outlet + common product
-                cursor.execute("""
-                    SELECT
-                        p.id as product_id,
-                        p.name as product_name,
-                        p.outlet_id,
-                        d.name as distributor_name,
-                        ph.unit_price,
-                        ph.effective_date
-                    FROM products p
-                    JOIN distributor_products dp ON dp.product_id = p.id
-                    JOIN distributors d ON d.id = dp.distributor_id
-                    LEFT JOIN (
-                        SELECT distributor_product_id, unit_price, effective_date,
-                               ROW_NUMBER() OVER (PARTITION BY distributor_product_id ORDER BY effective_date DESC) as rn
-                        FROM price_history
-                    ) ph ON ph.distributor_product_id = dp.id AND ph.rn = 1
-                    WHERE p.common_product_id = %s AND p.outlet_id = %s
-                    ORDER BY ph.unit_price ASC NULLS LAST
-                """, (ing['common_product_id'], recipe['outlet_id']))
-
-                products = dicts_from_rows(cursor.fetchall())
+                products = products_by_common.get(ing['common_product_id'], [])
                 ing_debug["products_found"] = products
                 ing_debug["has_price"] = any(p.get('unit_price') is not None for p in products)
 
@@ -598,23 +613,30 @@ def _calculate_ingredient_costs(cursor, recipe_id: int, outlet_id: int, visited:
     ingredients_with_costs = []
     total_cost = 0.0
 
-    for ing in ingredients:
-        ing_cost = None
-        unit_price = None
-        has_price = False
-        price_source = None
+    # Collect all common_product_ids for batch query (fixes N+1)
+    common_product_ids = [
+        ing['common_product_id'] for ing in ingredients
+        if ing.get('common_product_id')
+    ]
 
-        if ing.get('common_product_id'):
-            # Get lowest unit price for this common product from same outlet
-            cursor.execute("""
+    # Fetch ALL best prices for ALL common products in ONE query
+    best_prices_by_common = {}
+    if common_product_ids:
+        cursor.execute("""
+            WITH ranked_prices AS (
                 SELECT
+                    p.common_product_id,
                     ph.unit_price,
                     p.unit_id as product_unit_id,
                     d.name as distributor_name,
                     p.name as product_name,
                     p.pack,
                     p.size,
-                    u.abbreviation as product_unit
+                    u.abbreviation as product_unit,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY p.common_product_id
+                        ORDER BY ph.unit_price ASC
+                    ) as price_rank
                 FROM products p
                 JOIN distributor_products dp ON dp.product_id = p.id
                 JOIN distributors d ON d.id = dp.distributor_id
@@ -624,12 +646,27 @@ def _calculate_ingredient_costs(cursor, recipe_id: int, outlet_id: int, visited:
                            ROW_NUMBER() OVER (PARTITION BY distributor_product_id ORDER BY effective_date DESC) as rn
                     FROM price_history
                 ) ph ON ph.distributor_product_id = dp.id AND ph.rn = 1
-                WHERE p.common_product_id = %s AND p.outlet_id = %s AND ph.unit_price IS NOT NULL
-                ORDER BY ph.unit_price ASC
-                LIMIT 1
-            """, (ing['common_product_id'], outlet_id))
+                WHERE p.common_product_id = ANY(%s)
+                  AND p.outlet_id = %s
+                  AND ph.unit_price IS NOT NULL
+            )
+            SELECT * FROM ranked_prices WHERE price_rank = 1
+        """, (common_product_ids, outlet_id))
 
-            price_row = dict_from_row(cursor.fetchone())
+        all_best_prices = dicts_from_rows(cursor.fetchall())
+
+        # Index by common_product_id for O(1) lookup
+        best_prices_by_common = {row['common_product_id']: row for row in all_best_prices}
+
+    for ing in ingredients:
+        ing_cost = None
+        unit_price = None
+        has_price = False
+        price_source = None
+
+        if ing.get('common_product_id'):
+            # Look up from pre-fetched batch results
+            price_row = best_prices_by_common.get(ing['common_product_id'])
 
             if price_row and price_row.get('unit_price'):
                 unit_price = price_row['unit_price']
