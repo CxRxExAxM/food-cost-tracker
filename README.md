@@ -151,8 +151,8 @@ All core features implemented and production-ready:
 - **File Processing:** pandas, openpyxl for CSV/Excel imports
 
 ### Frontend
-- **Framework:** React 18 + Vite
-- **Routing:** React Router v6
+- **Framework:** React 19 + Vite 7
+- **Routing:** React Router v7
 - **HTTP Client:** Axios with JWT interceptors
 - **State Management:** React Context API
 - **Styling:** Custom CSS with responsive design
