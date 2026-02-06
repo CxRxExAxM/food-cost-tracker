@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import axios from '../lib/axios';
 import Navigation from '../components/Navigation';
 import { useOutlet } from '../contexts/OutletContext';
+import { useToast } from '../contexts/ToastContext';
 import OutletBadge from '../components/outlets/OutletBadge';
 import CommonProductsTable from './Products/CommonProductsTable';
 import './Products.css';
@@ -30,6 +31,7 @@ const ALLERGENS = [
 
 function Products() {
   const { currentOutlet, outlets } = useOutlet();
+  const toast = useToast();
   const [activeTab, setActiveTab] = useState('products');
   const [products, setProducts] = useState([]);
   const [commonProducts, setCommonProducts] = useState([]);
@@ -151,13 +153,13 @@ function Products() {
 
   const handleFileUpload = async () => {
     if (!uploadFile || !selectedDistributor) {
-      alert('Please select a distributor and file');
+      toast.warning('Please select a distributor and file');
       return;
     }
 
     // Validate outlet selection
     if (!currentOutlet || currentOutlet.id === 'all') {
-      alert('Please select a specific outlet before uploading. Products cannot be uploaded to "All Outlets".');
+      toast.warning('Please select a specific outlet before uploading. Products cannot be uploaded to "All Outlets".');
       return;
     }
 
@@ -229,7 +231,7 @@ function Products() {
       setShowAutocomplete(false);
     } catch (error) {
       console.error('Error mapping product:', error);
-      alert('Failed to map product');
+      toast.error('Failed to map product');
     }
   };
 
@@ -262,11 +264,7 @@ function Products() {
       setShowAutocomplete(false);
     } catch (error) {
       console.error('Error creating common product:', error);
-      if (error.response?.data?.detail) {
-        alert(error.response.data.detail);
-      } else {
-        alert('Failed to create common product');
-      }
+      toast.error(error.response?.data?.detail || 'Failed to create common product');
     }
   };
 
@@ -281,7 +279,7 @@ function Products() {
       ));
     } catch (error) {
       console.error('Error unmapping product:', error);
-      alert('Failed to unmap product');
+      toast.error('Failed to unmap product');
     }
   };
 
@@ -335,11 +333,7 @@ function Products() {
       cancelEditingCommonProduct();
     } catch (error) {
       console.error('Error updating common product:', error);
-      if (error.response?.data?.detail) {
-        alert(error.response.data.detail);
-      } else {
-        alert('Failed to update common product');
-      }
+      toast.error(error.response?.data?.detail || 'Failed to update common product');
     }
   };
 
@@ -363,7 +357,7 @@ function Products() {
       setAllergenModalProduct(response.data);
     } catch (error) {
       console.error('Error updating allergens:', error);
-      alert('Failed to update allergens');
+      toast.error('Failed to update allergens');
     }
   };
 
@@ -399,7 +393,7 @@ function Products() {
 
   const handleCreateProduct = async () => {
     if (!newProduct.name.trim()) {
-      alert('Product name is required');
+      toast.warning('Product name is required');
       return;
     }
 
@@ -425,7 +419,7 @@ function Products() {
       setShowAddProduct(false);
     } catch (error) {
       console.error('Error creating product:', error);
-      alert('Failed to create product');
+      toast.error('Failed to create product');
     }
   };
 
@@ -443,7 +437,7 @@ function Products() {
       ));
     } catch (error) {
       console.error('Error toggling catch weight:', error);
-      alert('Failed to update catch weight');
+      toast.error('Failed to update catch weight');
     }
   };
 
@@ -458,7 +452,7 @@ function Products() {
       fetchProducts();
     } catch (error) {
       console.error('Error deleting product:', error);
-      alert(error.response?.data?.detail || 'Failed to delete product');
+      toast.error(error.response?.data?.detail || 'Failed to delete product');
     }
   };
 
@@ -1290,13 +1284,13 @@ function AllergenModal({ product, onClose, onUpdate }) {
       fetchMappedProducts(); // Refresh the mapped products list
     } catch (error) {
       console.error('Error unmapping product:', error);
-      alert('Failed to unmap product');
+      toast.error('Failed to unmap product');
     }
   };
 
   const handleCreateConversion = async () => {
     if (!newConversion.from_unit_id || !newConversion.to_unit_id || !newConversion.conversion_factor) {
-      alert('Please fill in all required fields');
+      toast.warning('Please fill in all required fields');
       return;
     }
 
@@ -1319,7 +1313,7 @@ function AllergenModal({ product, onClose, onUpdate }) {
       });
     } catch (error) {
       console.error('Error creating conversion:', error);
-      alert(error.response?.data?.detail || 'Failed to create conversion');
+      toast.error(error.response?.data?.detail || 'Failed to create conversion');
     }
   };
 
@@ -1331,7 +1325,7 @@ function AllergenModal({ product, onClose, onUpdate }) {
       fetchConversions();
     } catch (error) {
       console.error('Error deleting conversion:', error);
-      alert('Failed to delete conversion');
+      toast.error('Failed to delete conversion');
     }
   };
 

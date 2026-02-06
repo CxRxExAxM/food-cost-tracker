@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import axios from '../../lib/axios';
 import { useAuth } from '../../contexts/AuthContext';
+import { useToast } from '../../contexts/ToastContext';
 import './SuperAdmin.css';
 
 export default function SuperAdminOrganizations() {
@@ -12,6 +13,7 @@ export default function SuperAdminOrganizations() {
   const location = useLocation();
   const navigate = useNavigate();
   const { setToken } = useAuth();
+  const toast = useToast();
 
   // Modal states
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -49,7 +51,7 @@ export default function SuperAdminOrganizations() {
       setOrganizations(response.data);
     } catch (error) {
       console.error('Error fetching organizations:', error);
-      alert('Error loading organizations');
+      toast.error('Error loading organizations');
     } finally {
       setLoading(false);
     }
@@ -59,13 +61,13 @@ export default function SuperAdminOrganizations() {
     e.preventDefault();
     try {
       await axios.post('/super-admin/organizations', createForm);
-      alert('Organization created successfully');
+      toast.success('Organization created successfully');
       setShowCreateModal(false);
       setCreateForm({ name: '', slug: '', subscription_tier: 'free' });
       fetchOrganizations();
     } catch (error) {
       console.error('Error creating organization:', error);
-      alert(error.response?.data?.detail || 'Error creating organization');
+      toast.error(error.response?.data?.detail || 'Error creating organization');
     }
   };
 
@@ -75,13 +77,13 @@ export default function SuperAdminOrganizations() {
       await axios.patch(`/super-admin/organizations/${selectedOrg.id}`, {
         subscription_tier: editTier
       });
-      alert('Tier updated successfully');
+      toast.success('Tier updated successfully');
       setShowEditTierModal(false);
       setSelectedOrg(null);
       fetchOrganizations();
     } catch (error) {
       console.error('Error updating tier:', error);
-      alert(error.response?.data?.detail || 'Error updating tier');
+      toast.error(error.response?.data?.detail || 'Error updating tier');
     }
   };
 
@@ -91,13 +93,13 @@ export default function SuperAdminOrganizations() {
       await axios.patch(`/super-admin/organizations/${selectedOrg.id}`, {
         subscription_status: newStatus
       });
-      alert(`Organization ${newStatus === 'active' ? 'activated' : 'suspended'} successfully`);
+      toast.success(`Organization ${newStatus === 'active' ? 'activated' : 'suspended'} successfully`);
       setShowSuspendModal(false);
       setSelectedOrg(null);
       fetchOrganizations();
     } catch (error) {
       console.error('Error toggling status:', error);
-      alert(error.response?.data?.detail || 'Error updating status');
+      toast.error(error.response?.data?.detail || 'Error updating status');
     }
   };
 
@@ -133,13 +135,13 @@ export default function SuperAdminOrganizations() {
     e.preventDefault();
     try {
       await axios.post(`/super-admin/organizations/${selectedOrg.id}/users`, createUserForm);
-      alert(`User created successfully!\n\nEmail: ${createUserForm.email}\nPassword: ${createUserForm.password}\n\nPlease save these credentials.`);
+      toast.success(`User created! Email: ${createUserForm.email} - Password: ${createUserForm.password}`, 10000);
       setShowCreateUserModal(false);
       setSelectedOrg(null);
       fetchOrganizations();
     } catch (error) {
       console.error('Error creating user:', error);
-      alert(error.response?.data?.detail || 'Error creating user');
+      toast.error(error.response?.data?.detail || 'Error creating user');
     }
   };
 
@@ -152,7 +154,7 @@ export default function SuperAdminOrganizations() {
       navigate('/');
     } catch (error) {
       console.error('Error impersonating organization:', error);
-      alert(error.response?.data?.detail || 'Error impersonating organization');
+      toast.error(error.response?.data?.detail || 'Error impersonating organization');
     }
   };
 

@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import axios from '../../../lib/axios';
+import { useToast } from '../../../contexts/ToastContext';
 import { Trash2, Link, GripVertical } from 'lucide-react';
 import AddPrepItemModal from './AddPrepItemModal';
 import LinkPrepItemModal from './LinkPrepItemModal';
 
 function PrepItemTable({ menuItemId, prepItems, itemCosts, guestCount, onPrepItemsChanged, onInlineEdit, menuType = 'banquet' }) {
+  const toast = useToast();
   const isRestaurant = menuType === 'restaurant';
   const [showAddModal, setShowAddModal] = useState(false);
   const [linkingPrepItem, setLinkingPrepItem] = useState(null);
@@ -164,7 +166,7 @@ function PrepItemTable({ menuItemId, prepItems, itemCosts, guestCount, onPrepIte
       onPrepItemsChanged();
     } catch (err) {
       console.error('Error deleting prep item:', err);
-      alert('Failed to delete prep item');
+      toast.error('Failed to delete prep item');
     }
   };
 

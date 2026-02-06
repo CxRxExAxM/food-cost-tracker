@@ -1,11 +1,13 @@
 import { useState, useRef } from 'react';
 import axios from '../../../lib/axios';
+import { useToast } from '../../../contexts/ToastContext';
 import { ChevronRight, Edit2, Trash2, GripVertical } from 'lucide-react';
 import PrepItemTable from './PrepItemTable';
 import AddItemModal from './AddItemModal';
 import EditItemModal from './EditItemModal';
 
 function MenuItemList({ menuId, menuItems, itemCosts, guestCount, expandedItems, onToggleExpand, onItemsChanged, onInlineEdit, menuType = 'banquet' }) {
+  const toast = useToast();
   const isRestaurant = menuType === 'restaurant';
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
@@ -35,7 +37,7 @@ function MenuItemList({ menuId, menuItems, itemCosts, guestCount, expandedItems,
       onItemsChanged();
     } catch (err) {
       console.error('Error deleting menu item:', err);
-      alert('Failed to delete menu item');
+      toast.error('Failed to delete menu item');
     }
   };
 

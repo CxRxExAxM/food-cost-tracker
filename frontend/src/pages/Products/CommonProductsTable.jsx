@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import axios from '../../lib/axios';
+import { useToast } from '../../contexts/ToastContext';
 import MergeCommonProductsModal from './MergeCommonProductsModal';
 import './CommonProducts.css';
 
@@ -26,6 +27,7 @@ const ALLERGENS = [
 ];
 
 function CommonProductsTable() {
+  const toast = useToast();
   // Data state
   const [commonProducts, setCommonProducts] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -147,7 +149,7 @@ function CommonProductsTable() {
           p.id === id ? { ...p, [field]: oldValue } : p
         )
       );
-      alert('Failed to save changes');
+      toast.error('Failed to save changes');
     } finally {
       setPendingSaves(prev => {
         const next = new Set(prev);
@@ -216,7 +218,7 @@ function CommonProductsTable() {
           p.id === id ? { ...p, [allergenKey]: !newValue } : p
         )
       );
-      alert('Failed to update allergen');
+      toast.error('Failed to update allergen');
     }
   };
 

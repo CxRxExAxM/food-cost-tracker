@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useToast } from '../../contexts/ToastContext';
 import { outletsAPI } from '../../services/api/outlets';
 import EditOutletModal from './EditOutletModal';
 import './OutletCard.css';
 
 export default function OutletCard({ outlet, viewMode, onUpdate }) {
   const { isAdmin } = useAuth();
+  const toast = useToast();
   const [stats, setStats] = useState(null);
   const [loadingStats, setLoadingStats] = useState(true);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -42,7 +44,7 @@ export default function OutletCard({ outlet, viewMode, onUpdate }) {
       onUpdate(); // Refresh the list
     } catch (error) {
       console.error('Failed to delete outlet:', error);
-      alert(error.response?.data?.detail || 'Failed to delete outlet');
+      toast.error(error.response?.data?.detail || 'Failed to delete outlet');
     } finally {
       setDeleting(false);
       setShowDeleteConfirm(false);

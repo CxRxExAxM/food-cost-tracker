@@ -1,11 +1,13 @@
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useToast } from '../contexts/ToastContext';
 import axios from '../lib/axios';
 import './ImpersonationBanner.css';
 
 export default function ImpersonationBanner() {
   const { user, setToken } = useAuth();
   const navigate = useNavigate();
+  const toast = useToast();
 
   if (!user?.impersonating) {
     return null;
@@ -20,7 +22,7 @@ export default function ImpersonationBanner() {
       navigate('/super-admin/organizations');
     } catch (error) {
       console.error('Error exiting impersonation:', error);
-      alert('Error exiting impersonation');
+      toast.error('Error exiting impersonation');
     }
   };
 

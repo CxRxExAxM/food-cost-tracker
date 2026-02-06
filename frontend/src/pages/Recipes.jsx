@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import axios from '../lib/axios';
 import Navigation from '../components/Navigation';
 import { useOutlet } from '../contexts/OutletContext';
+import { useToast } from '../contexts/ToastContext';
 import OutletBadge from '../components/outlets/OutletBadge';
 import UploadRecipeModal from '../components/RecipeImport/UploadRecipeModal';
 import ReviewParsedRecipe from '../components/RecipeImport/ReviewParsedRecipe';
@@ -29,6 +30,7 @@ const ALLERGEN_ICONS = {
 
 function Recipes() {
   const { currentOutlet } = useOutlet();
+  const toast = useToast();
   const [recipes, setRecipes] = useState([]);
   const [selectedRecipe, setSelectedRecipe] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -208,14 +210,14 @@ function Recipes() {
   const handleUploadDocument = () => {
     // Check if outlet is selected
     if (!currentOutlet || currentOutlet.id === 'all') {
-      alert('Please select a specific outlet before uploading recipes');
+      toast.warning('Please select a specific outlet before uploading recipes');
       return;
     }
 
     // Additional validation: ensure we have a valid numeric outlet ID
     if (!currentOutlet.id || typeof currentOutlet.id !== 'number') {
       console.error('Invalid outlet ID:', currentOutlet);
-      alert('Outlet ID is invalid. Please select an outlet from the dropdown and try again.');
+      toast.error('Outlet ID is invalid. Please select an outlet from the dropdown and try again.');
       return;
     }
 
@@ -277,7 +279,7 @@ function Recipes() {
       selectRecipe(response.data.id);
     } catch (error) {
       console.error('Error creating recipe:', error);
-      alert('Failed to create recipe');
+      toast.error('Failed to create recipe');
     }
   };
 
@@ -296,7 +298,7 @@ function Recipes() {
       setIsDirty(false);
     } catch (error) {
       console.error('Error updating recipe:', error);
-      alert('Failed to update recipe');
+      toast.error('Failed to update recipe');
     }
   };
 
@@ -310,7 +312,7 @@ function Recipes() {
       setEditedRecipe(null);
     } catch (error) {
       console.error('Error deleting recipe:', error);
-      alert('Failed to delete recipe');
+      toast.error('Failed to delete recipe');
     }
   };
 
@@ -352,7 +354,7 @@ function Recipes() {
     );
 
     if (recipesToUpdate.length === 0) {
-      alert('No recipes in this folder');
+      toast.warning('No recipes in this folder');
       return;
     }
 
@@ -381,7 +383,7 @@ function Recipes() {
       })
       .catch(error => {
         console.error('Error renaming folder:', error);
-        alert('Failed to rename folder');
+        toast.error('Failed to rename folder');
       });
   };
 
@@ -427,7 +429,7 @@ function Recipes() {
       })
       .catch(error => {
         console.error('Error deleting folder:', error);
-        alert('Failed to delete folder');
+        toast.error('Failed to delete folder');
       });
   };
 
@@ -505,7 +507,7 @@ function Recipes() {
       }
     } catch (error) {
       console.error('Error moving recipe:', error);
-      alert('Failed to move recipe');
+      toast.error('Failed to move recipe');
     }
 
     setDraggedItem(null);
@@ -1044,17 +1046,17 @@ function RecipeIngredients({ recipe, onIngredientsChange }) {
     // Validate based on mode
     if (addMode === 'map') {
       if (!newIngredient.common_product_id || !newIngredient.quantity || !newIngredient.unit_id) {
-        alert('Please fill in all required fields');
+        toast.warning('Please fill in all required fields');
         return;
       }
     } else if (addMode === 'subrecipe') {
       if (!newIngredient.sub_recipe_id || !newIngredient.quantity || !newIngredient.unit_id) {
-        alert('Please fill in all required fields');
+        toast.warning('Please fill in all required fields');
         return;
       }
     } else {
       if (!newIngredient.ingredient_name || !newIngredient.quantity || !newIngredient.unit_id) {
-        alert('Please fill in all required fields');
+        toast.warning('Please fill in all required fields');
         return;
       }
     }
@@ -1102,7 +1104,7 @@ function RecipeIngredients({ recipe, onIngredientsChange }) {
       setShowAddRow(false);
     } catch (error) {
       console.error('Error adding ingredient:', error);
-      alert('Failed to add ingredient');
+      toast.error('Failed to add ingredient');
     }
   };
 
@@ -1114,7 +1116,7 @@ function RecipeIngredients({ recipe, onIngredientsChange }) {
       onIngredientsChange();
     } catch (error) {
       console.error('Error removing ingredient:', error);
-      alert('Failed to remove ingredient');
+      toast.error('Failed to remove ingredient');
     }
   };
 
@@ -1175,17 +1177,17 @@ function RecipeIngredients({ recipe, onIngredientsChange }) {
   const handleSave = async () => {
     // Validation
     if (!editedValues.quantity || parseFloat(editedValues.quantity) <= 0) {
-      alert('Quantity must be greater than 0');
+      toast.warning('Quantity must be greater than 0');
       return;
     }
 
     if (!editedValues.unit_id) {
-      alert('Unit is required');
+      toast.warning('Unit is required');
       return;
     }
 
     if (!editedValues.common_product_id && !editedValues.ingredient_name) {
-      alert('Ingredient must be mapped to a product or have a name');
+      toast.warning('Ingredient must be mapped to a product or have a name');
       return;
     }
 
@@ -1214,7 +1216,7 @@ function RecipeIngredients({ recipe, onIngredientsChange }) {
       setEditedValues({});
     } catch (error) {
       console.error('Error updating ingredient:', error);
-      alert(error.response?.data?.detail || 'Failed to update ingredient');
+      toast.error(error.response?.data?.detail || 'Failed to update ingredient');
     }
   };
 
@@ -1681,13 +1683,13 @@ function RecipeMethod({ recipe, onMethodChange }) {
       onMethodChange();
     } catch (error) {
       console.error('Error updating method:', error);
-      alert('Failed to update method');
+      toast.error('Failed to update method');
     }
   };
 
   const handleSaveStep = (index) => {
     if (!steps[index].instruction.trim()) {
-      alert('Step instruction cannot be empty');
+      toast.warning('Step instruction cannot be empty');
       return;
     }
     setEditingStepIndex(null);
@@ -2031,7 +2033,7 @@ function RecipeCreateModal({ onClose, onCreate, initialCategoryPath = '' }) {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!formData.name.trim()) {
-      alert('Recipe name is required');
+      toast.warning('Recipe name is required');
       return;
     }
 
@@ -2130,7 +2132,7 @@ function FolderCreateModal({ onClose, onCreate }) {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!folderPath.trim()) {
-      alert('Folder path is required');
+      toast.warning('Folder path is required');
       return;
     }
 

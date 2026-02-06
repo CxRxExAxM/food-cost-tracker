@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useToast } from '../../contexts/ToastContext';
 import { createRecipeFromParse } from '../../services/aiParseService';
 import './RecipeImport.css';
 
@@ -12,6 +13,7 @@ export default function ReviewParsedRecipe({ parseResult, outletId, onClose }) {
   const [creating, setCreating] = useState(false);
 
   const navigate = useNavigate();
+  const toast = useToast();
 
   const handleCreateRecipe = async () => {
     setCreating(true);
@@ -40,12 +42,12 @@ export default function ReviewParsedRecipe({ parseResult, outletId, onClose }) {
 
       // Close modal and navigate
       onClose();
-      alert(`Recipe "${recipeName}" created successfully!`);
+      toast.success(`Recipe "${recipeName}" created successfully!`);
       navigate('/recipes');
 
     } catch (err) {
       console.error('Create error:', err);
-      alert(err.response?.data?.detail || 'Error creating recipe');
+      toast.error(err.response?.data?.detail || 'Error creating recipe');
       setCreating(false);
     }
   };

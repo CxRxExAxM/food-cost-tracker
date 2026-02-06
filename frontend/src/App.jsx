@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { OutletProvider } from './contexts/OutletContext';
+import { ToastProvider } from './contexts/ToastContext';
 import Home from './pages/Home';
 import Products from './pages/Products';
 import Recipes from './pages/Recipes';
@@ -195,12 +196,14 @@ function App() {
   return (
     <Router>
       <AuthProvider>
-        <OutletProvider>
-          <div className="app">
-            <ImpersonationBanner />
-            <AppRoutes />
-          </div>
-        </OutletProvider>
+        <ToastProvider>
+          <OutletProvider>
+            <div className="app">
+              <ImpersonationBanner />
+              <AppRoutes />
+            </div>
+          </OutletProvider>
+        </ToastProvider>
       </AuthProvider>
     </Router>
   );

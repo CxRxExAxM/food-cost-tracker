@@ -2,12 +2,14 @@ import { useState, useEffect } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import axios from '../../lib/axios';
 import { useAuth } from '../../contexts/AuthContext';
+import { useToast } from '../../contexts/ToastContext';
 import './SuperAdmin.css';
 
 export default function SuperAdminOrganizationDetail() {
   const { orgId } = useParams();
   const navigate = useNavigate();
   const { setToken } = useAuth();
+  const toast = useToast();
   const [organization, setOrganization] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -40,7 +42,7 @@ export default function SuperAdminOrganizationDetail() {
       setOrganization(response.data);
     } catch (error) {
       console.error('Error fetching organization detail:', error);
-      alert('Error loading organization');
+      toast.error('Error loading organization');
       navigate('/settings/super-admin/organizations');
     } finally {
       setLoading(false);
@@ -114,13 +116,13 @@ export default function SuperAdminOrganizationDetail() {
       await axios.patch(`/super-admin/users/${selectedUser.id}/outlets`, {
         outlet_ids: selectedOutletIds
       });
-      alert('Outlet assignments updated successfully');
+      toast.success('Outlet assignments updated successfully');
       setShowManageOutletsModal(false);
       setSelectedUser(null);
       fetchOrganizationDetail();
     } catch (error) {
       console.error('Error updating outlet assignments:', error);
-      alert(error.response?.data?.detail || 'Error updating outlet assignments');
+      toast.error(error.response?.data?.detail || 'Error updating outlet assignments');
     }
   };
 
@@ -147,13 +149,13 @@ export default function SuperAdminOrganizationDetail() {
       }
 
       await axios.patch(`/super-admin/users/${selectedUser.id}`, updateData);
-      alert('User updated successfully');
+      toast.success('User updated successfully');
       setShowEditUserModal(false);
       setSelectedUser(null);
       fetchOrganizationDetail();
     } catch (error) {
       console.error('Error updating user:', error);
-      alert(error.response?.data?.detail || 'Error updating user');
+      toast.error(error.response?.data?.detail || 'Error updating user');
     }
   };
 
@@ -162,13 +164,13 @@ export default function SuperAdminOrganizationDetail() {
       await axios.patch(`/super-admin/users/${selectedUser.id}`, {
         is_active: !selectedUser.is_active
       });
-      alert(`User ${selectedUser.is_active ? 'deactivated' : 'activated'} successfully`);
+      toast.success(`User ${selectedUser.is_active ? 'deactivated' : 'activated'} successfully`);
       setShowToggleUserModal(false);
       setSelectedUser(null);
       fetchOrganizationDetail();
     } catch (error) {
       console.error('Error toggling user status:', error);
-      alert(error.response?.data?.detail || 'Error updating user status');
+      toast.error(error.response?.data?.detail || 'Error updating user status');
     }
   };
 
@@ -184,12 +186,12 @@ export default function SuperAdminOrganizationDetail() {
     e.preventDefault();
     try {
       await axios.patch(`/super-admin/organizations/${orgId}`, subscriptionForm);
-      alert('Subscription updated successfully');
+      toast.success('Subscription updated successfully');
       setShowSubscriptionModal(false);
       fetchOrganizationDetail();
     } catch (error) {
       console.error('Error updating subscription:', error);
-      alert(error.response?.data?.detail || 'Error updating subscription');
+      toast.error(error.response?.data?.detail || 'Error updating subscription');
     }
   };
 
@@ -202,7 +204,7 @@ export default function SuperAdminOrganizationDetail() {
       navigate('/');
     } catch (error) {
       console.error('Error impersonating organization:', error);
-      alert(error.response?.data?.detail || 'Error impersonating organization');
+      toast.error(error.response?.data?.detail || 'Error impersonating organization');
     }
   };
 
