@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from typing import Optional
 from ..database import get_db, dicts_from_rows, dict_from_row
 from ..schemas import Product, ProductWithPrice
-from ..auth import get_current_user, build_outlet_filter, check_outlet_access
+from ..auth import get_current_user, build_outlet_filter, build_product_filter, check_outlet_access
 from ..config import DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT
 from ..logger import get_logger
 
@@ -13,7 +13,7 @@ router = APIRouter(prefix="/products", tags=["products"])
 
 
 class ProductCreate(BaseModel):
-    """Create a new product."""
+    """Create a new product (organization-wide)."""
     name: str
     brand: Optional[str] = None
     pack: Optional[int] = None
@@ -23,18 +23,18 @@ class ProductCreate(BaseModel):
     distributor_id: Optional[int] = None
     distributor_sku: Optional[str] = None
     case_price: Optional[float] = None
-    outlet_id: Optional[int] = None  # Added for multi-outlet support
+    outlet_id: Optional[int] = None  # Only used for price_history (not for product itself)
 
 
 @router.post("")
 def create_product(product: ProductCreate, current_user: dict = Depends(get_current_user)):
-    """Create a new product with optional distributor link and price."""
+    """Create a new product (organization-wide) with optional distributor link and price."""
     try:
         with get_db() as conn:
             cursor = conn.cursor()
             organization_id = current_user["organization_id"]
 
-            # Determine outlet_id
+            # Determine outlet_id for price_history only
             outlet_id = product.outlet_id
             if not outlet_id:
                 # No outlet specified - get first available outlet for user
@@ -60,27 +60,27 @@ def create_product(product: ProductCreate, current_user: dict = Depends(get_curr
                 if not check_outlet_access(current_user, outlet_id):
                     raise HTTPException(status_code=403, detail="You don't have access to this outlet")
 
-            # Insert the product with organization_id and outlet_id
+            # Insert the product with organization_id only (products are org-wide)
             cursor.execute("""
-                INSERT INTO products (name, brand, pack, size, unit_id, is_catch_weight, organization_id, outlet_id)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO products (name, brand, pack, size, unit_id, is_catch_weight, organization_id)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
             """, (product.name, product.brand, product.pack, product.size,
-                  product.unit_id, int(product.is_catch_weight), organization_id, outlet_id))
+                  product.unit_id, int(product.is_catch_weight), organization_id))
 
             product_id = cursor.fetchone()["id"]
 
-            # If distributor specified, create distributor_product link
+            # If distributor specified, create distributor_product link (org-wide)
             if product.distributor_id:
                 cursor.execute("""
-                    INSERT INTO distributor_products (distributor_id, product_id, distributor_sku, distributor_name, organization_id, outlet_id)
-                    VALUES (%s, %s, %s, %s, %s, %s)
+                    INSERT INTO distributor_products (distributor_id, product_id, distributor_sku, distributor_name, organization_id)
+                    VALUES (%s, %s, %s, %s, %s)
                     RETURNING id
-                """, (product.distributor_id, product_id, product.distributor_sku or '', product.name, organization_id, outlet_id))
+                """, (product.distributor_id, product_id, product.distributor_sku or '', product.name, organization_id))
 
                 distributor_product_id = cursor.fetchone()["id"]
 
-                # If price specified, add to price_history
+                # If price specified, add to price_history (outlet-specific)
                 if product.case_price is not None:
                     unit_price = None
                     if product.pack and product.size:
@@ -93,7 +93,7 @@ def create_product(product: ProductCreate, current_user: dict = Depends(get_curr
 
             conn.commit()
 
-            return {"message": "Product created successfully", "product_id": product_id, "outlet_id": outlet_id}
+            return {"message": "Product created successfully", "product_id": product_id}
     except HTTPException:
         raise
     except Exception as e:
@@ -126,6 +126,9 @@ def list_products(
     """
     List products with optional filtering and sorting.
 
+    Products are organization-wide. All users in an organization see all products.
+    The outlet_id parameter is used only to filter which outlet's prices to display.
+
     - **skip**: Number of records to skip (pagination)
     - **limit**: Maximum number of records to return
     - **search**: Search in product name or brand
@@ -133,48 +136,22 @@ def list_products(
     - **common_product_id**: Filter by common product mapping
     - **unmapped_only**: Show only products not mapped to common_products
     - **mapped_only**: Show only products mapped to common_products
-    - **outlet_id**: Filter by specific outlet (must be one user has access to)
+    - **outlet_id**: Filter prices by specific outlet (products are org-wide)
     - **sort_by**: Column to sort by (name, brand, distributor_name, pack, size, case_price, unit_price)
     - **sort_dir**: Sort direction (asc or desc)
     """
     with get_db() as conn:
         cursor = conn.cursor()
 
-        # Base WHERE clause - filter by organization and user's outlet access
+        # Base WHERE clause - products are org-wide, all users see all products
         org_id = current_user["organization_id"]
         where_clause = f"WHERE p.is_active = 1 AND p.organization_id = %s"
         params = [org_id]
 
-        # Get user's accessible outlet IDs
-        from ..auth import get_user_outlet_ids
-        user_outlet_ids = get_user_outlet_ids(current_user["id"])
-
-        # If user has no outlet access, return empty results
-        if user_outlet_ids is None:
-            where_clause += " AND 1 = 0"  # Always false
-        # If specific outlet requested, show only products from that outlet
-        elif outlet_id is not None:
-            # Verify user has access to this outlet
-            if user_outlet_ids and outlet_id not in user_outlet_ids:
-                # User requested an outlet they don't have access to
-                where_clause += " AND 1 = 0"  # Return empty
-            else:
-                where_clause += """ AND EXISTS (
-                    SELECT 1 FROM price_history ph_filter
-                    JOIN distributor_products dp_filter ON dp_filter.id = ph_filter.distributor_product_id
-                    WHERE dp_filter.product_id = p.id AND ph_filter.outlet_id = %s
-                )"""
-                params.append(outlet_id)
-        # If user is outlet-restricted (non-admin with assignments), filter by their outlets
-        elif user_outlet_ids:  # Non-empty list means outlet-restricted
-            placeholders = ','.join(['%s'] * len(user_outlet_ids))
-            where_clause += f""" AND EXISTS (
-                SELECT 1 FROM price_history ph_filter
-                JOIN distributor_products dp_filter ON dp_filter.id = ph_filter.distributor_product_id
-                WHERE dp_filter.product_id = p.id AND ph_filter.outlet_id IN ({placeholders})
-            )"""
-            params.extend(user_outlet_ids)
-        # else: admin user, show all products (no additional filter)
+        # Validate outlet_id for price filtering if specified
+        if outlet_id is not None:
+            if not check_outlet_access(current_user, outlet_id):
+                raise HTTPException(status_code=403, detail="You don't have access to this outlet")
 
         if search:
             where_clause += " AND (p.name ILIKE %s OR p.brand ILIKE %s OR cp.common_name ILIKE %s)"
@@ -265,8 +242,8 @@ def get_product(product_id: int, current_user: dict = Depends(get_current_user))
     with get_db() as conn:
         cursor = conn.cursor()
 
-        # Build outlet filter
-        outlet_filter, outlet_params = build_outlet_filter(current_user, "p")
+        # Build product filter (org-wide, no outlet filter)
+        product_filter, product_params = build_product_filter(current_user, "p")
 
         query = f"""
             SELECT
@@ -288,16 +265,16 @@ def get_product(product_id: int, current_user: dict = Depends(get_current_user))
                        ROW_NUMBER() OVER (PARTITION BY distributor_product_id, outlet_id ORDER BY effective_date DESC) as rn
                 FROM price_history
             ) ph ON ph.distributor_product_id = dp.id AND ph.rn = 1
-            WHERE p.id = %s AND {outlet_filter}
+            WHERE p.id = %s AND {product_filter}
         """
 
-        params = [product_id] + outlet_params
+        params = [product_id] + product_params
         cursor.execute(query, params)
 
         product = dict_from_row(cursor.fetchone())
 
         if not product:
-            raise HTTPException(status_code=404, detail="Product not found or you don't have access to it")
+            raise HTTPException(status_code=404, detail="Product not found")
 
         return product
 
@@ -308,15 +285,15 @@ def map_product_to_common(product_id: int, common_product_id: int, current_user:
     with get_db() as conn:
         cursor = conn.cursor()
 
-        # Check if product exists and user has access to it
-        outlet_filter, outlet_params = build_outlet_filter(current_user, "")
-        query = f"SELECT id, outlet_id FROM products WHERE id = %s AND {outlet_filter}"
-        params = [product_id] + outlet_params
+        # Check if product exists in user's organization (products are org-wide)
+        product_filter, product_params = build_product_filter(current_user, "")
+        query = f"SELECT id FROM products WHERE id = %s AND {product_filter}"
+        params = [product_id] + product_params
         cursor.execute(query, params)
 
         product = dict_from_row(cursor.fetchone())
         if not product:
-            raise HTTPException(status_code=404, detail="Product not found or you don't have access to it")
+            raise HTTPException(status_code=404, detail="Product not found")
 
         # Check if common product exists and belongs to user's organization
         cursor.execute("SELECT id FROM common_products WHERE id = %s AND organization_id = %s",
@@ -340,15 +317,15 @@ def unmap_product(product_id: int, current_user: dict = Depends(get_current_user
     with get_db() as conn:
         cursor = conn.cursor()
 
-        # Build outlet filter
-        outlet_filter, outlet_params = build_outlet_filter(current_user, "")
-        query = f"UPDATE products SET common_product_id = NULL WHERE id = %s AND {outlet_filter}"
-        params = [product_id] + outlet_params
+        # Build product filter (org-wide)
+        product_filter, product_params = build_product_filter(current_user, "")
+        query = f"UPDATE products SET common_product_id = NULL WHERE id = %s AND {product_filter}"
+        params = [product_id] + product_params
 
         cursor.execute(query, params)
 
         if cursor.rowcount == 0:
-            raise HTTPException(status_code=404, detail="Product not found or you don't have access to it")
+            raise HTTPException(status_code=404, detail="Product not found")
 
         conn.commit()
 
@@ -361,15 +338,15 @@ def update_product(product_id: int, updates: dict, current_user: dict = Depends(
     with get_db() as conn:
         cursor = conn.cursor()
 
-        # Check if product exists and user has access, get current values
-        outlet_filter, outlet_params = build_outlet_filter(current_user, "")
-        check_query = f"SELECT id, pack, size, outlet_id FROM products WHERE id = %s AND {outlet_filter}"
-        check_params = [product_id] + outlet_params
+        # Check if product exists in user's organization (products are org-wide)
+        product_filter, product_params = build_product_filter(current_user, "")
+        check_query = f"SELECT id, pack, size FROM products WHERE id = %s AND {product_filter}"
+        check_params = [product_id] + product_params
         cursor.execute(check_query, check_params)
 
         product = dict_from_row(cursor.fetchone())
         if not product:
-            raise HTTPException(status_code=404, detail="Product not found or you don't have access to it")
+            raise HTTPException(status_code=404, detail="Product not found")
 
         current_pack = product["pack"]
         current_size = product["size"]
@@ -396,8 +373,8 @@ def update_product(product_id: int, updates: dict, current_user: dict = Depends(
         # Update product fields if any
         if update_fields:
             params.append(product_id)
-            params.extend(outlet_params)
-            query = f"UPDATE products SET {', '.join(update_fields)} WHERE id = %s AND {outlet_filter}"
+            params.extend(product_params)
+            query = f"UPDATE products SET {', '.join(update_fields)} WHERE id = %s AND {product_filter}"
             cursor.execute(query, params)
 
         # Recalculate unit_price in price_history if pack or size changed
@@ -462,15 +439,15 @@ def delete_product(product_id: int, current_user: dict = Depends(get_current_use
     with get_db() as conn:
         cursor = conn.cursor()
 
-        # Check if product exists and user has access
-        outlet_filter, outlet_params = build_outlet_filter(current_user, "")
-        check_query = f"SELECT id, name FROM products WHERE id = %s AND {outlet_filter}"
-        check_params = [product_id] + outlet_params
+        # Check if product exists in user's organization (products are org-wide)
+        product_filter, product_params = build_product_filter(current_user, "")
+        check_query = f"SELECT id, name FROM products WHERE id = %s AND {product_filter}"
+        check_params = [product_id] + product_params
         cursor.execute(check_query, check_params)
 
         product = dict_from_row(cursor.fetchone())
         if not product:
-            raise HTTPException(status_code=404, detail="Product not found or you don't have access to it")
+            raise HTTPException(status_code=404, detail="Product not found")
 
         # Delete the product (CASCADE will handle related records)
         cursor.execute("DELETE FROM products WHERE id = %s", (product_id,))

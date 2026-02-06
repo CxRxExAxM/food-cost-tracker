@@ -307,6 +307,35 @@ def build_outlet_filter(current_user: dict, table_alias: str = "") -> tuple:
     return where_clause, params
 
 
+def build_product_filter(current_user: dict, table_alias: str = "") -> tuple:
+    """
+    Build SQL WHERE clause for product filtering (org-wide, no outlet filter).
+
+    Products are now organization-wide, so we only filter by organization_id.
+    This is different from build_outlet_filter which filters by outlet for
+    outlet-specific resources like prices.
+
+    Args:
+        current_user: User dict from get_current_user
+        table_alias: Optional table alias (e.g., "p" for products)
+
+    Returns:
+        Tuple of (where_clause, params)
+
+    Example:
+        where_clause, params = build_product_filter(current_user, "p")
+        query = f"SELECT * FROM products p WHERE {where_clause}"
+        cursor.execute(query, params)
+    """
+    prefix = f"{table_alias}." if table_alias else ""
+
+    # Products are org-wide - just filter by organization
+    where_clause = f"{prefix}organization_id = %s AND {prefix}is_active = 1"
+    params = [current_user["organization_id"]]
+
+    return where_clause, params
+
+
 def check_outlet_access(current_user: dict, outlet_id: int) -> bool:
     """
     Check if user has access to a specific outlet.

@@ -64,7 +64,7 @@ function Products() {
   const [sortColumn, setSortColumn] = useState('name');
   const [sortDirection, setSortDirection] = useState('asc');
   const [totalCount, setTotalCount] = useState(0);
-  // Add new product state
+  // Add new product state (products are org-wide, no outlet_id needed)
   const [showAddProduct, setShowAddProduct] = useState(false);
   const [newProduct, setNewProduct] = useState({
     name: '',
@@ -75,29 +75,25 @@ function Products() {
     size: '',
     unit_id: '',
     is_catch_weight: false,
-    case_price: '',
-    outlet_id: currentOutlet?.id && currentOutlet.id !== 'all' ? currentOutlet.id : ''
+    case_price: ''
   });
-
-  // Update newProduct outlet_id when currentOutlet changes
-  useEffect(() => {
-    setNewProduct(prev => ({
-      ...prev,
-      outlet_id: currentOutlet?.id && currentOutlet.id !== 'all' ? currentOutlet.id : ''
-    }));
-  }, [currentOutlet]);
 
   useEffect(() => {
     fetchProducts();
     fetchCommonProducts();
     fetchDistributors();
     fetchUnits();
-  }, [search, mappingFilter, distributorFilter, sortColumn, sortDirection, currentOutlet, currentPage]);
+  }, [search, mappingFilter, distributorFilter, sortColumn, sortDirection, currentPage]);
+
+  // Refetch products when outlet changes (for price filtering)
+  useEffect(() => {
+    fetchProducts();
+  }, [currentOutlet]);
 
   // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, mappingFilter, distributorFilter, sortColumn, sortDirection, currentOutlet]);
+  }, [search, mappingFilter, distributorFilter, sortColumn, sortDirection]);
 
   const fetchProducts = async () => {
     try {
@@ -111,7 +107,7 @@ function Products() {
         ...(mappingFilter === 'unmapped' && { unmapped_only: true }),
         ...(mappingFilter === 'mapped' && { mapped_only: true }),
         ...(distributorFilter && { distributor_id: parseInt(distributorFilter) }),
-        // Filter by outlet if specific outlet selected (not "All Outlets")
+        // outlet_id is used for price filtering only (products are org-wide)
         ...(currentOutlet && currentOutlet.id !== 'all' && { outlet_id: currentOutlet.id })
       };
       const response = await axios.get(`${API_URL}/products`, { params });
@@ -157,9 +153,9 @@ function Products() {
       return;
     }
 
-    // Validate outlet selection
+    // Validate outlet selection for price assignment
     if (!currentOutlet || currentOutlet.id === 'all') {
-      toast.warning('Please select a specific outlet before uploading. Products cannot be uploaded to "All Outlets".');
+      toast.warning('Please select a specific outlet. Products are shared org-wide, but prices are outlet-specific.');
       return;
     }
 
@@ -377,12 +373,13 @@ function Products() {
     return product.common_product_name || 'Unknown';
   };
 
-  // Add new product handlers
+  // Add new product handlers (products are org-wide)
   const resetNewProduct = () => {
     setNewProduct({
       name: '',
       brand: '',
       distributor_id: '',
+      distributor_sku: '',
       pack: '',
       size: '',
       unit_id: '',
@@ -398,6 +395,7 @@ function Products() {
     }
 
     try {
+      // Products are org-wide; outlet_id is only used for initial price if provided
       const productData = {
         name: newProduct.name.trim(),
         brand: newProduct.brand.trim() || null,
@@ -408,7 +406,8 @@ function Products() {
         distributor_id: newProduct.distributor_id ? parseInt(newProduct.distributor_id) : null,
         distributor_sku: newProduct.distributor_sku.trim() || null,
         case_price: newProduct.case_price ? parseFloat(newProduct.case_price) : null,
-        outlet_id: newProduct.outlet_id ? parseInt(newProduct.outlet_id) : null
+        // Pass current outlet for initial price assignment (if price is provided)
+        outlet_id: currentOutlet && currentOutlet.id !== 'all' ? currentOutlet.id : null
       };
 
       await axios.post(`${API_URL}/products`, productData);
@@ -417,6 +416,7 @@ function Products() {
       fetchProducts();
       resetNewProduct();
       setShowAddProduct(false);
+      toast.success('Product created successfully');
     } catch (error) {
       console.error('Error creating product:', error);
       toast.error('Failed to create product');
@@ -702,6 +702,9 @@ function Products() {
       {showUpload && (
         <div className="upload-section">
           <h3>Import Vendor Price List</h3>
+          <p className="upload-info" style={{ fontSize: '0.9rem', color: 'var(--color-text-secondary)', marginBottom: '1rem' }}>
+            Products are shared across all outlets. Prices are specific to the selected outlet.
+          </p>
 
           {!uploadResult ? (
             <div className="upload-form">
@@ -731,7 +734,7 @@ function Products() {
                 </div>
 
                 <div className="upload-field">
-                  <label>Upload to:</label>
+                  <label>Prices for outlet:</label>
                   <div style={{ padding: '0.5rem 0' }}>
                     <OutletBadge outletId={currentOutlet?.id !== 'all' ? currentOutlet?.id : null} outletName={currentOutlet?.id !== 'all' ? currentOutlet?.name : 'Please select an outlet'} />
                   </div>

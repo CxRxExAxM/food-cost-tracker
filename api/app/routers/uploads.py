@@ -365,8 +365,9 @@ async def upload_csv(
 
     - Supports .csv, .xlsx, and .xls files
     - Applies vendor-specific cleaning rules
-    - Imports products and prices into the database
-    - All products are assigned to the specified outlet
+    - Imports products (org-wide) and prices (outlet-specific) into the database
+    - Products are shared across all outlets in the organization
+    - Prices are specific to the selected outlet
     - Returns import statistics
     """
     import traceback
@@ -538,27 +539,29 @@ async def upload_csv(
                         distributor_product_id = existing["distributor_product_id"]
 
                         if not distributor_product_id:
+                            # Create distributor_product link (org-wide, no outlet_id)
                             cursor.execute("""
-                                INSERT INTO distributor_products (distributor_id, product_id, distributor_sku, distributor_name, organization_id, outlet_id)
-                                VALUES (%s, %s, %s, %s, %s, %s)
+                                INSERT INTO distributor_products (distributor_id, product_id, distributor_sku, distributor_name, organization_id)
+                                VALUES (%s, %s, %s, %s, %s)
                                 RETURNING id
-                            """, (distributor_id, product_id, sku, product_name, organization_id, outlet_id))
+                            """, (distributor_id, product_id, sku, product_name, organization_id))
                             distributor_product_id = cursor.fetchone()["id"]
                     else:
-                        # Create new product with organization_id and outlet_id
+                        # Create new product (org-wide, no outlet_id)
                         cursor.execute("""
-                            INSERT INTO products (name, brand, pack, size, unit_id, is_catch_weight, organization_id, outlet_id)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                            INSERT INTO products (name, brand, pack, size, unit_id, is_catch_weight, organization_id)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s)
                             RETURNING id
-                        """, (product_name, brand, pack, size, unit_id, int(is_catch_weight), organization_id, outlet_id))
+                        """, (product_name, brand, pack, size, unit_id, int(is_catch_weight), organization_id))
                         product_id = cursor.fetchone()["id"]
                         new_products += 1
 
+                        # Create distributor_product link (org-wide, no outlet_id)
                         cursor.execute("""
-                            INSERT INTO distributor_products (distributor_id, product_id, distributor_sku, distributor_name, organization_id, outlet_id)
-                            VALUES (%s, %s, %s, %s, %s, %s)
+                            INSERT INTO distributor_products (distributor_id, product_id, distributor_sku, distributor_name, organization_id)
+                            VALUES (%s, %s, %s, %s, %s)
                             RETURNING id
-                        """, (distributor_id, product_id, sku, product_name, organization_id, outlet_id))
+                        """, (distributor_id, product_id, sku, product_name, organization_id))
                         distributor_product_id = cursor.fetchone()["id"]
 
                     # Insert/update price (per outlet - allows different outlets to have different prices)
