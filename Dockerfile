@@ -14,10 +14,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY api/ ./api/
-COPY db/ ./db/
-
-# Create data directory for SQLite (will be mounted as volume in production)
-RUN mkdir -p /app/data
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
