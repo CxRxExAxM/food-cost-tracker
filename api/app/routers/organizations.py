@@ -8,6 +8,9 @@ from datetime import datetime
 from ..database import get_db, dict_from_row, dicts_from_rows
 from ..schemas import OrganizationCreate, OrganizationUpdate, OrganizationResponse
 from ..auth import get_current_user, require_admin
+from ..logger import get_logger
+
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/organizations", tags=["organizations"])
 
@@ -16,9 +19,9 @@ router = APIRouter(prefix="/organizations", tags=["organizations"])
 def get_my_organization(current_user: dict = Depends(get_current_user)):
     """Get current user's organization."""
     try:
-        print(f"[DEBUG] Current user: {current_user}")
+        logger.debug(f" Current user: {current_user}")
         org_id = current_user.get("organization_id")
-        print(f"[DEBUG] Organization ID: {org_id}")
+        logger.debug(f" Organization ID: {org_id}")
 
         if not org_id:
             raise HTTPException(
@@ -30,10 +33,10 @@ def get_my_organization(current_user: dict = Depends(get_current_user)):
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM organizations WHERE id = %s", (org_id,))
             result = cursor.fetchone()
-            print(f"[DEBUG] Query result: {result}")
+            logger.debug(f" Query result: {result}")
 
             org = dict_from_row(result)
-            print(f"[DEBUG] Parsed org: {org}")
+            logger.debug(f" Parsed org: {org}")
 
             if not org:
                 raise HTTPException(
@@ -45,7 +48,7 @@ def get_my_organization(current_user: dict = Depends(get_current_user)):
     except HTTPException:
         raise
     except Exception as e:
-        print(f"[ERROR] Failed to get organization: {e}")
+        logger.error(f" Failed to get organization: {e}")
         import traceback
         traceback.print_exc()
         raise HTTPException(

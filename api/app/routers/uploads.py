@@ -13,6 +13,9 @@ import re
 
 from ..database import get_db
 from ..auth import get_current_user, check_outlet_access, get_user_outlet_ids
+from ..logger import get_logger
+
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/uploads", tags=["uploads"])
 
@@ -367,7 +370,7 @@ async def upload_csv(
     - Returns import statistics
     """
     import traceback
-    print(f"[CSV Upload] Received upload request - distributor: {distributor_code}, outlet_id: {outlet_id}, user: {current_user.get('email')}")
+    logger.info(f"csv_upload: Received upload request - distributor: {distributor_code}, outlet_id: {outlet_id}, user: {current_user.get('email')}")
 
     # Validate file type
     filename_lower = file.filename.lower()
@@ -418,7 +421,7 @@ async def upload_csv(
         if not check_outlet_access(current_user, outlet_id):
             raise HTTPException(status_code=403, detail="You don't have access to this outlet")
 
-    print(f"[CSV Upload] Using outlet_id: {outlet_id}, organization_id: {organization_id}")
+    logger.info(f"csv_upload: Using outlet_id: {outlet_id}, organization_id: {organization_id}")
 
     # Read file content
     try:
@@ -433,15 +436,15 @@ async def upload_csv(
             # .xls file (older Excel format)
             df = pd.read_excel(io.BytesIO(content), header=config["header_row"], engine='xlrd')
 
-        print(f"[CSV Upload] File read successfully, {len(df)} rows")
+        logger.info(f"csv_upload: File read successfully, {len(df)} rows")
 
         # Apply cleaning
         df = clean_dataframe(df, distributor_code)
-        print(f"[CSV Upload] Data cleaned successfully")
+        logger.info(f"csv_upload: Data cleaned successfully")
 
     except Exception as e:
         import traceback
-        print(f"[ERROR] File processing failed: {str(e)}")
+        logger.error(f" File processing failed: {str(e)}")
         traceback.print_exc()
         raise HTTPException(status_code=400, detail=f"Error processing file: {str(e)}")
 
@@ -453,23 +456,23 @@ async def upload_csv(
     updated_prices = 0
     batch_id = str(uuid.uuid4())
 
-    print(f"[CSV Upload] Starting database import, batch_id: {batch_id}")
+    logger.info(f"csv_upload: Starting database import, batch_id: {batch_id}")
 
     try:
         with get_db() as conn:
             cursor = conn.cursor()
-            print(f"[CSV Upload] Database connection established")
+            logger.info(f"csv_upload: Database connection established")
 
             # Get distributor ID
             distributor_id = get_distributor_id(cursor, distributor_code)
-            print(f"[CSV Upload] Distributor ID: {distributor_id}")
+            logger.info(f"csv_upload: Distributor ID: {distributor_id}")
 
             # Create import batch with organization_id and outlet_id
             cursor.execute("""
                 INSERT INTO import_batches (id, distributor_id, filename, import_date, organization_id, outlet_id)
                 VALUES (%s, %s, %s, %s, %s, %s)
             """, (batch_id, distributor_id, file.filename, datetime.now(), organization_id, outlet_id))
-            print(f"[CSV Upload] Import batch created")
+            logger.info(f"csv_upload: Import batch created")
 
             # Process each row
             for idx, row in df.iterrows():
@@ -613,7 +616,7 @@ async def upload_csv(
     except Exception as e:
         # Log the full error for debugging
         import traceback
-        print(f"[ERROR] Upload failed: {str(e)}")
+        logger.error(f" Upload failed: {str(e)}")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Import failed: {str(e)}")
 

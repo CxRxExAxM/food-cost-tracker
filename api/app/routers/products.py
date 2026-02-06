@@ -5,6 +5,9 @@ from ..database import get_db, dicts_from_rows, dict_from_row
 from ..schemas import Product, ProductWithPrice
 from ..auth import get_current_user, build_outlet_filter, check_outlet_access
 from ..config import DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT
+from ..logger import get_logger
+
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/products", tags=["products"])
 
@@ -95,7 +98,7 @@ def create_product(product: ProductCreate, current_user: dict = Depends(get_curr
         raise
     except Exception as e:
         import traceback
-        print(f"[ERROR] Create product failed: {str(e)}")
+        logger.error(f" Create product failed: {str(e)}")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Failed to create product: {str(e)}")
 

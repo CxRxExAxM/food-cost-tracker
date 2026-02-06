@@ -34,7 +34,10 @@ from ..utils.tier_limits import (
     get_usage_stats,
 )
 from ..audit import log_audit
+from ..logger import get_logger
 import os
+
+logger = get_logger(__name__)
 
 
 router = APIRouter(prefix="/api", tags=["ai_parse"])
@@ -132,7 +135,7 @@ async def parse_recipe_file(
     start_time = time.time()
 
     # Log request details for debugging
-    print(f"[PARSE] Request received - user: {current_user.get('id')}, outlet: {outlet_id}, file: {file.filename if file else 'None'}")
+    logger.debug(f"parse: Request received - user: {current_user.get('id')}, outlet: {outlet_id}, file: {file.filename if file else 'None'}")
 
     # Check permissions
     if current_user['role'] not in ['chef', 'admin']:
@@ -245,12 +248,12 @@ async def parse_recipe_file(
             )
 
         # Process ingredients: match products and normalize units
-        print(f"[PARSE] Processing {len(recipe_data['ingredients'])} ingredients...")
+        logger.debug(f"parse: Processing {len(recipe_data['ingredients'])} ingredients...")
         parsed_ingredients = []
         ingredients_matched = 0
 
         for idx, ing_data in enumerate(recipe_data['ingredients']):
-            print(f"[PARSE] Ingredient {idx + 1}: {ing_data['name']}")
+            logger.debug(f"parse: Ingredient {idx + 1}: {ing_data['name']}")
             # Match to common products
             matches = match_products(
                 ing_data['name'],
@@ -327,15 +330,15 @@ async def parse_recipe_file(
             parse_time_ms=int((time.time() - start_time) * 1000)
         )
 
-        print(f"[PARSE] All ingredients processed. Creating response...")
+        logger.debug(f"parse: All ingredients processed. Creating response...")
 
         # Get updated usage stats
-        print(f"[PARSE] Fetching updated usage stats...")
+        logger.debug(f"parse: Fetching updated usage stats...")
         _, updated_usage = check_parse_limit(organization_id, conn)
-        print(f"[PARSE] Usage stats: {updated_usage}")
+        logger.debug(f"parse: Usage stats: {updated_usage}")
 
         # Log audit event
-        print(f"[PARSE] Logging audit event...")
+        logger.debug(f"parse: Logging audit event...")
         try:
             log_audit(
                 user_id=user_id,
@@ -351,18 +354,18 @@ async def parse_recipe_file(
                 },
                 ip_address=request.client.host if request else None
             )
-            print(f"[PARSE] Audit logged successfully")
+            logger.debug(f"parse: Audit logged successfully")
         except Exception as e:
-            print(f"[PARSE ERROR] Audit logging failed: {type(e).__name__}: {str(e)}")
+            logger.error(f"parse: Audit logging failed: {type(e).__name__}: {str(e)}")
             import traceback
             traceback.print_exc()
             # Don't fail the whole request if audit logging fails
-            print(f"[PARSE] Continuing despite audit log failure...")
+            logger.debug(f"parse: Continuing despite audit log failure...")
 
-        print(f"[PARSE] Creating ParseFileResponse object...")
-        print(f"[PARSE] - parse_id: {parse_id}")
-        print(f"[PARSE] - recipe_name: {recipe_data['name']}")
-        print(f"[PARSE] - ingredients count: {len(parsed_ingredients)}")
+        logger.debug(f"parse: Creating ParseFileResponse object...")
+        logger.debug(f"parse: - parse_id: {parse_id}")
+        logger.debug(f"parse: - recipe_name: {recipe_data['name']}")
+        logger.debug(f"parse: - ingredients count: {len(parsed_ingredients)}")
 
         try:
             response = ParseFileResponse(
@@ -375,11 +378,11 @@ async def parse_recipe_file(
                 usage=UsageStats(**updated_usage),
                 credits_used=credits_used
             )
-            print(f"[PARSE] Response object created successfully")
-            print(f"[PARSE] Returning successful response to client")
+            logger.debug(f"parse: Response object created successfully")
+            logger.debug(f"parse: Returning successful response to client")
             return response
         except Exception as e:
-            print(f"[PARSE ERROR] Failed to create response object: {type(e).__name__}: {str(e)}")
+            logger.error(f"parse: Failed to create response object: {type(e).__name__}: {str(e)}")
             import traceback
             traceback.print_exc()
             raise

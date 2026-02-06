@@ -5,7 +5,10 @@ from ..schemas import Recipe, RecipeCreate, RecipeWithIngredients, RecipeWithCos
 from ..auth import get_current_user, build_outlet_filter, check_outlet_access
 from ..utils.conversions import get_unit_conversion_factor
 from ..config import DEFAULT_PAGE_LIMIT_LARGE, MAX_PAGE_LIMIT_LARGE
+from ..logger import get_logger
 import json
+
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/recipes", tags=["recipes"])
 
@@ -151,7 +154,7 @@ def get_recipe(recipe_id: int, current_user: dict = Depends(get_current_user)):
         raise
     except Exception as e:
         import traceback
-        print(f"[ERROR] Get recipe {recipe_id} failed: {str(e)}")
+        logger.error(f" Get recipe {recipe_id} failed: {str(e)}")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Failed to get recipe: {str(e)}")
 
@@ -666,7 +669,7 @@ def _calculate_ingredient_costs(cursor, recipe_id: int, outlet_id: int, visited:
                         total_cost += ing_cost
                     else:
                         # No conversion available - log warning and use direct calc (may be inaccurate)
-                        print(f"[WARN] No conversion from unit {ingredient_unit_id} ({ing.get('unit_abbreviation')}) to {product_unit_id} ({price_row.get('product_unit')}) for common_product {ing['common_product_id']}")
+                        logger.warning(f" No conversion from unit {ingredient_unit_id} ({ing.get('unit_abbreviation')}) to {product_unit_id} ({price_row.get('product_unit')}) for common_product {ing['common_product_id']}")
                         ing_cost = ing['quantity'] * unit_price * (100 / yield_pct)
                         has_price = True
                         price_source = f"{price_row['distributor_name']}: {price_row['product_name']} (unit mismatch: {ing.get('unit_abbreviation')} vs {price_row.get('product_unit')})"

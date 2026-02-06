@@ -5,6 +5,9 @@ from ..schemas import CommonProduct, CommonProductCreate, CommonProductUpdate, Q
 from ..auth import get_current_user
 from ..audit import log_audit
 from ..config import DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT_LARGE
+from ..logger import get_logger
+
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/common-products", tags=["common-products"])
 
@@ -214,8 +217,8 @@ def update_common_product(common_product_id: int, update: CommonProductUpdate, c
             params.append(common_product_id)
             query = f"UPDATE common_products SET {', '.join(update_fields)} WHERE id = %s"
 
-            print(f"[DEBUG] Update query: {query}")
-            print(f"[DEBUG] Params: {params}")
+            logger.debug(f" Update query: {query}")
+            logger.debug(f" Params: {params}")
             cursor.execute(query, params)
             conn.commit()
 
@@ -226,7 +229,7 @@ def update_common_product(common_product_id: int, update: CommonProductUpdate, c
         raise
     except Exception as e:
         import traceback
-        print(f"[ERROR] Update common product failed: {str(e)}")
+        logger.error(f" Update common product failed: {str(e)}")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Update failed: {str(e)}")
 
@@ -771,8 +774,8 @@ def quick_create_common_product(
     Required permissions: Chef or Admin role
     """
 
-    print(f"[QUICK-CREATE] Starting product creation: {product.common_name}")
-    print(f"[QUICK-CREATE] User: {current_user.get('id')}, Org: {current_user.get('organization_id')}")
+    logger.debug(f"quick_create: Starting product creation: {product.common_name}")
+    logger.debug(f"quick_create: User: {current_user.get('id')}, Org: {current_user.get('organization_id')}")
 
     try:
         # Check permissions
@@ -787,7 +790,7 @@ def quick_create_common_product(
         with get_db() as conn:
             cursor = conn.cursor()
 
-            print(f"[QUICK-CREATE] Checking for duplicates...")
+            logger.debug(f"quick_create: Checking for duplicates...")
             # Check if common_name already exists in this organization
             cursor.execute(
                 "SELECT id FROM common_products WHERE common_name = %s AND organization_id = %s",
@@ -795,13 +798,13 @@ def quick_create_common_product(
             )
             existing = cursor.fetchone()
             if existing:
-                print(f"[QUICK-CREATE] Duplicate found: {existing['id']}")
+                logger.debug(f"quick_create: Duplicate found: {existing['id']}")
                 raise HTTPException(
                     status_code=400,
                     detail=f"Product '{product.common_name}' already exists in your organization"
                 )
 
-            print(f"[QUICK-CREATE] Inserting into database...")
+            logger.debug(f"quick_create: Inserting into database...")
             # Create with minimal fields (allergens default to 0)
             cursor.execute("""
                 INSERT INTO common_products (
@@ -817,12 +820,12 @@ def quick_create_common_product(
             ))
 
             result = cursor.fetchone()
-            print(f"[QUICK-CREATE] Product created with ID: {result['id']}")
+            logger.debug(f"quick_create: Product created with ID: {result['id']}")
             conn.commit()
-            print(f"[QUICK-CREATE] Committed to database")
+            logger.debug(f"quick_create: Committed to database")
 
             # Log audit event
-            print(f"[QUICK-CREATE] Logging audit event...")
+            logger.debug(f"quick_create: Logging audit event...")
             try:
                 log_audit(
                     user_id=current_user['id'],  # Database column is 'id', not 'user_id'
@@ -837,28 +840,28 @@ def quick_create_common_product(
                     },
                     ip_address=request.client.host if request else None
                 )
-                print(f"[QUICK-CREATE] Audit logged successfully")
+                logger.debug(f"quick_create: Audit logged successfully")
             except Exception as audit_error:
-                print(f"[QUICK-CREATE ERROR] Audit logging failed: {type(audit_error).__name__}: {str(audit_error)}")
+                logger.error(f"quick_create: Audit logging failed: {type(audit_error).__name__}: {str(audit_error)}")
                 import traceback
                 traceback.print_exc()
                 # Continue despite audit failure
-                print(f"[QUICK-CREATE] Continuing despite audit failure...")
+                logger.debug(f"quick_create: Continuing despite audit failure...")
 
-            print(f"[QUICK-CREATE] Creating response...")
+            logger.debug(f"quick_create: Creating response...")
             response = QuickCreateProductResponse(
                 common_product_id=result['id'],
                 common_name=result['common_name'],
                 category=result['category'],
                 message=f"Product '{product.common_name}' created successfully"
             )
-            print(f"[QUICK-CREATE] Success! Returning response")
+            logger.debug(f"quick_create: Success! Returning response")
             return response
 
     except HTTPException:
         raise
     except Exception as e:
-        print(f"[QUICK-CREATE ERROR] Unexpected error: {type(e).__name__}: {str(e)}")
+        logger.error(f"quick_create: Unexpected error: {type(e).__name__}: {str(e)}")
         import traceback
         traceback.print_exc()
         raise HTTPException(
