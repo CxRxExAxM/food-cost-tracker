@@ -914,7 +914,7 @@ def get_audit_logs(
                 import json
                 try:
                     log["changes"] = json.loads(log["changes"])
-                except:
-                    pass
+                except (json.JSONDecodeError, TypeError):
+                    pass  # Keep as string if not valid JSON
 
         return logs
