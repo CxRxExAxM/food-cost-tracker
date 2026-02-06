@@ -318,7 +318,7 @@ def get_mapped_products(
         outlet_filter = ""
         outlet_params = []
 
-        # If user is not admin, filter by assigned outlets
+        # If user is not admin, filter by assigned outlets (for price display)
         if current_user.get('role') != 'admin':
             cursor.execute("""
                 SELECT outlet_id FROM user_outlets WHERE user_id = %s
@@ -327,7 +327,7 @@ def get_mapped_products(
 
             if user_outlets:
                 placeholders = ', '.join(['%s'] * len(user_outlets))
-                outlet_filter = f"AND p.outlet_id IN ({placeholders})"
+                outlet_filter = f"AND ph.outlet_id IN ({placeholders})"
                 outlet_params = user_outlets
             else:
                 # User has no outlet access - return empty
@@ -338,6 +338,7 @@ def get_mapped_products(
                 }
 
         # Get all mapped products with latest prices
+        # Products are org-wide, grouped by outlet via price_history
         query = f"""
             SELECT
                 p.*,
@@ -348,7 +349,6 @@ def get_mapped_products(
                 ph.unit_price,
                 ph.effective_date
             FROM products p
-            JOIN outlets o ON o.id = p.outlet_id
             LEFT JOIN distributor_products dp ON dp.product_id = p.id
             LEFT JOIN distributors d ON d.id = dp.distributor_id
             LEFT JOIN units u ON u.id = p.unit_id
@@ -358,10 +358,12 @@ def get_mapped_products(
                                           ORDER BY effective_date DESC) as rn
                 FROM price_history
             ) ph ON ph.distributor_product_id = dp.id AND ph.rn = 1
+            LEFT JOIN outlets o ON o.id = ph.outlet_id
             WHERE p.common_product_id = %s
               AND p.organization_id = %s
+              AND p.is_active = 1
               {outlet_filter}
-            ORDER BY o.name, p.name
+            ORDER BY o.name NULLS LAST, p.name
         """
 
         params = [common_product_id, current_user['organization_id']] + outlet_params

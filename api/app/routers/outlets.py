@@ -211,19 +211,20 @@ def delete_outlet(
                 detail="Outlet not found"
             )
 
-        # Check if outlet has products or recipes
+        # Check if outlet has prices or recipes
+        # Note: Products are org-wide, but prices are outlet-specific
         cursor.execute("""
             SELECT
-                (SELECT COUNT(*) FROM products WHERE outlet_id = %s AND is_active = 1) as products,
+                (SELECT COUNT(*) FROM price_history WHERE outlet_id = %s) as prices,
                 (SELECT COUNT(*) FROM recipes WHERE outlet_id = %s AND is_active = 1) as recipes
         """, (outlet_id, outlet_id))
 
         counts = cursor.fetchone()
 
-        if counts["products"] > 0 or counts["recipes"] > 0:
+        if counts["prices"] > 0 or counts["recipes"] > 0:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Cannot delete outlet with {counts['products']} products and {counts['recipes']} recipes. Deactivate instead or move data first."
+                detail=f"Cannot delete outlet with {counts['prices']} price records and {counts['recipes']} recipes. Deactivate instead or move data first."
             )
 
         # Soft delete (set is_active = 0)

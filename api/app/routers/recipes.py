@@ -348,28 +348,29 @@ def debug_common_product_products(common_product_id: int, current_user: dict = D
         if not common_product:
             raise HTTPException(status_code=404, detail="Common product not found")
 
-        # Get ALL products for this common product (any outlet)
+        # Get ALL products for this common product with their prices by outlet
+        # Products are org-wide, prices are outlet-specific
         cursor.execute("""
             SELECT
                 p.id as product_id,
                 p.name as product_name,
-                p.outlet_id,
+                ph.outlet_id,
                 o.name as outlet_name,
                 p.common_product_id,
                 d.name as distributor_name,
                 ph.unit_price,
                 ph.effective_date
             FROM products p
-            JOIN outlets o ON o.id = p.outlet_id
             JOIN distributor_products dp ON dp.product_id = p.id
             JOIN distributors d ON d.id = dp.distributor_id
             LEFT JOIN (
-                SELECT distributor_product_id, unit_price, effective_date,
-                       ROW_NUMBER() OVER (PARTITION BY distributor_product_id ORDER BY effective_date DESC) as rn
+                SELECT distributor_product_id, outlet_id, unit_price, effective_date,
+                       ROW_NUMBER() OVER (PARTITION BY distributor_product_id, outlet_id ORDER BY effective_date DESC) as rn
                 FROM price_history
             ) ph ON ph.distributor_product_id = dp.id AND ph.rn = 1
-            WHERE p.common_product_id = %s
-            ORDER BY p.outlet_id, ph.unit_price ASC NULLS LAST
+            LEFT JOIN outlets o ON o.id = ph.outlet_id
+            WHERE p.common_product_id = %s AND p.is_active = 1
+            ORDER BY ph.outlet_id NULLS LAST, ph.unit_price ASC NULLS LAST
         """, (common_product_id,))
 
         products = dicts_from_rows(cursor.fetchall())
@@ -421,6 +422,7 @@ def debug_recipe_cost(recipe_id: int, current_user: dict = Depends(get_current_u
         ]
 
         # Fetch ALL products for ALL common products in ONE query
+        # Products are org-wide, filter prices by recipe's outlet
         products_by_common = {}
         if common_product_ids:
             cursor.execute("""
@@ -428,7 +430,7 @@ def debug_recipe_cost(recipe_id: int, current_user: dict = Depends(get_current_u
                     p.common_product_id,
                     p.id as product_id,
                     p.name as product_name,
-                    p.outlet_id,
+                    ph.outlet_id,
                     d.name as distributor_name,
                     ph.unit_price,
                     ph.effective_date
@@ -436,13 +438,13 @@ def debug_recipe_cost(recipe_id: int, current_user: dict = Depends(get_current_u
                 JOIN distributor_products dp ON dp.product_id = p.id
                 JOIN distributors d ON d.id = dp.distributor_id
                 LEFT JOIN (
-                    SELECT distributor_product_id, unit_price, effective_date,
-                           ROW_NUMBER() OVER (PARTITION BY distributor_product_id ORDER BY effective_date DESC) as rn
+                    SELECT distributor_product_id, outlet_id, unit_price, effective_date,
+                           ROW_NUMBER() OVER (PARTITION BY distributor_product_id, outlet_id ORDER BY effective_date DESC) as rn
                     FROM price_history
-                ) ph ON ph.distributor_product_id = dp.id AND ph.rn = 1
-                WHERE p.common_product_id = ANY(%s) AND p.outlet_id = %s
+                ) ph ON ph.distributor_product_id = dp.id AND ph.rn = 1 AND ph.outlet_id = %s
+                WHERE p.common_product_id = ANY(%s) AND p.is_active = 1
                 ORDER BY p.common_product_id, ph.unit_price ASC NULLS LAST
-            """, (common_product_ids, recipe['outlet_id']))
+            """, (recipe['outlet_id'], common_product_ids))
 
             all_products = dicts_from_rows(cursor.fetchall())
 
@@ -642,16 +644,16 @@ def _calculate_ingredient_costs(cursor, recipe_id: int, outlet_id: int, visited:
                 JOIN distributors d ON d.id = dp.distributor_id
                 LEFT JOIN units u ON u.id = p.unit_id
                 LEFT JOIN (
-                    SELECT distributor_product_id, unit_price,
-                           ROW_NUMBER() OVER (PARTITION BY distributor_product_id ORDER BY effective_date DESC) as rn
+                    SELECT distributor_product_id, outlet_id, unit_price,
+                           ROW_NUMBER() OVER (PARTITION BY distributor_product_id, outlet_id ORDER BY effective_date DESC) as rn
                     FROM price_history
-                ) ph ON ph.distributor_product_id = dp.id AND ph.rn = 1
+                ) ph ON ph.distributor_product_id = dp.id AND ph.rn = 1 AND ph.outlet_id = %s
                 WHERE p.common_product_id = ANY(%s)
-                  AND p.outlet_id = %s
+                  AND p.is_active = 1
                   AND ph.unit_price IS NOT NULL
             )
             SELECT * FROM ranked_prices WHERE price_rank = 1
-        """, (common_product_ids, outlet_id))
+        """, (outlet_id, common_product_ids))
 
         all_best_prices = dicts_from_rows(cursor.fetchall())
 
