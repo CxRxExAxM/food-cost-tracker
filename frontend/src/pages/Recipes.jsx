@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, memo } from 'react';
 import axios from '../lib/axios';
 import Navigation from '../components/Navigation';
 import { useOutlet } from '../contexts/OutletContext';
@@ -2215,8 +2215,8 @@ function ContextMenu({ x, y, item, onRenameFolder, onDeleteFolder, onClose }) {
   );
 }
 
-// Tree Node Component
-function TreeNode({
+// Tree Node Component - memoized to prevent unnecessary re-renders
+const TreeNode = memo(function TreeNode({
   node,
   selectedRecipe,
   expandedFolders,
@@ -2292,6 +2292,6 @@ function TreeNode({
       <OutletBadge outletId={node.data.outlet_id} />
     </div>
   );
-}
+});
 
 export default Recipes;
