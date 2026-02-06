@@ -61,7 +61,6 @@ function Admin({ embedded = false }) {
   const fetchOrganization = async () => {
     const response = await axios.get('/organizations/me');
     const data = response.data;
-    console.log('Organization response:', data);
     setOrganization(data);
     setFormData({
       name: data.name || '',
@@ -72,16 +71,12 @@ function Admin({ embedded = false }) {
 
   const fetchStats = async () => {
     const response = await axios.get('/organizations/me/stats');
-    const data = response.data;
-    console.log('Stats response:', data);
-    setStats(data);
+    setStats(response.data);
   };
 
   const fetchUsers = async () => {
     const response = await axios.get('/auth/users');
-    const data = response.data;
-    console.log('Users response:', data);
-    setUsers(data);
+    setUsers(response.data);
   };
 
   const handleSubmit = async (e) => {

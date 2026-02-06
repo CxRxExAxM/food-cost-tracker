@@ -14,19 +14,13 @@ export default function UploadRecipeModal({ isOpen, onClose, outletId, onParseCo
   // Load usage stats and validate outlet when modal opens
   useEffect(() => {
     if (isOpen) {
-      console.log('[UploadRecipeModal] Modal opened with outletId:', outletId);
-
       // If outletId is missing, try to get it from localStorage as fallback
       if (!outletId || outletId === 'all') {
         const savedOutletId = localStorage.getItem('selectedOutletId');
-        console.log('[UploadRecipeModal] outletId missing, checking localStorage:', savedOutletId);
 
         if (savedOutletId && savedOutletId !== 'all') {
           const parsedId = parseInt(savedOutletId);
-          console.log('[UploadRecipeModal] Using fallback outlet ID:', parsedId);
           setEffectiveOutletId(parsedId);
-        } else {
-          console.error('[UploadRecipeModal] No valid outlet ID available');
         }
       } else {
         setEffectiveOutletId(outletId);
@@ -93,8 +87,6 @@ export default function UploadRecipeModal({ isOpen, onClose, outletId, onParseCo
   const handleParseRecipe = async () => {
     if (!file) return;
 
-    console.log('[UploadRecipeModal] handleParseRecipe called with effectiveOutletId:', effectiveOutletId);
-
     // Validate outlet ID
     if (!effectiveOutletId || effectiveOutletId === 'all') {
       setError('Please select a specific outlet before uploading. Try selecting an outlet from the dropdown and reopening the upload dialog.');
@@ -111,7 +103,6 @@ export default function UploadRecipeModal({ isOpen, onClose, outletId, onParseCo
       await new Promise(resolve => setTimeout(resolve, 500));
       setProgress('Analyzing document...');
 
-      console.log('[UploadRecipeModal] Calling parseRecipeFile with outlet ID:', effectiveOutletId);
       const result = await parseRecipeFile(file, effectiveOutletId);
 
       setProgress('Extracting ingredients...');

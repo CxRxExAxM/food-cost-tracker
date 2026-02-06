@@ -44,13 +44,11 @@ export function AuthProvider({ children }) {
 
   const login = async (email, password) => {
     try {
-      console.log('[AuthContext] Starting login...');
       const response = await axios.post(`${API_URL}/auth/login`, {
         email,
         password
       });
 
-      console.log('[AuthContext] Login response:', response.data);
       const { access_token } = response.data;
 
       if (!access_token) {
@@ -58,26 +56,23 @@ export function AuthProvider({ children }) {
       }
 
       localStorage.setItem('token', access_token);
-      console.log('[AuthContext] Token saved, fetching user info...');
 
       // Fetch user info
       const userResponse = await axios.get(`${API_URL}/auth/me`, {
         headers: { Authorization: `Bearer ${access_token}` }
       });
 
-      console.log('[AuthContext] User info received:', userResponse.data);
       setUser(userResponse.data);
       setSetupRequired(false);
       return userResponse.data;
     } catch (error) {
-      console.error('[AuthContext] Login failed:', error);
+      console.error('Login failed:', error);
       throw error;
     }
   };
 
   const setup = async (email, username, password, fullName) => {
     try {
-      console.log('[AuthContext] Starting setup...');
       const response = await axios.post(`${API_URL}/auth/setup`, {
         email,
         username,
@@ -85,7 +80,6 @@ export function AuthProvider({ children }) {
         full_name: fullName
       });
 
-      console.log('[AuthContext] Setup response:', response.data);
       const { access_token } = response.data;
 
       if (!access_token) {
@@ -93,26 +87,23 @@ export function AuthProvider({ children }) {
       }
 
       localStorage.setItem('token', access_token);
-      console.log('[AuthContext] Token saved, fetching user info...');
 
       // Fetch user info
       const userResponse = await axios.get(`${API_URL}/auth/me`, {
         headers: { Authorization: `Bearer ${access_token}` }
       });
 
-      console.log('[AuthContext] User info received:', userResponse.data);
       setUser(userResponse.data);
       setSetupRequired(false);
       return userResponse.data;
     } catch (error) {
-      console.error('[AuthContext] Setup failed:', error);
+      console.error('Setup failed:', error);
       throw error;
     }
   };
 
   const setToken = async (token) => {
     try {
-      console.log('[AuthContext] Setting new token...');
       localStorage.setItem('token', token);
 
       // Fetch user info with new token
@@ -120,11 +111,10 @@ export function AuthProvider({ children }) {
         headers: { Authorization: `Bearer ${token}` }
       });
 
-      console.log('[AuthContext] User info received:', userResponse.data);
       setUser(userResponse.data);
       return userResponse.data;
     } catch (error) {
-      console.error('[AuthContext] Failed to set token:', error);
+      console.error('Failed to set token:', error);
       localStorage.removeItem('token');
       throw error;
     }

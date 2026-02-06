@@ -62,7 +62,6 @@ export function OutletProvider({ children }) {
 
       // Always set the outlet and persist it
       if (outletToSelect) {
-        console.log('[OutletContext] Setting current outlet:', outletToSelect);
         setCurrentOutlet(outletToSelect);
 
         // Persist to localStorage immediately
@@ -71,8 +70,6 @@ export function OutletProvider({ children }) {
         } else {
           localStorage.setItem('selectedOutletId', outletToSelect.id.toString());
         }
-      } else {
-        console.warn('[OutletContext] No outlets available to select');
       }
 
       setLoading(false);

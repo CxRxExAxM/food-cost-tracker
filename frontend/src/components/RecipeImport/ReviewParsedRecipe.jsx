@@ -27,7 +27,7 @@ export default function ReviewParsedRecipe({ parseResult, outletId, onClose }) {
         notes: ing.prep_note
       }));
 
-      const response = await createRecipeFromParse({
+      await createRecipeFromParse({
         parse_id: parseResult.parse_id,
         name: recipeName,
         outlet_id: outletId,
@@ -37,8 +37,6 @@ export default function ReviewParsedRecipe({ parseResult, outletId, onClose }) {
         category,
         ingredients
       });
-
-      console.log('[REVIEW] Recipe created successfully:', response);
 
       // Close modal and navigate
       onClose();

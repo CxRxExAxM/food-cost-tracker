@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { OutletProvider } from './contexts/OutletContext';
 import { ToastProvider } from './contexts/ToastContext';
+import LoadingSpinner from './components/LoadingSpinner';
 import Home from './pages/Home';
 import Products from './pages/Products';
 import Recipes from './pages/Recipes';
@@ -25,12 +26,7 @@ function ProtectedRoute({ children }) {
   const { user, loading, setupRequired } = useAuth();
 
   if (loading) {
-    return (
-      <div className="loading-screen">
-        <div className="loading-spinner"></div>
-        <p>Loading...</p>
-      </div>
-    );
+    return <LoadingSpinner fullScreen message="Loading..." />;
   }
 
   if (setupRequired) {
@@ -49,12 +45,7 @@ function PublicRoute({ children }) {
   const { user, loading, setupRequired } = useAuth();
 
   if (loading) {
-    return (
-      <div className="loading-screen">
-        <div className="loading-spinner"></div>
-        <p>Loading...</p>
-      </div>
-    );
+    return <LoadingSpinner fullScreen message="Loading..." />;
   }
 
   // Allow access to login for setup
@@ -74,12 +65,7 @@ function AdminRoute({ children }) {
   const { user, loading, isAdmin } = useAuth();
 
   if (loading) {
-    return (
-      <div className="loading-screen">
-        <div className="loading-spinner"></div>
-        <p>Loading...</p>
-      </div>
-    );
+    return <LoadingSpinner fullScreen message="Loading..." />;
   }
 
   if (!user) {
@@ -98,12 +84,7 @@ function SuperAdminRoute({ children }) {
   const { user, loading } = useAuth();
 
   if (loading) {
-    return (
-      <div className="loading-screen">
-        <div className="loading-spinner"></div>
-        <p>Loading...</p>
-      </div>
-    );
+    return <LoadingSpinner fullScreen message="Loading..." />;
   }
 
   if (!user) {
