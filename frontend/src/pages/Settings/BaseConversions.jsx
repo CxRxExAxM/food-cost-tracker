@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { Scale, Plus, Pencil, Trash2, Info, RefreshCw } from 'lucide-react';
 import Navigation from '../../components/Navigation';
 import UnitSelect from '../../components/UnitSelect';

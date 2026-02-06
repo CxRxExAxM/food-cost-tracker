@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../contexts/AuthContext';
 import { useOutlet } from '../contexts/OutletContext';
 import Navigation from '../components/Navigation';
 import OrgCard from '../components/outlets/OrgCard';

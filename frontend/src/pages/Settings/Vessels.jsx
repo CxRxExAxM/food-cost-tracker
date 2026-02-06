@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { Container, Plus, Pencil, Trash2, ChevronDown, ChevronRight, Search, X } from 'lucide-react';
 import Navigation from '../../components/Navigation';
 import UnitSelect from '../../components/UnitSelect';

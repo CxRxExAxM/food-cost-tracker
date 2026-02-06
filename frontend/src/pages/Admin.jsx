@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../contexts/AuthContext';
 import { Building2, Users, Save, BarChart3, AlertCircle, CheckCircle } from 'lucide-react';
 import Navigation from '../components/Navigation';
 import axios from '../lib/axios';

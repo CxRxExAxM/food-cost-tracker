@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useLocation, Navigate } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../contexts/AuthContext';
 import Navigation from '../../components/Navigation';
 import { Users, Building2, Container, ArrowRightLeft, Settings as SettingsIcon, Shield } from 'lucide-react';
 import './Settings.css';
