@@ -296,8 +296,9 @@ def get_banquet_menu(menu_id: int, current_user: dict = Depends(get_current_user
         """, (menu_id,))
         menu_items = dicts_from_rows(cursor.fetchall())
 
-        # Get prep items for each menu item with linked product/recipe/common_product info
-        for item in menu_items:
+        # Get ALL prep items for ALL menu items in ONE query (fixes N+1)
+        menu_item_ids = [item["id"] for item in menu_items]
+        if menu_item_ids:
             cursor.execute("""
                 SELECT
                     bp.*,
@@ -351,10 +352,22 @@ def get_banquet_menu(menu_id: int, current_user: dict = Depends(get_current_user
                 LEFT JOIN common_products cp ON cp.id = bp.common_product_id
                 LEFT JOIN vessels v ON v.id = bp.vessel_id
                 LEFT JOIN units vu ON vu.id = v.default_unit_id
-                WHERE bp.banquet_menu_item_id = %s
-                ORDER BY bp.display_order, bp.name
-            """, (item["id"],))
-            item["prep_items"] = dicts_from_rows(cursor.fetchall())
+                WHERE bp.banquet_menu_item_id = ANY(%s)
+                ORDER BY bp.banquet_menu_item_id, bp.display_order, bp.name
+            """, (menu_item_ids,))
+            all_prep_items = dicts_from_rows(cursor.fetchall())
+
+            # Group prep items by menu_item_id
+            from ..utils.db_helpers import group_by_key
+            prep_by_item = group_by_key(all_prep_items, "banquet_menu_item_id")
+
+            # Assign to each menu item
+            for item in menu_items:
+                item["prep_items"] = prep_by_item.get(item["id"], [])
+        else:
+            # No menu items, nothing to fetch
+            for item in menu_items:
+                item["prep_items"] = []
 
         menu["menu_items"] = menu_items
         return menu
