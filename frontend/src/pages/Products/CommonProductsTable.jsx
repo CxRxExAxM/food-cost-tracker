@@ -408,21 +408,11 @@ function CommonProductsTable() {
                     title="Select all"
                   />
                 </th>
-                <th>Name</th>
-                <th>Category</th>
-                <th className="allergens-header">
-                  <div className="allergen-header-group">
-                    {ALLERGENS.map(a => (
-                      <span key={a.key} className="allergen-col-header" title={a.label}>{a.abbr}</span>
-                    ))}
-                  </div>
-                  <div className="dietary-header-group">
-                    {DIETARY.map(a => (
-                      <span key={a.key} className="dietary-col-header" title={a.label}>{a.abbr}</span>
-                    ))}
-                  </div>
-                </th>
-                <th className="text-center">Linked</th>
+                <th className="name-header">Name</th>
+                <th className="allergens-header">Allergens</th>
+                <th className="dietary-header">Dietary</th>
+                <th className="category-header">Category</th>
+                <th className="text-center linked-header">Linked</th>
               </tr>
             </thead>
             <tbody>
@@ -441,42 +431,42 @@ function CommonProductsTable() {
                   <td className="name-cell">
                     {renderEditableCell(product, 'common_name', product.common_name)}
                   </td>
+                  <td className="allergens-cell">
+                    <div className="allergen-grid-inline">
+                      {ALLERGENS.map(allergen => (
+                        <label
+                          key={allergen.key}
+                          className={`allergen-pill ${product[allergen.key] ? 'checked' : ''}`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={product[allergen.key] || false}
+                            onChange={() => handleAllergenToggle(product.id, allergen.key)}
+                          />
+                          <span className="allergen-pill-label">{allergen.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </td>
+                  <td className="dietary-cell">
+                    <div className="dietary-grid-inline">
+                      {DIETARY.map(dietary => (
+                        <label
+                          key={dietary.key}
+                          className={`dietary-pill ${product[dietary.key] ? 'checked' : ''}`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={product[dietary.key] || false}
+                            onChange={() => handleAllergenToggle(product.id, dietary.key)}
+                          />
+                          <span className="dietary-pill-label">{dietary.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </td>
                   <td className="category-cell">
                     {renderEditableCell(product, 'category', product.category)}
-                  </td>
-                  <td className="allergens-cell">
-                    <div className="allergen-checkboxes">
-                      <div className="allergen-checkbox-group">
-                        {ALLERGENS.map(allergen => (
-                          <label
-                            key={allergen.key}
-                            className={`allergen-inline-checkbox ${product[allergen.key] ? 'checked' : ''}`}
-                            title={allergen.label}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={product[allergen.key] || false}
-                              onChange={() => handleAllergenToggle(product.id, allergen.key)}
-                            />
-                          </label>
-                        ))}
-                      </div>
-                      <div className="dietary-checkbox-group">
-                        {DIETARY.map(dietary => (
-                          <label
-                            key={dietary.key}
-                            className={`dietary-inline-checkbox ${product[dietary.key] ? 'checked' : ''}`}
-                            title={dietary.label}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={product[dietary.key] || false}
-                              onChange={() => handleAllergenToggle(product.id, dietary.key)}
-                            />
-                          </label>
-                        ))}
-                      </div>
-                    </div>
                   </td>
                   <td className="text-center linked-cell">
                     <button

@@ -169,101 +169,125 @@
   max-width: 150px;
 }
 
-/* Allergen Header */
+/* Column Headers */
+.name-header {
+  min-width: 200px;
+}
+
 .allergens-header {
-  min-width: 320px;
+  min-width: 420px;
 }
 
-.allergen-header-group,
-.dietary-header-group {
-  display: inline-flex;
-  gap: 2px;
+.dietary-header {
+  min-width: 140px;
 }
 
-.dietary-header-group {
-  margin-left: var(--space-2);
-  padding-left: var(--space-2);
-  border-left: 1px solid var(--border-default);
+.category-header {
+  min-width: 120px;
 }
 
-.allergen-col-header,
-.dietary-col-header {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  font-size: 9px;
-  font-weight: var(--font-weight-bold);
-  color: var(--text-tertiary);
-  cursor: default;
+.linked-header {
+  width: 70px;
 }
 
-.dietary-col-header {
-  color: var(--color-green);
-}
-
-/* Allergen Inline Checkboxes */
+/* Allergen Pills Grid */
 .allergens-cell {
-  min-width: 320px;
   padding: var(--space-2) var(--space-3) !important;
 }
 
-.allergen-checkboxes {
+.allergen-grid-inline {
   display: flex;
-  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
 }
 
-.allergen-checkbox-group,
-.dietary-checkbox-group {
-  display: inline-flex;
-  gap: 2px;
-}
-
-.dietary-checkbox-group {
-  margin-left: var(--space-2);
-  padding-left: var(--space-2);
-  border-left: 1px solid var(--border-subtle);
-}
-
-.allergen-inline-checkbox,
-.dietary-inline-checkbox {
+.allergen-pill {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
   cursor: pointer;
-  border-radius: 3px;
-  transition: background-color var(--transition-fast);
+  transition: all var(--transition-fast);
+  background: var(--bg-tertiary);
+  border: 1px solid transparent;
+  color: var(--text-tertiary);
+  user-select: none;
 }
 
-.allergen-inline-checkbox:hover {
+.allergen-pill:hover {
   background: var(--color-yellow-dim);
+  border-color: var(--color-yellow);
 }
 
-.dietary-inline-checkbox:hover {
-  background: var(--color-green-dim);
-}
-
-.allergen-inline-checkbox.checked {
+.allergen-pill.checked {
   background: var(--color-yellow-dim);
+  border-color: var(--color-yellow);
+  color: var(--text-primary);
 }
 
-.dietary-inline-checkbox.checked {
-  background: var(--color-green-dim);
-}
-
-.allergen-inline-checkbox input[type="checkbox"],
-.dietary-inline-checkbox input[type="checkbox"] {
-  width: 14px;
-  height: 14px;
+.allergen-pill input[type="checkbox"] {
+  width: 12px;
+  height: 12px;
+  margin: 0;
   cursor: pointer;
   accent-color: var(--color-yellow);
 }
 
-.dietary-inline-checkbox input[type="checkbox"] {
+.allergen-pill-label {
+  font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+}
+
+/* Dietary Pills */
+.dietary-cell {
+  padding: var(--space-2) var(--space-3) !important;
+}
+
+.dietary-grid-inline {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dietary-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  background: var(--bg-tertiary);
+  border: 1px solid transparent;
+  color: var(--text-tertiary);
+  user-select: none;
+}
+
+.dietary-pill:hover {
+  background: var(--color-green-dim);
+  border-color: var(--color-green);
+}
+
+.dietary-pill.checked {
+  background: var(--color-green-dim);
+  border-color: var(--color-green);
+  color: var(--text-primary);
+}
+
+.dietary-pill input[type="checkbox"] {
+  width: 12px;
+  height: 12px;
+  margin: 0;
+  cursor: pointer;
   accent-color: var(--color-green);
+}
+
+.dietary-pill-label {
+  font-weight: var(--font-weight-medium);
+  white-space: nowrap;
 }
 
 /* Linked Count */
