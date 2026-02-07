@@ -434,34 +434,26 @@ function CommonProductsTable() {
                   <td className="allergens-cell">
                     <div className="allergen-grid-inline">
                       {ALLERGENS.map(allergen => (
-                        <label
+                        <span
                           key={allergen.key}
                           className={`allergen-pill ${product[allergen.key] ? 'checked' : ''}`}
+                          onClick={() => handleAllergenToggle(product.id, allergen.key)}
                         >
-                          <input
-                            type="checkbox"
-                            checked={product[allergen.key] || false}
-                            onChange={() => handleAllergenToggle(product.id, allergen.key)}
-                          />
-                          <span className="allergen-pill-label">{allergen.label}</span>
-                        </label>
+                          {allergen.label}
+                        </span>
                       ))}
                     </div>
                   </td>
                   <td className="dietary-cell">
                     <div className="dietary-grid-inline">
                       {DIETARY.map(dietary => (
-                        <label
+                        <span
                           key={dietary.key}
                           className={`dietary-pill ${product[dietary.key] ? 'checked' : ''}`}
+                          onClick={() => handleAllergenToggle(product.id, dietary.key)}
                         >
-                          <input
-                            type="checkbox"
-                            checked={product[dietary.key] || false}
-                            onChange={() => handleAllergenToggle(product.id, dietary.key)}
-                          />
-                          <span className="dietary-pill-label">{dietary.label}</span>
-                        </label>
+                          {dietary.label}
+                        </span>
                       ))}
                     </div>
                   </td>

@@ -202,42 +202,31 @@
 }
 
 .allergen-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 8px;
+  display: inline-block;
+  padding: 3px 10px;
   border-radius: 12px;
   font-size: 11px;
+  font-weight: var(--font-weight-medium);
   cursor: pointer;
   transition: all var(--transition-fast);
   background: var(--bg-tertiary);
-  border: 1px solid transparent;
+  border: 1px solid var(--border-subtle);
   color: var(--text-tertiary);
   user-select: none;
+  white-space: nowrap;
 }
 
 .allergen-pill:hover {
   background: var(--color-yellow-dim);
   border-color: var(--color-yellow);
-}
-
-.allergen-pill.checked {
-  background: var(--color-yellow-dim);
-  border-color: var(--color-yellow);
   color: var(--text-primary);
 }
 
-.allergen-pill input[type="checkbox"] {
-  width: 12px;
-  height: 12px;
-  margin: 0;
-  cursor: pointer;
-  accent-color: var(--color-yellow);
-}
-
-.allergen-pill-label {
-  font-weight: var(--font-weight-medium);
-  white-space: nowrap;
+.allergen-pill.checked {
+  background: var(--color-yellow);
+  border-color: var(--color-yellow);
+  color: var(--bg-primary);
+  font-weight: var(--font-weight-semibold);
 }
 
 /* Dietary Pills */
@@ -252,42 +241,31 @@
 }
 
 .dietary-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 8px;
+  display: inline-block;
+  padding: 3px 10px;
   border-radius: 12px;
   font-size: 11px;
+  font-weight: var(--font-weight-medium);
   cursor: pointer;
   transition: all var(--transition-fast);
   background: var(--bg-tertiary);
-  border: 1px solid transparent;
+  border: 1px solid var(--border-subtle);
   color: var(--text-tertiary);
   user-select: none;
+  white-space: nowrap;
 }
 
 .dietary-pill:hover {
   background: var(--color-green-dim);
   border-color: var(--color-green);
-}
-
-.dietary-pill.checked {
-  background: var(--color-green-dim);
-  border-color: var(--color-green);
   color: var(--text-primary);
 }
 
-.dietary-pill input[type="checkbox"] {
-  width: 12px;
-  height: 12px;
-  margin: 0;
-  cursor: pointer;
-  accent-color: var(--color-green);
-}
-
-.dietary-pill-label {
-  font-weight: var(--font-weight-medium);
-  white-space: nowrap;
+.dietary-pill.checked {
+  background: var(--color-green);
+  border-color: var(--color-green);
+  color: var(--bg-primary);
+  font-weight: var(--font-weight-semibold);
 }
 
 /* Linked Count */
