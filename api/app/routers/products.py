@@ -198,10 +198,24 @@ def list_products(
         sort_col = sort_column_map.get(sort_by, 'p.name')
         sort_direction = 'DESC' if sort_dir.lower() == 'desc' else 'ASC'
 
-        # Build price_history join condition (filter by outlet if specified)
-        ph_join_condition = "ph.distributor_product_id = dp.id AND ph.rn = 1"
+        # Build price_history subquery and join condition
+        # When outlet specified: get latest price for that outlet
+        # When no outlet (All): get latest price from any outlet
         if outlet_id is not None:
-            ph_join_condition += f" AND ph.outlet_id = {outlet_id}"
+            ph_subquery = """
+                SELECT distributor_product_id, outlet_id, case_price, unit_price, effective_date,
+                       ROW_NUMBER() OVER (PARTITION BY distributor_product_id, outlet_id ORDER BY effective_date DESC) as rn
+                FROM price_history
+            """
+            ph_join_condition = f"ph.distributor_product_id = dp.id AND ph.rn = 1 AND ph.outlet_id = {outlet_id}"
+        else:
+            # No outlet filter - get latest price across all outlets
+            ph_subquery = """
+                SELECT distributor_product_id, outlet_id, case_price, unit_price, effective_date,
+                       ROW_NUMBER() OVER (PARTITION BY distributor_product_id ORDER BY effective_date DESC) as rn
+                FROM price_history
+            """
+            ph_join_condition = "ph.distributor_product_id = dp.id AND ph.rn = 1"
 
         # Build main query
         query = f"""
@@ -219,11 +233,7 @@ def list_products(
             LEFT JOIN distributors d ON d.id = dp.distributor_id
             LEFT JOIN units u ON u.id = p.unit_id
             LEFT JOIN common_products cp ON cp.id = p.common_product_id
-            LEFT JOIN (
-                SELECT distributor_product_id, outlet_id, case_price, unit_price, effective_date,
-                       ROW_NUMBER() OVER (PARTITION BY distributor_product_id, outlet_id ORDER BY effective_date DESC) as rn
-                FROM price_history
-            ) ph ON {ph_join_condition}
+            LEFT JOIN ({ph_subquery}) ph ON {ph_join_condition}
             {where_clause}
             ORDER BY {sort_col} {sort_direction} NULLS LAST
             LIMIT %s OFFSET %s
@@ -245,6 +255,7 @@ def get_product(product_id: int, current_user: dict = Depends(get_current_user))
         # Build product filter (org-wide, no outlet filter)
         product_filter, product_params = build_product_filter(current_user, "p")
 
+        # Get latest price across all outlets for this product
         query = f"""
             SELECT
                 p.*,
@@ -262,7 +273,7 @@ def get_product(product_id: int, current_user: dict = Depends(get_current_user))
             LEFT JOIN common_products cp ON cp.id = p.common_product_id
             LEFT JOIN (
                 SELECT distributor_product_id, outlet_id, case_price, unit_price, effective_date,
-                       ROW_NUMBER() OVER (PARTITION BY distributor_product_id, outlet_id ORDER BY effective_date DESC) as rn
+                       ROW_NUMBER() OVER (PARTITION BY distributor_product_id ORDER BY effective_date DESC) as rn
                 FROM price_history
             ) ph ON ph.distributor_product_id = dp.id AND ph.rn = 1
             WHERE p.id = %s AND {product_filter}
