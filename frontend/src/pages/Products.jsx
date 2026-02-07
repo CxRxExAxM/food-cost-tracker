@@ -9,24 +9,27 @@ import './Products.css';
 
 const API_URL = import.meta.env.VITE_API_URL ?? '';
 
-// Allergen definitions with icons and labels
+// Allergen definitions with abbreviations
 const ALLERGENS = [
-  { key: 'allergen_gluten', label: 'Gluten', icon: '🌾' },
-  { key: 'allergen_dairy', label: 'Dairy', icon: '🥛' },
-  { key: 'allergen_egg', label: 'Egg', icon: '🥚' },
-  { key: 'allergen_fish', label: 'Fish', icon: '🐟' },
-  { key: 'allergen_crustation', label: 'Crustacean', icon: '🦐' },
-  { key: 'allergen_mollusk', label: 'Mollusk', icon: '🦪' },
-  { key: 'allergen_tree_nuts', label: 'Tree Nuts', icon: '🌰' },
-  { key: 'allergen_peanuts', label: 'Peanuts', icon: '🥜' },
-  { key: 'allergen_soy', label: 'Soy', icon: '🫘' },
-  { key: 'allergen_sesame', label: 'Sesame', icon: '⚪' },
-  { key: 'allergen_mustard', label: 'Mustard', icon: '🟡' },
-  { key: 'allergen_celery', label: 'Celery', icon: '🥬' },
-  { key: 'allergen_lupin', label: 'Lupin', icon: '🌸' },
-  { key: 'allergen_sulphur_dioxide', label: 'Sulphites', icon: '🧪' },
-  { key: 'allergen_vegan', label: 'Vegan', icon: '🌱', dietary: true },
-  { key: 'allergen_vegetarian', label: 'Vegetarian', icon: '🥗', dietary: true },
+  { key: 'allergen_gluten', label: 'Gluten', abbr: 'G' },
+  { key: 'allergen_dairy', label: 'Dairy', abbr: 'D' },
+  { key: 'allergen_egg', label: 'Egg', abbr: 'E' },
+  { key: 'allergen_fish', label: 'Fish', abbr: 'Fi' },
+  { key: 'allergen_crustation', label: 'Crustacean', abbr: 'Cr' },
+  { key: 'allergen_mollusk', label: 'Mollusk', abbr: 'Mo' },
+  { key: 'allergen_tree_nuts', label: 'Tree Nuts', abbr: 'TN' },
+  { key: 'allergen_peanuts', label: 'Peanuts', abbr: 'P' },
+  { key: 'allergen_soy', label: 'Soy', abbr: 'So' },
+  { key: 'allergen_sesame', label: 'Sesame', abbr: 'Se' },
+  { key: 'allergen_mustard', label: 'Mustard', abbr: 'Mu' },
+  { key: 'allergen_celery', label: 'Celery', abbr: 'Ce' },
+  { key: 'allergen_lupin', label: 'Lupin', abbr: 'Lu' },
+  { key: 'allergen_sulphur_dioxide', label: 'Sulphites', abbr: 'Su' },
+];
+
+const DIETARY = [
+  { key: 'allergen_vegan', label: 'Vegan', abbr: 'VN' },
+  { key: 'allergen_vegetarian', label: 'Vegetarian', abbr: 'VG' },
 ];
 
 function Products() {
@@ -360,7 +363,8 @@ function Products() {
   const getActiveAllergens = (commonProductId) => {
     const cp = commonProducts.find(c => c.id === commonProductId);
     if (!cp) return [];
-    return ALLERGENS.filter(a => cp[a.key]);
+    const allDefs = [...ALLERGENS, ...DIETARY];
+    return allDefs.filter(a => cp[a.key]);
   };
 
   const formatPrice = (price) => {
@@ -1158,14 +1162,14 @@ function Products() {
                                   title="Click to manage product details"
                                 >
                                   {getCommonProductName(product)}
-                                  <div className="allergen-icons">
-                                    {getActiveAllergens(product.common_product_id).slice(0, 4).map(a => (
-                                      <span key={a.key} className="allergen-icon" title={a.label}>
-                                        {a.icon}
+                                  <div className="allergen-tags">
+                                    {getActiveAllergens(product.common_product_id).slice(0, 6).map(a => (
+                                      <span key={a.key} className="allergen-tag" title={a.label}>
+                                        {a.abbr}
                                       </span>
                                     ))}
-                                    {getActiveAllergens(product.common_product_id).length > 4 && (
-                                      <span className="allergen-more">+{getActiveAllergens(product.common_product_id).length - 4}</span>
+                                    {getActiveAllergens(product.common_product_id).length > 6 && (
+                                      <span className="allergen-more">+{getActiveAllergens(product.common_product_id).length - 6}</span>
                                     )}
                                   </div>
                                 </span>
@@ -1237,8 +1241,7 @@ function AllergenModal({ product, onClose, onUpdate }) {
   const [selectedOutlet, setSelectedOutlet] = useState('all');
   const [loadingMappedProducts, setLoadingMappedProducts] = useState(false);
 
-  const allergenAllergens = ALLERGENS.filter(a => !a.dietary);
-  const dietaryFlags = ALLERGENS.filter(a => a.dietary);
+  // Use the separate ALLERGENS and DIETARY arrays directly
 
   useEffect(() => {
     if (product) {
@@ -1376,14 +1379,14 @@ function AllergenModal({ product, onClose, onUpdate }) {
             <h3>Allergens</h3>
             <p className="allergen-section-note">Select all allergens this product contains</p>
             <div className="allergen-grid">
-              {allergenAllergens.map(allergen => (
+              {ALLERGENS.map(allergen => (
                 <label key={allergen.key} className={`allergen-checkbox ${product[allergen.key] ? 'active' : ''}`}>
                   <input
                     type="checkbox"
                     checked={product[allergen.key] || false}
                     onChange={() => handleToggle(allergen.key)}
                   />
-                  <span className="allergen-checkbox-icon">{allergen.icon}</span>
+                  <span className="allergen-checkbox-abbr">{allergen.abbr}</span>
                   <span className="allergen-checkbox-label">{allergen.label}</span>
                 </label>
               ))}
@@ -1394,14 +1397,14 @@ function AllergenModal({ product, onClose, onUpdate }) {
             <h3>Dietary Flags</h3>
             <p className="allergen-section-note">Mark if this product is suitable</p>
             <div className="allergen-grid dietary-grid">
-              {dietaryFlags.map(flag => (
+              {DIETARY.map(flag => (
                 <label key={flag.key} className={`allergen-checkbox dietary ${product[flag.key] ? 'active' : ''}`}>
                   <input
                     type="checkbox"
                     checked={product[flag.key] || false}
                     onChange={() => handleToggle(flag.key)}
                   />
-                  <span className="allergen-checkbox-icon">{flag.icon}</span>
+                  <span className="allergen-checkbox-abbr">{flag.abbr}</span>
                   <span className="allergen-checkbox-label">{flag.label}</span>
                 </label>
               ))}

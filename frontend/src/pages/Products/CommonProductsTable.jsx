@@ -6,24 +6,27 @@ import './CommonProducts.css';
 
 const API_URL = import.meta.env.VITE_API_URL ?? '';
 
-// Allergen definitions with icons and labels
+// Allergen definitions with abbreviations
 const ALLERGENS = [
-  { key: 'allergen_gluten', label: 'Gluten', icon: '🌾' },
-  { key: 'allergen_dairy', label: 'Dairy', icon: '🥛' },
-  { key: 'allergen_egg', label: 'Egg', icon: '🥚' },
-  { key: 'allergen_fish', label: 'Fish', icon: '🐟' },
-  { key: 'allergen_crustation', label: 'Crustacean', icon: '🦐' },
-  { key: 'allergen_mollusk', label: 'Mollusk', icon: '🦪' },
-  { key: 'allergen_tree_nuts', label: 'Tree Nuts', icon: '🌰' },
-  { key: 'allergen_peanuts', label: 'Peanuts', icon: '🥜' },
-  { key: 'allergen_soy', label: 'Soy', icon: '🫘' },
-  { key: 'allergen_sesame', label: 'Sesame', icon: '⚪' },
-  { key: 'allergen_mustard', label: 'Mustard', icon: '🟡' },
-  { key: 'allergen_celery', label: 'Celery', icon: '🥬' },
-  { key: 'allergen_lupin', label: 'Lupin', icon: '🌸' },
-  { key: 'allergen_sulphur_dioxide', label: 'Sulphites', icon: '🧪' },
-  { key: 'allergen_vegan', label: 'Vegan', icon: '🌱', dietary: true },
-  { key: 'allergen_vegetarian', label: 'Vegetarian', icon: '🥗', dietary: true },
+  { key: 'allergen_gluten', label: 'Gluten', abbr: 'G' },
+  { key: 'allergen_dairy', label: 'Dairy', abbr: 'D' },
+  { key: 'allergen_egg', label: 'Egg', abbr: 'E' },
+  { key: 'allergen_fish', label: 'Fish', abbr: 'Fi' },
+  { key: 'allergen_crustation', label: 'Crustacean', abbr: 'Cr' },
+  { key: 'allergen_mollusk', label: 'Mollusk', abbr: 'Mo' },
+  { key: 'allergen_tree_nuts', label: 'Tree Nuts', abbr: 'TN' },
+  { key: 'allergen_peanuts', label: 'Peanuts', abbr: 'P' },
+  { key: 'allergen_soy', label: 'Soy', abbr: 'So' },
+  { key: 'allergen_sesame', label: 'Sesame', abbr: 'Se' },
+  { key: 'allergen_mustard', label: 'Mustard', abbr: 'Mu' },
+  { key: 'allergen_celery', label: 'Celery', abbr: 'Ce' },
+  { key: 'allergen_lupin', label: 'Lupin', abbr: 'Lu' },
+  { key: 'allergen_sulphur_dioxide', label: 'Sulphites', abbr: 'Su' },
+];
+
+const DIETARY = [
+  { key: 'allergen_vegan', label: 'Vegan', abbr: 'VN' },
+  { key: 'allergen_vegetarian', label: 'Vegetarian', abbr: 'VG' },
 ];
 
 function CommonProductsTable() {
@@ -243,10 +246,8 @@ function CommonProductsTable() {
     setSelectedIds([]);
   };
 
-  // Get active allergens for a product
-  const getActiveAllergens = (product) => {
-    return ALLERGENS.filter(a => product[a.key]);
-  };
+  // Get all allergen/dietary definitions combined
+  const getAllAllergenDefs = () => [...ALLERGENS, ...DIETARY];
 
   // Handle viewing linked products
   const handleViewLinkedProducts = async (product) => {
@@ -352,9 +353,16 @@ function CommonProductsTable() {
           className="filter-select"
         >
           <option value="">All Allergens</option>
-          {ALLERGENS.map(a => (
-            <option key={a.key} value={a.key}>{a.icon} {a.label}</option>
-          ))}
+          <optgroup label="Allergens">
+            {ALLERGENS.map(a => (
+              <option key={a.key} value={a.key}>{a.label}</option>
+            ))}
+          </optgroup>
+          <optgroup label="Dietary">
+            {DIETARY.map(a => (
+              <option key={a.key} value={a.key}>{a.label}</option>
+            ))}
+          </optgroup>
         </select>
       </div>
 
@@ -402,7 +410,18 @@ function CommonProductsTable() {
                 </th>
                 <th>Name</th>
                 <th>Category</th>
-                <th>Allergens</th>
+                <th className="allergens-header">
+                  <div className="allergen-header-group">
+                    {ALLERGENS.map(a => (
+                      <span key={a.key} className="allergen-col-header" title={a.label}>{a.abbr}</span>
+                    ))}
+                  </div>
+                  <div className="dietary-header-group">
+                    {DIETARY.map(a => (
+                      <span key={a.key} className="dietary-col-header" title={a.label}>{a.abbr}</span>
+                    ))}
+                  </div>
+                </th>
                 <th className="text-center">Linked</th>
               </tr>
             </thead>
@@ -426,25 +445,37 @@ function CommonProductsTable() {
                     {renderEditableCell(product, 'category', product.category)}
                   </td>
                   <td className="allergens-cell">
-                    <div className="allergen-chips">
-                      {getActiveAllergens(product).slice(0, 4).map(allergen => (
-                        <span
-                          key={allergen.key}
-                          className={`allergen-chip active ${allergen.dietary ? 'dietary' : ''}`}
-                          onClick={() => handleAllergenToggle(product.id, allergen.key)}
-                          title={`${allergen.label} (click to toggle)`}
-                        >
-                          {allergen.icon}
-                        </span>
-                      ))}
-                      {getActiveAllergens(product).length > 4 && (
-                        <span className="allergen-more">
-                          +{getActiveAllergens(product).length - 4}
-                        </span>
-                      )}
-                      {getActiveAllergens(product).length === 0 && (
-                        <span className="no-allergens">None</span>
-                      )}
+                    <div className="allergen-checkboxes">
+                      <div className="allergen-checkbox-group">
+                        {ALLERGENS.map(allergen => (
+                          <label
+                            key={allergen.key}
+                            className={`allergen-inline-checkbox ${product[allergen.key] ? 'checked' : ''}`}
+                            title={allergen.label}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={product[allergen.key] || false}
+                              onChange={() => handleAllergenToggle(product.id, allergen.key)}
+                            />
+                          </label>
+                        ))}
+                      </div>
+                      <div className="dietary-checkbox-group">
+                        {DIETARY.map(dietary => (
+                          <label
+                            key={dietary.key}
+                            className={`dietary-inline-checkbox ${product[dietary.key] ? 'checked' : ''}`}
+                            title={dietary.label}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={product[dietary.key] || false}
+                              onChange={() => handleAllergenToggle(product.id, dietary.key)}
+                            />
+                          </label>
+                        ))}
+                      </div>
                     </div>
                   </td>
                   <td className="text-center linked-cell">
