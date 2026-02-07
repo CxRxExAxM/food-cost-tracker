@@ -198,24 +198,15 @@ def list_products(
         sort_col = sort_column_map.get(sort_by, 'p.name')
         sort_direction = 'DESC' if sort_dir.lower() == 'desc' else 'ASC'
 
-        # Build price_history subquery and join condition
-        # When outlet specified: get latest price for that outlet
-        # When no outlet (All): get latest price from any outlet
-        if outlet_id is not None:
-            ph_subquery = """
-                SELECT distributor_product_id, outlet_id, case_price, unit_price, effective_date,
-                       ROW_NUMBER() OVER (PARTITION BY distributor_product_id, outlet_id ORDER BY effective_date DESC) as rn
-                FROM price_history
-            """
-            ph_join_condition = f"ph.distributor_product_id = dp.id AND ph.rn = 1 AND ph.outlet_id = {outlet_id}"
-        else:
-            # No outlet filter - get latest price across all outlets
-            ph_subquery = """
-                SELECT distributor_product_id, outlet_id, case_price, unit_price, effective_date,
-                       ROW_NUMBER() OVER (PARTITION BY distributor_product_id ORDER BY effective_date DESC) as rn
-                FROM price_history
-            """
-            ph_join_condition = "ph.distributor_product_id = dp.id AND ph.rn = 1"
+        # Build price_history subquery - always get the most recent price across all outlets
+        # Products are org-wide, so we show the latest price regardless of which outlet it came from
+        # Outlet selection is used for uploading prices, not filtering the view
+        ph_subquery = """
+            SELECT distributor_product_id, outlet_id, case_price, unit_price, effective_date,
+                   ROW_NUMBER() OVER (PARTITION BY distributor_product_id ORDER BY effective_date DESC) as rn
+            FROM price_history
+        """
+        ph_join_condition = "ph.distributor_product_id = dp.id AND ph.rn = 1"
 
         # Build main query
         query = f"""
