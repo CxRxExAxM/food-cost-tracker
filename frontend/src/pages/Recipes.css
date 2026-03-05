@@ -702,6 +702,42 @@
   letter-spacing: var(--tracking-wide);
 }
 
+/* Text-only Ingredient Badge */
+.text-only-badge {
+  display: inline-block;
+  padding: var(--space-1) var(--space-2);
+  background: var(--bg-tertiary);
+  color: var(--text-tertiary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  font-family: var(--font-mono);
+  margin-left: var(--space-2);
+  text-transform: uppercase;
+  font-weight: var(--font-weight-medium);
+  letter-spacing: var(--tracking-wide);
+}
+
+/* Product Link in Ingredients Table */
+.ingredient-name-cell {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.product-link {
+  color: var(--color-blue);
+  cursor: pointer;
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+
+.product-link:hover {
+  color: var(--color-yellow);
+  text-decoration: underline;
+}
+
 /* Refresh Button */
 .btn-refresh-cost {
   display: inline-flex;

@@ -866,14 +866,103 @@ def _calculate_recipe_allergens(cursor, recipe_id: int, visited: set) -> dict:
 
 
 @router.post("/{recipe_id}/duplicate", response_model=Recipe)
-def duplicate_recipe(recipe_id: int, new_name: Optional[str] = None):
+def duplicate_recipe(recipe_id: int, new_name: Optional[str] = None, current_user: dict = Depends(get_current_user)):
     """
     Duplicate a recipe with all ingredients.
 
-    TODO Phase 2: Implement recipe duplication
+    Creates a copy of the recipe with "(Copy)" appended to the name,
+    or uses the provided new_name.
     """
-    # Placeholder - will implement in Phase 2
-    raise HTTPException(status_code=501, detail="Recipe duplication not yet implemented")
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Check if recipe exists and user has access
+        outlet_filter, outlet_params = build_outlet_filter(current_user, "")
+        check_query = f"SELECT * FROM recipes WHERE id = %s AND is_active = 1 AND {outlet_filter}"
+        check_params = [recipe_id] + outlet_params
+        cursor.execute(check_query, check_params)
+
+        original = cursor.fetchone()
+        if not original:
+            raise HTTPException(status_code=404, detail="Recipe not found or you don't have access to it")
+
+        original = dict_from_row(original)
+
+        # Determine new name
+        if new_name:
+            duplicate_name = new_name
+        else:
+            duplicate_name = f"{original['name']} (Copy)"
+
+        # Parse method JSON if present
+        method_json = original.get('method')
+
+        # Insert the duplicated recipe
+        cursor.execute("""
+            INSERT INTO recipes (
+                name, description, category, category_path,
+                yield_amount, yield_unit_id, servings, serving_unit_id,
+                prep_time_minutes, cook_time_minutes,
+                method, notes, organization_id, outlet_id
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
+        """, (
+            duplicate_name,
+            original.get('description'),
+            original.get('category'),
+            original.get('category_path'),
+            original.get('yield_amount'),
+            original.get('yield_unit_id'),
+            original.get('servings'),
+            original.get('serving_unit_id'),
+            original.get('prep_time_minutes'),
+            original.get('cook_time_minutes'),
+            method_json,
+            original.get('notes'),
+            original.get('organization_id'),
+            original.get('outlet_id')
+        ))
+
+        new_recipe_id = cursor.fetchone()["id"]
+
+        # Copy all ingredients
+        cursor.execute("""
+            SELECT common_product_id, sub_recipe_id, ingredient_name,
+                   quantity, unit_id, yield_percentage, notes
+            FROM recipe_ingredients
+            WHERE recipe_id = %s
+        """, (recipe_id,))
+
+        ingredients = cursor.fetchall()
+
+        for ing in ingredients:
+            ing = dict_from_row(ing)
+            cursor.execute("""
+                INSERT INTO recipe_ingredients (
+                    recipe_id, common_product_id, sub_recipe_id, ingredient_name,
+                    quantity, unit_id, yield_percentage, notes
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            """, (
+                new_recipe_id,
+                ing.get('common_product_id'),
+                ing.get('sub_recipe_id'),
+                ing.get('ingredient_name'),
+                ing.get('quantity'),
+                ing.get('unit_id'),
+                ing.get('yield_percentage'),
+                ing.get('notes')
+            ))
+
+        conn.commit()
+
+        # Fetch and return the new recipe
+        cursor.execute("SELECT * FROM recipes WHERE id = %s", (new_recipe_id,))
+        new_recipe = dict_from_row(cursor.fetchone())
+
+        if new_recipe.get('method'):
+            new_recipe['method'] = json.loads(new_recipe['method'])
+
+        return new_recipe
 
 
 # Recipe Ingredients endpoints

@@ -136,6 +136,44 @@ def get_unit_conversion_factor(cursor, common_product_id: int, from_unit_id: int
                 # Chain: from_unit → intermediate (base) → to_unit (product)
                 return base_factor * product_factor
 
+        # ============================================
+        # Step 3b: Try 3-hop chain: base → product → base
+        # Example: Cup → TBSP (base) → g (product) → LB (base)
+        # This handles cases where the product conversion is between
+        # intermediate units, not from/to the original units
+        # ============================================
+
+        # Get all product conversions for this product (both directions)
+        cursor.execute("""
+            SELECT from_unit_id, to_unit_id, conversion_factor
+            FROM product_conversions
+            WHERE common_product_id = %s
+              AND organization_id = %s
+        """, (common_product_id, org_id))
+
+        all_product_conversions = cursor.fetchall()
+
+        for conv in all_product_conversions:
+            prod_from = conv['from_unit_id']
+            prod_to = conv['to_unit_id']
+            prod_factor = float(conv['conversion_factor'])
+
+            # Try: from_unit → prod_from (base) → prod_to (product) → to_unit (base)
+            base_factor_1 = get_base_conversion_factor(cursor, from_unit_id, prod_from, org_id, outlet_id)
+            if base_factor_1 is not None:
+                base_factor_2 = get_base_conversion_factor(cursor, prod_to, to_unit_id, org_id, outlet_id)
+                if base_factor_2 is not None:
+                    # Full chain: from_unit → prod_from → prod_to → to_unit
+                    return base_factor_1 * prod_factor * base_factor_2
+
+            # Try reverse: from_unit → prod_to (base) → prod_from (reverse product) → to_unit (base)
+            base_factor_1 = get_base_conversion_factor(cursor, from_unit_id, prod_to, org_id, outlet_id)
+            if base_factor_1 is not None:
+                base_factor_2 = get_base_conversion_factor(cursor, prod_from, to_unit_id, org_id, outlet_id)
+                if base_factor_2 is not None:
+                    # Full chain with reverse product: from_unit → prod_to → prod_from → to_unit
+                    return base_factor_1 * (1.0 / prod_factor) * base_factor_2
+
     # ============================================
     # Step 4: Try base conversion from database
     # ============================================

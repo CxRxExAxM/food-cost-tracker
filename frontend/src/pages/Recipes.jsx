@@ -6,6 +6,7 @@ import { useToast } from '../contexts/ToastContext';
 import OutletBadge from '../components/outlets/OutletBadge';
 import UploadRecipeModal from '../components/RecipeImport/UploadRecipeModal';
 import ReviewParsedRecipe from '../components/RecipeImport/ReviewParsedRecipe';
+import ProductDrawer from '../components/ProductDrawer/ProductDrawer';
 import './Recipes.css';
 
 const API_URL = import.meta.env.VITE_API_URL ?? '';
@@ -47,6 +48,9 @@ function Recipes() {
   const [draggedItem, setDraggedItem] = useState(null);
   const [dropTarget, setDropTarget] = useState(null);
   const [prefilledCategoryPath, setPrefilledCategoryPath] = useState('');
+  const [showMoveModal, setShowMoveModal] = useState(false);
+  const [moveTargetRecipe, setMoveTargetRecipe] = useState(null);
+  const [drawerProductId, setDrawerProductId] = useState(null);
   const [virtualFolders, setVirtualFolders] = useState(() => {
     // Load from localStorage on mount
     const saved = localStorage.getItem('virtualFolders');
@@ -180,6 +184,25 @@ function Recipes() {
     sortTree(tree);
     return tree;
   };
+
+  // Helper to extract all folder paths from tree
+  const getAllFolderPaths = (tree) => {
+    const paths = [];
+    const traverse = (nodes) => {
+      nodes.forEach(node => {
+        if (node.type === 'folder') {
+          paths.push(node.path);
+          if (node.children) {
+            traverse(node.children);
+          }
+        }
+      });
+    };
+    traverse(tree);
+    return paths.sort();
+  };
+
+  const recipeTree = buildTree();
 
   const toggleFolder = (path) => {
     const newExpanded = new Set(expandedFolders);
@@ -431,6 +454,43 @@ function Recipes() {
       });
   };
 
+  const handleDuplicateRecipe = async (recipeId) => {
+    try {
+      const response = await axios.post(`${API_URL}/recipes/${recipeId}/duplicate`);
+      toast.success(`Created "${response.data.name}"`);
+      await fetchRecipes();
+      // Select the new recipe
+      setSelectedRecipe(response.data);
+      closeContextMenu();
+    } catch (error) {
+      console.error('Error duplicating recipe:', error);
+      toast.error('Failed to duplicate recipe');
+    }
+  };
+
+  const handleMoveRecipe = (recipe) => {
+    setMoveTargetRecipe(recipe);
+    setShowMoveModal(true);
+    closeContextMenu();
+  };
+
+  const handleConfirmMove = async (newPath) => {
+    if (!moveTargetRecipe) return;
+
+    try {
+      await axios.patch(`${API_URL}/recipes/${moveTargetRecipe.id}`, {
+        category_path: newPath || null
+      });
+      toast.success('Recipe moved successfully');
+      await fetchRecipes();
+      setShowMoveModal(false);
+      setMoveTargetRecipe(null);
+    } catch (error) {
+      console.error('Error moving recipe:', error);
+      toast.error('Failed to move recipe');
+    }
+  };
+
   // Close context menu when clicking outside
   useEffect(() => {
     const handleClick = () => closeContextMenu();
@@ -554,7 +614,7 @@ function Recipes() {
               onDragOver={(e) => handleDragOver(e, null)}
               onDrop={(e) => handleDrop(e, null)}
             >
-              {buildTree().map((node, idx) => (
+              {recipeTree.map((node, idx) => (
                 <TreeNode
                   key={node.type === 'folder' ? node.path : node.data.id}
                   node={node}
@@ -582,6 +642,8 @@ function Recipes() {
               item={contextMenu.item}
               onRenameFolder={handleRenameFolder}
               onDeleteFolder={handleDeleteFolder}
+              onDuplicateRecipe={handleDuplicateRecipe}
+              onMoveRecipe={handleMoveRecipe}
               onClose={closeContextMenu}
             />
           )}
@@ -688,6 +750,33 @@ function Recipes() {
           parseResult={parseResult}
           outletId={currentOutlet?.id}
           onClose={handleReviewClose}
+        />
+      )}
+
+      {/* Move Recipe Modal */}
+      {showMoveModal && moveTargetRecipe && (
+        <MoveRecipeModal
+          recipe={moveTargetRecipe}
+          folders={getAllFolderPaths(recipeTree)}
+          onClose={() => {
+            setShowMoveModal(false);
+            setMoveTargetRecipe(null);
+          }}
+          onMove={handleConfirmMove}
+        />
+      )}
+
+      {/* Product Drawer */}
+      {drawerProductId && (
+        <ProductDrawer
+          productId={drawerProductId}
+          onClose={() => setDrawerProductId(null)}
+          onProductUpdated={() => {
+            // Refresh the selected recipe to get updated allergens/costs
+            if (selectedRecipe) {
+              selectRecipe(selectedRecipe.id);
+            }
+          }}
         />
       )}
       </div>
@@ -1320,8 +1409,23 @@ function RecipeIngredients({ recipe, onIngredientsChange }) {
                           />
                         </div>
                       ) : (
-                        <span onClick={() => handleStartEdit(ing.id)}>
-                          {ing.ingredient_name || ing.common_name || ing.sub_recipe_name || 'Unknown'}
+                        <span className="ingredient-name-cell">
+                          {ing.common_product_id ? (
+                            <span
+                              className="product-link"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDrawerProductId(ing.common_product_id);
+                              }}
+                              title="Click to view/edit product"
+                            >
+                              {ing.common_name || 'Unknown'}
+                            </span>
+                          ) : (
+                            <span onClick={() => handleStartEdit(ing.id)}>
+                              {ing.ingredient_name || ing.sub_recipe_name || 'Unknown'}
+                            </span>
+                          )}
                           {ing.sub_recipe_id && <span className="sub-recipe-badge">sub-recipe</span>}
                         </span>
                       )}
@@ -1921,8 +2025,11 @@ function RecipeCost({ recipe }) {
                           className={!ing.has_price ? 'missing-price' : ''}
                         >
                           <td className="ingredient-cell">
-                            {ing.common_name || ing.sub_recipe_name || 'Unknown'}
+                            {ing.common_name || ing.sub_recipe_name || ing.ingredient_name || 'Unknown'}
                             {ing.sub_recipe_id && <span className="sub-recipe-badge">sub-recipe</span>}
+                            {ing.ingredient_name && !ing.common_product_id && !ing.sub_recipe_id && (
+                              <span className="text-only-badge">text only</span>
+                            )}
                           </td>
                           <td className="qty-cell">
                             {ing.quantity} {ing.unit_abbreviation}
@@ -2173,11 +2280,62 @@ function FolderCreateModal({ onClose, onCreate }) {
   );
 }
 
+// Move Recipe Modal
+function MoveRecipeModal({ recipe, folders, onClose, onMove }) {
+  const [selectedPath, setSelectedPath] = useState(recipe.category_path || '');
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onMove(selectedPath);
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h2>Move Recipe</h2>
+          <button className="modal-close" onClick={onClose}>×</button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="modal-form">
+          <div className="form-group">
+            <label>Moving: <strong>{recipe.name}</strong></label>
+          </div>
+
+          <div className="form-group">
+            <label>Destination Folder</label>
+            <select
+              value={selectedPath}
+              onChange={(e) => setSelectedPath(e.target.value)}
+              autoFocus
+            >
+              <option value="">(Root - No Folder)</option>
+              {folders.map(path => (
+                <option key={path} value={path}>
+                  {path}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="modal-actions">
+            <button type="button" className="btn-cancel" onClick={onClose}>
+              Cancel
+            </button>
+            <button type="submit" className="btn-save">
+              Move Recipe
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // Context Menu Component
-function ContextMenu({ x, y, item, onRenameFolder, onDeleteFolder, onClose }) {
+function ContextMenu({ x, y, item, onRenameFolder, onDeleteFolder, onDuplicateRecipe, onMoveRecipe, onClose }) {
   const handleAction = (action) => {
     action();
-    onClose();
   };
 
   return (
@@ -2203,11 +2361,17 @@ function ContextMenu({ x, y, item, onRenameFolder, onDeleteFolder, onClose }) {
         </>
       ) : (
         <>
-          <div className="context-menu-item context-menu-disabled">
-            Move to...
+          <div
+            className="context-menu-item"
+            onClick={() => handleAction(() => onMoveRecipe(item.data))}
+          >
+            📁 Move to...
           </div>
-          <div className="context-menu-item context-menu-disabled">
-            Duplicate
+          <div
+            className="context-menu-item"
+            onClick={() => handleAction(() => onDuplicateRecipe(item.data.id))}
+          >
+            📋 Duplicate
           </div>
         </>
       )}
