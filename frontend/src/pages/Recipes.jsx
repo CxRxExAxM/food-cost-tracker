@@ -682,6 +682,7 @@ function Recipes() {
               <RecipeIngredients
                 recipe={selectedRecipe}
                 onIngredientsChange={() => selectRecipe(selectedRecipe.id)}
+                onOpenProductDrawer={setDrawerProductId}
               />
 
               {/* Method Steps */}
@@ -1039,7 +1040,7 @@ function IngredientMappingCell({ values, onFieldChange, commonProducts, onKeyDow
   );
 }
 
-function RecipeIngredients({ recipe, onIngredientsChange }) {
+function RecipeIngredients({ recipe, onIngredientsChange, onOpenProductDrawer }) {
   const [commonProducts, setCommonProducts] = useState([]);
   const [availableRecipes, setAvailableRecipes] = useState([]);
   const [units, setUnits] = useState([]);
@@ -1415,7 +1416,7 @@ function RecipeIngredients({ recipe, onIngredientsChange }) {
                               className="product-link"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setDrawerProductId(ing.common_product_id);
+                                onOpenProductDrawer(ing.common_product_id);
                               }}
                               title="Click to view/edit product"
                             >
