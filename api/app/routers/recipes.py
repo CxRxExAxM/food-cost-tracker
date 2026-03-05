@@ -903,8 +903,8 @@ def duplicate_recipe(recipe_id: int, new_name: Optional[str] = None, current_use
                 name, description, category, category_path,
                 yield_amount, yield_unit_id, servings, serving_unit_id,
                 prep_time_minutes, cook_time_minutes,
-                method, notes, organization_id, outlet_id
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                method, organization_id, outlet_id
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
         """, (
             duplicate_name,
@@ -918,7 +918,6 @@ def duplicate_recipe(recipe_id: int, new_name: Optional[str] = None, current_use
             original.get('prep_time_minutes'),
             original.get('cook_time_minutes'),
             method_json,
-            original.get('notes'),
             original.get('organization_id'),
             original.get('outlet_id')
         ))
