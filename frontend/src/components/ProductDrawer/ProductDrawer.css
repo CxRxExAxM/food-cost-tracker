@@ -497,6 +497,28 @@
   color: var(--color-red);
 }
 
+.mapped-product-actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.btn-edit-product {
+  padding: var(--space-1) var(--space-2);
+  background: transparent;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.btn-edit-product:hover {
+  border-color: var(--color-focus);
+  color: var(--color-focus);
+}
+
 .empty-state {
   text-align: center;
   padding: var(--space-8);

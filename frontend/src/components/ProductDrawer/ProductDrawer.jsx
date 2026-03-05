@@ -475,13 +475,22 @@ function ProductDrawer({ productId, onClose, onProductUpdated }) {
                                   <div className="mapped-price-none">No price</div>
                                 )}
                               </div>
-                              <button
-                                className="btn-unmap"
-                                onClick={() => handleUnmapProduct(mappedProduct.id)}
-                                title="Unmap this product"
-                              >
-                                Unmap
-                              </button>
+                              <div className="mapped-product-actions">
+                                <button
+                                  className="btn-edit-product"
+                                  onClick={() => window.open(`/products?search=${encodeURIComponent(mappedProduct.name)}`, '_blank')}
+                                  title="Edit on Products page"
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  className="btn-unmap"
+                                  onClick={() => handleUnmapProduct(mappedProduct.id)}
+                                  title="Unmap this product"
+                                >
+                                  Unmap
+                                </button>
+                              </div>
                             </div>
                           ))}
                         </div>

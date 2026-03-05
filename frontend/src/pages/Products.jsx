@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import axios from '../lib/axios';
 import Navigation from '../components/Navigation';
 import { useOutlet } from '../contexts/OutletContext';
@@ -35,11 +36,12 @@ const DIETARY = [
 function Products() {
   const { currentOutlet, outlets } = useOutlet();
   const toast = useToast();
+  const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState('products');
   const [products, setProducts] = useState([]);
   const [commonProducts, setCommonProducts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(searchParams.get('search') || '');
   const [mappingFilter, setMappingFilter] = useState('all'); // 'all', 'mapped', 'unmapped'
   const [distributorFilter, setDistributorFilter] = useState(''); // distributor_id or empty
   const [currentPage, setCurrentPage] = useState(1);
