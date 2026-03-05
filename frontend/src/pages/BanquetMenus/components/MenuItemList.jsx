@@ -6,7 +6,7 @@ import PrepItemTable from './PrepItemTable';
 import AddItemModal from './AddItemModal';
 import EditItemModal from './EditItemModal';
 
-function MenuItemList({ menuId, menuItems, itemCosts, guestCount, expandedItems, onToggleExpand, onItemsChanged, onInlineEdit, menuType = 'banquet' }) {
+function MenuItemList({ menuId, menuItems, itemCosts, guestCount, expandedItems, onToggleExpand, onItemsChanged, onInlineEdit, menuType = 'banquet', onOpenProductDrawer }) {
   const toast = useToast();
   const isRestaurant = menuType === 'restaurant';
   const [showAddModal, setShowAddModal] = useState(false);
@@ -203,6 +203,7 @@ function MenuItemList({ menuId, menuItems, itemCosts, guestCount, expandedItems,
                   onPrepItemsChanged={onItemsChanged}
                   onInlineEdit={onInlineEdit}
                   menuType={menuType}
+                  onOpenProductDrawer={onOpenProductDrawer}
                 />
               )}
             </li>

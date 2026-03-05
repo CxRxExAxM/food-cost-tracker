@@ -7,6 +7,7 @@ import MenuItemList from './components/MenuItemList';
 import NewMenuModal from './components/NewMenuModal';
 import EditMenuModal from './components/EditMenuModal';
 import ImportMenuModal from './components/ImportMenuModal';
+import ProductDrawer from '../../components/ProductDrawer/ProductDrawer';
 import './BanquetMenus.css';
 
 // localStorage keys for persisting selection
@@ -96,6 +97,7 @@ function BanquetMenus() {
   const [showNewMenuModal, setShowNewMenuModal] = useState(false);
   const [showEditMenuModal, setShowEditMenuModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [drawerProductId, setDrawerProductId] = useState(null);
 
   // Save selections to localStorage when they change
   // Note: outletId is saved in the validation effect below, not here,
@@ -558,6 +560,7 @@ function BanquetMenus() {
                 onItemsChanged={handleMenuItemsChanged}
                 onInlineEdit={debouncedCostRefresh}
                 menuType={menuMode}
+                onOpenProductDrawer={setDrawerProductId}
               />
             </>
           )}
@@ -612,6 +615,14 @@ function BanquetMenus() {
             outletId={selectedOutlet.id}
             onClose={() => setShowImportModal(false)}
             onImportComplete={handleImportComplete}
+          />
+        )}
+
+        {/* Product Drawer */}
+        {drawerProductId && (
+          <ProductDrawer
+            productId={drawerProductId}
+            onClose={() => setDrawerProductId(null)}
           />
         )}
       </main>

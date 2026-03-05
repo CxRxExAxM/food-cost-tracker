@@ -5,7 +5,7 @@ import { Trash2, Link, GripVertical } from 'lucide-react';
 import AddPrepItemModal from './AddPrepItemModal';
 import LinkPrepItemModal from './LinkPrepItemModal';
 
-function PrepItemTable({ menuItemId, prepItems, itemCosts, guestCount, onPrepItemsChanged, onInlineEdit, menuType = 'banquet' }) {
+function PrepItemTable({ menuItemId, prepItems, itemCosts, guestCount, onPrepItemsChanged, onInlineEdit, menuType = 'banquet', onOpenProductDrawer }) {
   const toast = useToast();
   const isRestaurant = menuType === 'restaurant';
   const [showAddModal, setShowAddModal] = useState(false);
@@ -368,11 +368,29 @@ function PrepItemTable({ menuItemId, prepItems, itemCosts, guestCount, onPrepIte
                   )}
                   <td className="prep-link-cell">
                     {linkInfo ? (
-                      <span
-                        className={`prep-link-badge ${linkInfo.type} clickable`}
-                        onClick={() => setLinkingPrepItem(prep)}
-                      >
-                        {linkInfo.name}
+                      <span className="prep-link-wrapper">
+                        <span
+                          className={`prep-link-badge ${linkInfo.type} clickable`}
+                          onClick={() => {
+                            if (linkInfo.type === 'common' && onOpenProductDrawer) {
+                              onOpenProductDrawer(prep.common_product_id);
+                            } else {
+                              setLinkingPrepItem(prep);
+                            }
+                          }}
+                          title={linkInfo.type === 'common' ? 'Click to view/edit product' : 'Click to change link'}
+                        >
+                          {linkInfo.name}
+                        </span>
+                        {linkInfo.type === 'common' && (
+                          <button
+                            className="btn-relink-inline"
+                            onClick={() => setLinkingPrepItem(prep)}
+                            title="Change link"
+                          >
+                            <Link size={10} />
+                          </button>
+                        )}
                       </span>
                     ) : (
                       <button

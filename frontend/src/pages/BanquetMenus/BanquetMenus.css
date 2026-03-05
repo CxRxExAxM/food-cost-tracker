@@ -657,6 +657,32 @@
   opacity: 0.8;
 }
 
+.prep-link-wrapper {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.btn-relink-inline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.btn-relink-inline:hover {
+  border-color: var(--color-focus);
+  color: var(--color-focus);
+}
+
 /* Link button */
 .btn-link-inline {
   display: inline-flex;
