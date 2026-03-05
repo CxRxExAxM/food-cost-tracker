@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, memo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import axios from '../lib/axios';
 import Navigation from '../components/Navigation';
 import { useOutlet } from '../contexts/OutletContext';
@@ -32,6 +33,7 @@ const ALLERGEN_ICONS = {
 function Recipes() {
   const { currentOutlet } = useOutlet();
   const toast = useToast();
+  const [searchParams] = useSearchParams();
   const [recipes, setRecipes] = useState([]);
   const [selectedRecipe, setSelectedRecipe] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -60,6 +62,27 @@ function Recipes() {
   useEffect(() => {
     fetchRecipes();
   }, [currentOutlet]);
+
+  // Auto-select recipe from URL param
+  useEffect(() => {
+    const recipeIdParam = searchParams.get('recipe');
+    if (recipeIdParam && recipes.length > 0 && !selectedRecipe) {
+      const recipeId = parseInt(recipeIdParam, 10);
+      const recipe = recipes.find(r => r.id === recipeId);
+      if (recipe) {
+        selectRecipe(recipeId);
+        // Expand parent folders to show the recipe
+        if (recipe.category) {
+          const segments = recipe.category.split('/').filter(s => s.trim());
+          let path = '';
+          segments.forEach(segment => {
+            path = path ? `${path}/${segment}` : segment;
+            setExpandedFolders(prev => new Set([...prev, path]));
+          });
+        }
+      }
+    }
+  }, [recipes, searchParams]);
 
   const fetchRecipes = async () => {
     try {
@@ -1422,12 +1445,23 @@ function RecipeIngredients({ recipe, onIngredientsChange, onOpenProductDrawer })
                             >
                               {ing.common_name || 'Unknown'}
                             </span>
+                          ) : ing.sub_recipe_id ? (
+                            <span
+                              className="recipe-link"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                window.open(`/recipes?recipe=${ing.sub_recipe_id}`, '_blank');
+                              }}
+                              title="Click to view sub-recipe"
+                            >
+                              {ing.sub_recipe_name || 'Unknown'}
+                              <span className="sub-recipe-badge">sub-recipe</span>
+                            </span>
                           ) : (
                             <span onClick={() => handleStartEdit(ing.id)}>
-                              {ing.ingredient_name || ing.sub_recipe_name || 'Unknown'}
+                              {ing.ingredient_name || 'Unknown'}
                             </span>
                           )}
-                          {ing.sub_recipe_id && <span className="sub-recipe-badge">sub-recipe</span>}
                         </span>
                       )}
                     </td>
@@ -2026,10 +2060,28 @@ function RecipeCost({ recipe }) {
                           className={!ing.has_price ? 'missing-price' : ''}
                         >
                           <td className="ingredient-cell">
-                            {ing.common_name || ing.sub_recipe_name || ing.ingredient_name || 'Unknown'}
-                            {ing.sub_recipe_id && <span className="sub-recipe-badge">sub-recipe</span>}
-                            {ing.ingredient_name && !ing.common_product_id && !ing.sub_recipe_id && (
-                              <span className="text-only-badge">text only</span>
+                            {ing.common_product_id ? (
+                              <span
+                                className="product-link"
+                                onClick={() => setDrawerProductId(ing.common_product_id)}
+                                title="Click to view/edit product"
+                              >
+                                {ing.common_name || 'Unknown'}
+                              </span>
+                            ) : ing.sub_recipe_id ? (
+                              <span
+                                className="recipe-link"
+                                onClick={() => window.open(`/recipes?recipe=${ing.sub_recipe_id}`, '_blank')}
+                                title="Click to view sub-recipe"
+                              >
+                                {ing.sub_recipe_name || 'Unknown'}
+                                <span className="sub-recipe-badge">sub-recipe</span>
+                              </span>
+                            ) : (
+                              <>
+                                {ing.ingredient_name || 'Unknown'}
+                                <span className="text-only-badge">text only</span>
+                              </>
                             )}
                           </td>
                           <td className="qty-cell">

@@ -374,15 +374,21 @@ function PrepItemTable({ menuItemId, prepItems, itemCosts, guestCount, onPrepIte
                           onClick={() => {
                             if (linkInfo.type === 'common' && onOpenProductDrawer) {
                               onOpenProductDrawer(prep.common_product_id);
+                            } else if (linkInfo.type === 'recipe') {
+                              window.open(`/recipes?recipe=${prep.recipe_id}`, '_blank');
                             } else {
                               setLinkingPrepItem(prep);
                             }
                           }}
-                          title={linkInfo.type === 'common' ? 'Click to view/edit product' : 'Click to change link'}
+                          title={
+                            linkInfo.type === 'common' ? 'Click to view/edit product' :
+                            linkInfo.type === 'recipe' ? 'Click to view recipe' :
+                            'Click to change link'
+                          }
                         >
                           {linkInfo.name}
                         </span>
-                        {linkInfo.type === 'common' && (
+                        {(linkInfo.type === 'common' || linkInfo.type === 'recipe') && (
                           <button
                             className="btn-relink-inline"
                             onClick={() => setLinkingPrepItem(prep)}

@@ -738,6 +738,21 @@
   text-decoration: underline;
 }
 
+.recipe-link {
+  color: var(--color-green);
+  cursor: pointer;
+  text-decoration: none;
+  transition: color var(--transition-fast);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.recipe-link:hover {
+  color: var(--color-green-bright);
+  text-decoration: underline;
+}
+
 /* Refresh Button */
 .btn-refresh-cost {
   display: inline-flex;
