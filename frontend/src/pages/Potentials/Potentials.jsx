@@ -1076,7 +1076,7 @@ function Potentials() {
         <div className="header-content">
           <div className="header-title">
             <h1>F&B Planning Dashboard</h1>
-            {filteredMetrics && (
+            {filteredMetrics?.date_range && (
               <p>
                 Showing {filteredMetrics.total_days} days: {format(parseISO(filteredMetrics.date_range.start), 'MMM d')} - {format(parseISO(filteredMetrics.date_range.end), 'MMM d, yyyy')}
               </p>
