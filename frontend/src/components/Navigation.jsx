@@ -4,12 +4,21 @@ import { useAuth } from '../contexts/AuthContext';
 import OutletSelector from './outlets/OutletSelector';
 import './Navigation.css';
 
-function Navigation() {
+function Navigation({ showModuleNav = true }) {
   const { user, logout, isAdmin } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const menuRef = useRef(null);
+
+  // Determine current module based on path
+  const isPotentialsModule = location.pathname.startsWith('/potentials');
+  const isCostingModule = location.pathname.startsWith('/costing') ||
+    location.pathname.startsWith('/products') ||
+    location.pathname.startsWith('/recipes') ||
+    location.pathname.startsWith('/banquet-menus') ||
+    location.pathname.startsWith('/settings');
+  const isAppLauncher = location.pathname === '/';
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -40,42 +49,70 @@ function Navigation() {
     return location.pathname.startsWith('/settings');
   };
 
-  // Get organization name from user object
-  // Note: We'll need to add organization info to the user object from AuthContext
   const organizationName = user?.organization_name || 'Organization';
   const organizationTier = user?.organization_tier || 'Free';
 
+  // Determine module name for branding
+  const getModuleName = () => {
+    if (isPotentialsModule) return 'Potentials';
+    if (isCostingModule) return 'Food Costing';
+    return null;
+  };
+
   return (
     <nav className="navigation">
-        <div className="nav-container">
-          {/* Left: Branding + Nav Links */}
-          <div className="nav-left">
+      <div className="nav-container">
+        {/* Left: Branding + Nav Links */}
+        <div className="nav-left">
           <div className="nav-brand">
             <Link to="/" className="brand-link">
               <div className="brand-name">RestauranTek</div>
-              <div className="brand-module">Food Cost Tracker</div>
+              {getModuleName() && (
+                <div className="brand-module">{getModuleName()}</div>
+              )}
             </Link>
           </div>
 
-          <div className="nav-links">
-            <Link to="/" className={`nav-link ${isActivePath('/') ? 'active' : ''}`}>
-              Home
-            </Link>
-            <Link to="/products" className={`nav-link ${isActivePath('/products') ? 'active' : ''}`}>
-              Products
-            </Link>
-            <Link to="/recipes" className={`nav-link ${isActivePath('/recipes') ? 'active' : ''}`}>
-              Recipes
-            </Link>
-            <Link to="/banquet-menus" className={`nav-link ${isActivePath('/banquet-menus') ? 'active' : ''}`}>
-              Menus
-            </Link>
-            {isAdmin() && (
-              <Link to="/settings" className={`nav-link ${isSettingsActive() ? 'active' : ''}`}>
-                Settings
+          {showModuleNav && !isAppLauncher && (
+            <div className="nav-links">
+              {/* Apps link - always visible */}
+              <Link to="/" className="nav-link apps-link">
+                Apps
               </Link>
-            )}
-          </div>
+
+              {/* Costing module links */}
+              {isCostingModule && (
+                <>
+                  <Link to="/costing" className={`nav-link ${isActivePath('/costing') ? 'active' : ''}`}>
+                    Home
+                  </Link>
+                  <Link to="/products" className={`nav-link ${isActivePath('/products') ? 'active' : ''}`}>
+                    Products
+                  </Link>
+                  <Link to="/recipes" className={`nav-link ${isActivePath('/recipes') ? 'active' : ''}`}>
+                    Recipes
+                  </Link>
+                  <Link to="/banquet-menus" className={`nav-link ${isActivePath('/banquet-menus') ? 'active' : ''}`}>
+                    Menus
+                  </Link>
+                  {isAdmin() && (
+                    <Link to="/settings" className={`nav-link ${isSettingsActive() ? 'active' : ''}`}>
+                      Settings
+                    </Link>
+                  )}
+                </>
+              )}
+
+              {/* Potentials module - minimal nav since it's a single-page dashboard */}
+              {isPotentialsModule && (
+                <>
+                  <Link to="/potentials" className={`nav-link ${isActivePath('/potentials') ? 'active' : ''}`}>
+                    Dashboard
+                  </Link>
+                </>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Right: Org + User Info */}
@@ -87,7 +124,8 @@ function Navigation() {
             </span>
           </div>
 
-          <OutletSelector />
+          {/* Only show outlet selector in costing module */}
+          {isCostingModule && <OutletSelector />}
 
           <div className="user-menu" ref={menuRef}>
             <button

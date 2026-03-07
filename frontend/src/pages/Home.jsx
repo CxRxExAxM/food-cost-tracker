@@ -1,17 +1,14 @@
 import { Link } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
 import Navigation from '../components/Navigation';
 import './Home.css';
 
 function Home() {
-  const { isAdmin } = useAuth();
-
   return (
     <div className="home">
       <Navigation />
       <div className="home-container">
         <header className="home-header">
-          <h1>RestauranTek</h1>
+          <h1>Food Costing</h1>
           <p>Manage distributor prices, map products, and calculate recipe costs</p>
         </header>
 
@@ -30,23 +27,12 @@ function Home() {
             <span className="card-arrow">&rarr;</span>
           </Link>
 
-          {isAdmin() && (
-            <Link to="/users" className="nav-card admin-card">
-              <div className="card-icon">👥</div>
-              <h2>Users</h2>
-              <p>Manage user accounts, roles, and permissions</p>
-              <span className="card-arrow">&rarr;</span>
-            </Link>
-          )}
-
-          {isAdmin() && (
-            <Link to="/admin" className="nav-card admin-card">
-              <div className="card-icon">⚙️</div>
-              <h2>Admin Panel</h2>
-              <p>System administration and organization management</p>
-              <span className="card-arrow">&rarr;</span>
-            </Link>
-          )}
+          <Link to="/banquet-menus" className="nav-card">
+            <div className="card-icon">🍽️</div>
+            <h2>Banquet Menus</h2>
+            <p>Build banquet menus with cost analysis per guest</p>
+            <span className="card-arrow">&rarr;</span>
+          </Link>
         </div>
 
         <footer className="home-footer">

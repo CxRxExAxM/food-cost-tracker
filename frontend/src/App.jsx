@@ -4,6 +4,7 @@ import { OutletProvider } from './contexts/OutletContext';
 import { ToastProvider } from './contexts/ToastContext';
 import LoadingSpinner from './components/LoadingSpinner';
 import Home from './pages/Home';
+import AppLauncher from './pages/AppLauncher';
 import Products from './pages/Products';
 import Recipes from './pages/Recipes';
 import Users from './pages/Users';
@@ -18,6 +19,7 @@ import SuperAdminAuditLogs from './pages/SuperAdmin/AuditLogs';
 import BanquetMenus from './pages/BanquetMenus/BanquetMenus';
 import Vessels from './pages/Settings/Vessels';
 import BaseConversions from './pages/Settings/BaseConversions';
+import Potentials from './pages/Potentials/Potentials';
 import ImpersonationBanner from './components/ImpersonationBanner';
 import './App.css';
 
@@ -113,7 +115,23 @@ function AppRoutes() {
         path="/"
         element={
           <ProtectedRoute>
+            <AppLauncher />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/costing"
+        element={
+          <ProtectedRoute>
             <Home />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/potentials"
+        element={
+          <ProtectedRoute>
+            <Potentials />
           </ProtectedRoute>
         }
       />
