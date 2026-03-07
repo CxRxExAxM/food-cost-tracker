@@ -22,7 +22,7 @@ class User(Base):
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
     __table_args__ = (
-        CheckConstraint("role IN ('admin', 'chef', 'viewer')", name='check_role'),
+        CheckConstraint("role IN ('admin', 'chef', 'viewer', 'foh_manager')", name='check_role'),
     )
 
 
