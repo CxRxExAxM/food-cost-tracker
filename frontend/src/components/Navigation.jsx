@@ -80,6 +80,13 @@ function Navigation({ showModuleNav = true }) {
                 Apps
               </Link>
 
+              {/* Settings link - always visible for admins */}
+              {isAdmin() && (
+                <Link to="/settings" className={`nav-link apps-link ${isSettingsActive() ? 'active' : ''}`}>
+                  Settings
+                </Link>
+              )}
+
               {/* Costing module links */}
               {isCostingModule && (
                 <>
@@ -95,11 +102,6 @@ function Navigation({ showModuleNav = true }) {
                   <Link to="/banquet-menus" className={`nav-link ${isActivePath('/banquet-menus') ? 'active' : ''}`}>
                     Menus
                   </Link>
-                  {isAdmin() && (
-                    <Link to="/settings" className={`nav-link ${isSettingsActive() ? 'active' : ''}`}>
-                      Settings
-                    </Link>
-                  )}
                 </>
               )}
 

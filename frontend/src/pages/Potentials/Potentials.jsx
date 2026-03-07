@@ -1066,9 +1066,26 @@ function Potentials() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const [filterStartDate, setFilterStartDate] = useState('');
-  const [filterEndDate, setFilterEndDate] = useState('');
+  const [filterStartDate, setFilterStartDate] = useState(() => {
+    return localStorage.getItem('potentials_filter_start') || '';
+  });
+  const [filterEndDate, setFilterEndDate] = useState(() => {
+    return localStorage.getItem('potentials_filter_end') || '';
+  });
   const [dateRange, setDateRange] = useState({ min: '', max: '' });
+
+  // Persist filter dates to localStorage
+  useEffect(() => {
+    if (filterStartDate) {
+      localStorage.setItem('potentials_filter_start', filterStartDate);
+    }
+  }, [filterStartDate]);
+
+  useEffect(() => {
+    if (filterEndDate) {
+      localStorage.setItem('potentials_filter_end', filterEndDate);
+    }
+  }, [filterEndDate]);
 
   const [status, setStatus] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -1100,12 +1117,22 @@ function Potentials() {
         setGroups(groupsData.data);
 
         if (dailyData.data.length > 0) {
-          setDateRange({
-            min: dailyData.data[0].date,
-            max: dailyData.data[dailyData.data.length - 1].date
-          });
-          setFilterStartDate(dailyData.data[0].date);
-          setFilterEndDate(dailyData.data[dailyData.data.length - 1].date);
+          const dataMin = dailyData.data[0].date;
+          const dataMax = dailyData.data[dailyData.data.length - 1].date;
+
+          setDateRange({ min: dataMin, max: dataMax });
+
+          // Only set filter dates if not already loaded from localStorage
+          // or if persisted dates are outside the current data range
+          const savedStart = localStorage.getItem('potentials_filter_start');
+          const savedEnd = localStorage.getItem('potentials_filter_end');
+
+          if (!savedStart || savedStart < dataMin || savedStart > dataMax) {
+            setFilterStartDate(dataMin);
+          }
+          if (!savedEnd || savedEnd < dataMin || savedEnd > dataMax) {
+            setFilterEndDate(dataMax);
+          }
 
           const firstWithEvents = dailyData.data.find(d => d.event_count > 0);
           setSelectedDate(firstWithEvents?.date || dailyData.data[0].date);
