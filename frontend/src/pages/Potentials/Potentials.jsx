@@ -48,6 +48,223 @@ function formatTimestamp(isoString) {
   });
 }
 
+// Generate and open print window for export
+async function openExportWindow(dailyData, events) {
+  // Fetch group rooms for all dates
+  const groupRoomsByDate = {};
+
+  await Promise.all(
+    dailyData.map(async (day) => {
+      try {
+        const res = await fetch(`${API_BASE}/group-rooms/${day.date}`, {
+          headers: getAuthHeaders()
+        });
+        if (res.ok) {
+          const data = await res.json();
+          groupRoomsByDate[day.date] = data.data || [];
+        }
+      } catch (err) {
+        console.error(`Error fetching group rooms for ${day.date}:`, err);
+        groupRoomsByDate[day.date] = [];
+      }
+    })
+  );
+
+  // Helper functions
+  const getEventsForDay = (date) => events.filter(e => e.date === date);
+
+  const groupEventsByBooking = (dayEvents) => {
+    const grouped = {};
+    dayEvents.forEach(event => {
+      if (!grouped[event.booking_name]) grouped[event.booking_name] = [];
+      grouped[event.booking_name].push(event);
+    });
+    return grouped;
+  };
+
+  const getGroupRoomData = (date, groupName) => {
+    const dayRooms = groupRoomsByDate[date] || [];
+    return dayRooms.find(gr => gr.block_name === groupName) || { rooms: 0, arrivals: 0, departures: 0 };
+  };
+
+  const getAllGroupsForDay = (date, eventGroupNames) => {
+    const dayRooms = groupRoomsByDate[date] || [];
+    const significantRoomGroups = dayRooms
+      .filter(gr => gr.rooms > 20 || gr.arrivals > 20 || gr.departures > 20)
+      .map(gr => gr.block_name);
+    return [...new Set([...eventGroupNames, ...significantRoomGroups])];
+  };
+
+  // Open print window
+  const printWindow = window.open('', '_blank');
+  if (!printWindow) {
+    alert('Please allow popups for this site to print');
+    return;
+  }
+
+  const dateRange = dailyData.length > 0
+    ? `${format(parseISO(dailyData[0].date), 'MMM d')} - ${format(parseISO(dailyData[dailyData.length - 1].date), 'MMM d, yyyy')}`
+    : '';
+
+  let html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>F&B Running Potentials</title>
+      <style>
+        @page {
+          margin: 0;
+          size: letter;
+        }
+        * {
+          margin: 0;
+          padding: 0;
+          box-sizing: border-box;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 11px; padding: 20px; }
+        .title { text-align: center; margin-bottom: 20px; }
+        .title h1 { font-size: 18px; margin-bottom: 4px; }
+        .title p { color: #666; }
+        .day { margin-bottom: 24px; page-break-inside: avoid; }
+        .day-header { background: #1f2937 !important; color: white; padding: 8px 12px; display: flex; justify-content: space-between; }
+        .day-header .stats { display: flex; gap: 12px; }
+        .day-header .arr { color: #86efac; }
+        .day-header .dep { color: #fca5a5; }
+        .meals { display: grid; grid-template-columns: repeat(4, 1fr); border-left: 1px solid #ccc; border-right: 1px solid #ccc; }
+        .meal { padding: 8px; text-align: center; border-right: 1px solid #ccc; }
+        .meal:last-child { border-right: none; }
+        .meal.breakfast { background: #fef3c7 !important; }
+        .meal.lunch { background: #d1fae5 !important; }
+        .meal.dinner { background: #ede9fe !important; }
+        .meal.reception { background: #fce7f3 !important; }
+        .meal .label { font-weight: 600; text-transform: uppercase; color: #666; margin-bottom: 4px; }
+        .groups { border: 1px solid #ccc; border-top: none; }
+        .groups-header { display: flex; padding: 6px 12px; background: #e5e7eb !important; font-weight: 600; font-size: 10px; color: #4b5563; border-bottom: 1px solid #ccc; }
+        .group-row { display: flex; padding: 6px 12px; border-bottom: 1px solid #d1d5db; align-items: flex-start; }
+        .group-row:last-child { border-bottom: none; }
+        .group-row.even { background: white !important; }
+        .group-row.odd { background: #f3f4f6 !important; }
+        .group-name { flex: 1; font-weight: 500; min-width: 200px; }
+        .group-rooms { width: 60px; text-align: right; color: #2563eb; }
+        .group-arr { width: 50px; text-align: right; color: #16a34a; }
+        .group-dep { width: 50px; text-align: right; color: #dc2626; }
+        .group-events { flex: 2; padding-left: 16px; }
+        .event { margin-bottom: 2px; }
+        .event .cat { font-weight: 500; }
+        .event .cat.breakfast { color: #d97706; }
+        .event .cat.lunch { color: #059669; }
+        .event .cat.dinner { color: #7c3aed; }
+        .event .cat.reception { color: #db2777; }
+        .event .time { color: #888; margin: 0 8px; }
+        .event .venue { color: #666; }
+        .no-groups { padding: 12px; color: #888; font-style: italic; }
+        @media print {
+          body { padding: 0.4in; margin: 0; }
+          .day { page-break-inside: avoid; }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="title">
+        <h1>F&B Running Potentials</h1>
+        <p>${dateRange}</p>
+      </div>
+  `;
+
+  dailyData.forEach(day => {
+    const dayEvents = getEventsForDay(day.date);
+    const groupedEvents = groupEventsByBooking(dayEvents);
+    const eventGroupNames = Object.keys(groupedEvents);
+    const allGroupNames = getAllGroupsForDay(day.date, eventGroupNames);
+    const dayRooms = groupRoomsByDate[day.date] || [];
+    const totalArrivals = dayRooms.reduce((sum, gr) => sum + (gr.arrivals || 0), 0);
+    const totalDepartures = dayRooms.reduce((sum, gr) => sum + (gr.departures || 0), 0);
+
+    const ihg = day.adults_children || 0;
+
+    html += `
+      <div class="day">
+        <div class="day-header">
+          <strong>${day.day_of_week}, ${format(parseISO(day.date), 'MMMM d, yyyy')}</strong>
+          <div class="stats">
+            ${day.has_forecast !== false ? `
+              <span>Occ: ${day.occupancy_pct}%</span>
+              <span>Rooms: ${day.forecasted_rooms}</span>
+              <span>IHG: ${day.adults_children}</span>
+              <span>Kids: ${day.kids}</span>
+              ${totalArrivals > 0 ? `<span class="arr">Arr: ${totalArrivals}</span>` : ''}
+              ${totalDepartures > 0 ? `<span class="dep">Dep: ${totalDepartures}</span>` : ''}
+            ` : ''}
+          </div>
+        </div>
+        <div class="meals">
+          ${['breakfast', 'lunch', 'dinner', 'reception'].map(meal => {
+            const catered = day[`catered_${meal}`] || 0;
+            const aloo = Math.max(0, ihg - catered);
+            return `
+              <div class="meal ${meal}">
+                <div class="label">${meal}</div>
+                <div>Catered: <strong>${catered}</strong></div>
+                <div>ALOO: <strong>${aloo}</strong></div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+        <div class="groups">
+          <div class="groups-header">
+            <div class="group-name">Group</div>
+            <div class="group-rooms">Rooms</div>
+            <div class="group-arr">Arr</div>
+            <div class="group-dep">Dep</div>
+            <div class="group-events">Events</div>
+          </div>
+          ${allGroupNames.length === 0 ? '<div class="no-groups">No groups</div>' :
+            allGroupNames.map((groupName, idx) => {
+              const groupEvents = groupedEvents[groupName] || [];
+              const roomData = getGroupRoomData(day.date, groupName);
+              const rowClass = idx % 2 === 0 ? 'even' : 'odd';
+
+              return `
+                <div class="group-row ${rowClass}">
+                  <div class="group-name">${groupName}</div>
+                  <div class="group-rooms">${roomData.rooms > 0 ? roomData.rooms : '-'}</div>
+                  <div class="group-arr">${roomData.arrivals > 0 ? '+' + roomData.arrivals : '-'}</div>
+                  <div class="group-dep">${roomData.departures > 0 ? '-' + roomData.departures : '-'}</div>
+                  <div class="group-events">
+                    ${groupEvents.length > 0 ? groupEvents.map(e => `
+                      <div class="event">
+                        <span class="cat ${e.category}">${e.category.charAt(0).toUpperCase() + e.category.slice(1)}</span>
+                        <span class="time">${e.time}</span>
+                        <span>${e.attendees} pax</span>
+                        <span class="venue">${e.venue}</span>
+                        ${e.notes ? `<div style="color:#666;font-style:italic;margin-left:0;padding-left:4px;margin-top:2px;border-left:2px solid #ddd;">Note: ${e.notes}</div>` : ''}
+                      </div>
+                    `).join('') : '-'}
+                  </div>
+                </div>
+              `;
+            }).join('')
+          }
+        </div>
+      </div>
+    `;
+  });
+
+  html += `
+    </body>
+    </html>
+  `;
+
+  printWindow.document.write(html);
+  printWindow.document.close();
+  printWindow.focus();
+  setTimeout(() => {
+    printWindow.print();
+  }, 250);
+}
+
 // Format large numbers with commas
 function formatNumber(num) {
   if (num === null || num === undefined) return '-';
@@ -1094,6 +1311,13 @@ function Potentials() {
                 onReset={resetDateFilter}
               />
             )}
+            <button
+              onClick={() => openExportWindow(dailySummary, events)}
+              disabled={dailySummary.length === 0}
+              className="btn-secondary"
+            >
+              Export
+            </button>
             <button onClick={() => setShowUploadModal(true)} className="btn-success">
               Upload Files
             </button>
