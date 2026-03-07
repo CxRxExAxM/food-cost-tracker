@@ -221,7 +221,8 @@ def require_role(allowed_roles: list):
 # Convenience dependencies
 require_admin = require_role(["admin"])
 require_chef_or_admin = require_role(["admin", "chef"])
-require_any_auth = require_role(["admin", "chef", "viewer"])
+require_foh_or_admin = require_role(["admin", "foh_manager"])
+require_any_auth = require_role(["admin", "chef", "viewer", "foh_manager"])
 
 
 # ============================================

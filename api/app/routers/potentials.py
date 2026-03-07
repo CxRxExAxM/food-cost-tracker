@@ -14,7 +14,7 @@ import tempfile
 import os
 
 from ..database import get_db, dicts_from_rows, dict_from_row
-from ..auth import get_current_user
+from ..auth import get_current_user, require_foh_or_admin
 
 router = APIRouter(prefix="/potentials", tags=["potentials"])
 
@@ -309,8 +309,8 @@ def get_events(
 
 
 @router.post("/events")
-def create_event(event: EventCreate, current_user: dict = Depends(get_current_user)):
-    """Create a new event."""
+def create_event(event: EventCreate, current_user: dict = Depends(require_foh_or_admin)):
+    """Create a new event. Requires admin or foh_manager role."""
     org_id = current_user["organization_id"]
 
     with get_db() as conn:
@@ -344,8 +344,8 @@ def create_event(event: EventCreate, current_user: dict = Depends(get_current_us
 
 
 @router.put("/events/{event_id}")
-def update_event(event_id: int, updates: EventUpdate, current_user: dict = Depends(get_current_user)):
-    """Update an event."""
+def update_event(event_id: int, updates: EventUpdate, current_user: dict = Depends(require_foh_or_admin)):
+    """Update an event. Requires admin or foh_manager role."""
     org_id = current_user["organization_id"]
 
     with get_db() as conn:
@@ -383,8 +383,8 @@ def update_event(event_id: int, updates: EventUpdate, current_user: dict = Depen
 
 
 @router.delete("/events/{event_id}")
-def delete_event(event_id: int, current_user: dict = Depends(get_current_user)):
-    """Delete an event."""
+def delete_event(event_id: int, current_user: dict = Depends(require_foh_or_admin)):
+    """Delete an event. Requires admin or foh_manager role."""
     org_id = current_user["organization_id"]
 
     with get_db() as conn:
@@ -518,8 +518,8 @@ def get_summary_metrics(current_user: dict = Depends(get_current_user)):
 # ============================================
 
 @router.post("/upload/hitlist")
-async def upload_hitlist(file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
-    """Upload a hitlist Excel file."""
+async def upload_hitlist(file: UploadFile = File(...), current_user: dict = Depends(require_foh_or_admin)):
+    """Upload a hitlist Excel file. Requires admin or foh_manager role."""
     org_id = current_user["organization_id"]
 
     if not file.filename.endswith('.xlsx'):
@@ -617,8 +617,8 @@ async def upload_hitlist(file: UploadFile = File(...), current_user: dict = Depe
 
 
 @router.post("/upload/forecast")
-async def upload_forecast(file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
-    """Upload a forecast Excel file."""
+async def upload_forecast(file: UploadFile = File(...), current_user: dict = Depends(require_foh_or_admin)):
+    """Upload a forecast Excel file. Requires admin or foh_manager role."""
     org_id = current_user["organization_id"]
 
     if not file.filename.endswith('.xlsx'):

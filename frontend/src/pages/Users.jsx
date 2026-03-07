@@ -260,6 +260,7 @@ function Users({ embedded = false }) {
                         className="role-select"
                       >
                         <option value="admin">Admin</option>
+                        <option value="foh_manager">FOH Manager</option>
                         <option value="chef">Chef</option>
                         <option value="viewer">Viewer</option>
                       </select>
@@ -380,6 +381,7 @@ function Users({ embedded = false }) {
                 >
                   <option value="viewer">Viewer</option>
                   <option value="chef">Chef</option>
+                  <option value="foh_manager">FOH Manager</option>
                   <option value="admin">Admin</option>
                 </select>
               </div>

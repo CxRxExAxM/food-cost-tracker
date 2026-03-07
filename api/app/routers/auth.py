@@ -110,10 +110,10 @@ def register(user: UserCreate, current_user: dict = Depends(require_admin)):
             )
 
         # Validate role
-        if user.role not in ["admin", "chef", "viewer"]:
+        if user.role not in ["admin", "chef", "viewer", "foh_manager"]:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid role. Must be: admin, chef, or viewer"
+                detail="Invalid role. Must be: admin, chef, viewer, or foh_manager"
             )
 
         # Create user in the same organization as current user
@@ -242,7 +242,7 @@ def update_user(user_id: int, updates: UserUpdate, current_user: dict = Depends(
             params.append(updates.full_name)
 
         if updates.role is not None:
-            if updates.role not in ["admin", "chef", "viewer"]:
+            if updates.role not in ["admin", "chef", "viewer", "foh_manager"]:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Invalid role"

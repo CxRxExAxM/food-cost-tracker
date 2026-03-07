@@ -7,6 +7,7 @@ import {
 } from 'recharts';
 import Navigation from '../../components/Navigation';
 import { useToast } from '../../contexts/ToastContext';
+import { useAuth } from '../../contexts/AuthContext';
 import './Potentials.css';
 
 // API helper with auth
@@ -414,7 +415,7 @@ function DateSelector({ dates, selectedDate, onSelect }) {
 }
 
 // Event row component
-function EventRow({ event, onEventUpdate, onEventDelete }) {
+function EventRow({ event, onEventUpdate, onEventDelete, canEdit }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState({});
   const [saving, setSaving] = useState(false);
@@ -550,10 +551,12 @@ function EventRow({ event, onEventUpdate, onEventDelete }) {
       <div className="event-time">{event.time}</div>
       <div className="event-pax">{event.attendees || event.gtd || '-'} pax</div>
       <div className="event-venue">{event.venue}</div>
-      <div className="event-actions">
-        <button onClick={startEditing} className="btn-ghost-sm">Edit</button>
-        <button onClick={() => setShowDeleteConfirm(true)} className="btn-ghost-sm danger">Delete</button>
-      </div>
+      {canEdit && (
+        <div className="event-actions">
+          <button onClick={startEditing} className="btn-ghost-sm">Edit</button>
+          <button onClick={() => setShowDeleteConfirm(true)} className="btn-ghost-sm danger">Delete</button>
+        </div>
+      )}
       {event.notes && <div className="event-notes">Note: {event.notes}</div>}
     </div>
   );
@@ -666,7 +669,7 @@ function AddEventForm({ date, onSave, onCancel }) {
 }
 
 // Day detail component
-function DayDetail({ date, events, dailyData, onEventUpdate, onEventDelete, onEventAdd }) {
+function DayDetail({ date, events, dailyData, onEventUpdate, onEventDelete, onEventAdd, canEdit }) {
   const [showAddForm, setShowAddForm] = useState(false);
   const dayInfo = dailyData.find(d => d.date === date);
   const dayEvents = events.filter(e => e.date === date);
@@ -722,12 +725,12 @@ function DayDetail({ date, events, dailyData, onEventUpdate, onEventDelete, onEv
       <div className="events-section">
         <div className="events-header">
           <span>Events</span>
-          {!showAddForm && (
+          {canEdit && !showAddForm && (
             <button onClick={() => setShowAddForm(true)} className="btn-primary-sm">+ Add Event</button>
           )}
         </div>
 
-        {showAddForm && (
+        {canEdit && showAddForm && (
           <AddEventForm
             date={date}
             onSave={handleAddEvent}
@@ -745,6 +748,7 @@ function DayDetail({ date, events, dailyData, onEventUpdate, onEventDelete, onEv
                 event={event}
                 onEventUpdate={onEventUpdate}
                 onEventDelete={onEventDelete}
+                canEdit={canEdit}
               />
             ))
           )}
@@ -1093,6 +1097,10 @@ function Potentials() {
   const [groupRooms, setGroupRooms] = useState([]);
 
   const { showToast } = useToast();
+  const { user } = useAuth();
+
+  // Check if user can edit (admin or foh_manager)
+  const canEdit = user?.role === 'admin' || user?.role === 'foh_manager';
 
   // Fetch all data on mount
   useEffect(() => {
@@ -1345,9 +1353,11 @@ function Potentials() {
             >
               Export
             </button>
-            <button onClick={() => setShowUploadModal(true)} className="btn-success">
-              Upload Files
-            </button>
+            {canEdit && (
+              <button onClick={() => setShowUploadModal(true)} className="btn-success">
+                Upload Files
+              </button>
+            )}
             <button onClick={handleRefresh} disabled={refreshing} className="btn-primary">
               {refreshing ? 'Refreshing...' : 'Refresh'}
             </button>
@@ -1395,6 +1405,7 @@ function Potentials() {
             onEventUpdate={handleEventUpdate}
             onEventDelete={handleEventDelete}
             onEventAdd={handleEventAdd}
+            canEdit={canEdit}
           />
         )}
 
