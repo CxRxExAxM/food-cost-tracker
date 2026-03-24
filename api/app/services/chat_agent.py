@@ -134,6 +134,32 @@ TOOLS = [
             },
             "required": ["start_date", "end_date"]
         }
+    },
+    {
+        "name": "get_high_aloo_periods",
+        "description": "Identify when large groups have high ALOO (At Leisure On Own) and might flood outlets. Shows which groups are not scheduled for catered meals and will likely eat at outlets instead.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "start_date": {
+                    "type": "string",
+                    "description": "Start date in YYYY-MM-DD format"
+                },
+                "end_date": {
+                    "type": "string",
+                    "description": "End date in YYYY-MM-DD format"
+                },
+                "min_group_aloo": {
+                    "type": "integer",
+                    "description": "Minimum group ALOO count to flag (default 30)"
+                },
+                "min_rooms": {
+                    "type": "integer",
+                    "description": "Minimum rooms for a group to be considered (default 20)"
+                }
+            },
+            "required": ["start_date", "end_date"]
+        }
     }
 ]
 
@@ -290,6 +316,14 @@ def execute_tool(tool_name: str, tool_input: Dict, org_id: int, conn) -> Dict:
         )
     elif tool_name == "get_groups_summary":
         return get_groups_summary(conn, org_id, tool_input["start_date"], tool_input["end_date"])
+    elif tool_name == "get_high_aloo_periods":
+        return get_high_aloo_periods(
+            conn, org_id,
+            tool_input["start_date"],
+            tool_input["end_date"],
+            tool_input.get("min_group_aloo", 30),
+            tool_input.get("min_rooms", 20)
+        )
     else:
         return {"error": f"Unknown tool: {tool_name}"}
 
@@ -575,6 +609,89 @@ def get_groups_summary(conn, org_id: int, start_date: str, end_date: str) -> Dic
         })
 
     return {"groups": groups, "count": len(groups)}
+
+
+def get_high_aloo_periods(conn, org_id: int, start_date: str, end_date: str,
+                         min_group_aloo: int = 30, min_rooms: int = 20) -> Dict:
+    """
+    Identify when large groups have high ALOO and might overwhelm outlets.
+
+    Calculates group-specific ALOO (guests not scheduled for catered events)
+    for each meal period and flags potential outlet capacity issues.
+    """
+    cursor = conn.cursor()
+
+    # Get group room data by date
+    cursor.execute("""
+        SELECT date, block_name, rooms
+        FROM potentials_group_rooms
+        WHERE organization_id = %s
+            AND date >= %s AND date <= %s
+            AND rooms >= %s
+        ORDER BY date, block_name
+    """, (org_id, start_date, end_date, min_rooms))
+
+    group_rooms_data = {}
+    for row in cursor.fetchall():
+        date_key = row["date"].isoformat()
+        if date_key not in group_rooms_data:
+            group_rooms_data[date_key] = {}
+        group_rooms_data[date_key][row["block_name"]] = row["rooms"]
+
+    # Get scheduled events by group and meal category
+    cursor.execute("""
+        SELECT date, booking_name, category, SUM(attendees) as total_covers
+        FROM potentials_events
+        WHERE organization_id = %s
+            AND date >= %s AND date <= %s
+            AND category IN ('breakfast', 'lunch', 'dinner', 'reception')
+        GROUP BY date, booking_name, category
+    """, (org_id, start_date, end_date))
+
+    scheduled_covers = {}
+    for row in cursor.fetchall():
+        date_key = row["date"].isoformat()
+        group_key = (date_key, row["booking_name"], row["category"])
+        scheduled_covers[group_key] = row["total_covers"] or 0
+
+    # Calculate ALOO for each group/date/meal combination
+    high_aloo_periods = []
+
+    for date_str, groups in group_rooms_data.items():
+        for group_name, rooms in groups.items():
+            # Estimate group size: rooms × 2.5 average guests per room
+            estimated_group_size = int(rooms * 2.5)
+
+            # Check each meal period
+            for meal in ['breakfast', 'lunch', 'dinner', 'reception']:
+                group_key = (date_str, group_name, meal)
+                scheduled = scheduled_covers.get(group_key, 0)
+                aloo = estimated_group_size - scheduled
+
+                # Flag if ALOO exceeds threshold
+                if aloo >= min_group_aloo:
+                    high_aloo_periods.append({
+                        "date": date_str,
+                        "group": group_name,
+                        "meal_period": meal,
+                        "rooms": rooms,
+                        "estimated_group_size": estimated_group_size,
+                        "scheduled_covers": scheduled,
+                        "aloo": aloo,
+                        "pct_aloo": round((aloo / estimated_group_size) * 100, 1) if estimated_group_size > 0 else 0
+                    })
+
+    # Sort by ALOO count descending
+    high_aloo_periods.sort(key=lambda x: x["aloo"], reverse=True)
+
+    return {
+        "high_aloo_periods": high_aloo_periods,
+        "count": len(high_aloo_periods),
+        "thresholds": {
+            "min_group_aloo": min_group_aloo,
+            "min_rooms": min_rooms
+        }
+    }
 
 
 # Session and message management
