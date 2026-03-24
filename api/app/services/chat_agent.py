@@ -359,10 +359,10 @@ def get_forecast_summary(conn, org_id: int, start_date: str, end_date: str) -> D
 
     metrics = {}
     for row in cursor.fetchall():
-        metrics[row[0]] = {
-            "avg": float(row[1]) if row[1] else 0,
-            "min": float(row[2]) if row[2] else 0,
-            "max": float(row[3]) if row[3] else 0
+        metrics[row["metric_name"]] = {
+            "avg": float(row["avg_value"]) if row["avg_value"] else 0,
+            "min": float(row["min_value"]) if row["min_value"] else 0,
+            "max": float(row["max_value"]) if row["max_value"] else 0
         }
 
     return {"metrics": metrics, "start_date": start_date, "end_date": end_date}
@@ -397,16 +397,16 @@ def get_upcoming_events(conn, org_id: int, start_date: str, end_date: str,
     events = []
     for row in cursor.fetchall():
         events.append({
-            "event_id": row[0],
-            "date": row[1].isoformat() if row[1] else None,
-            "booking_name": row[2],
-            "event_name": row[3],
-            "category": row[4],
-            "venue": row[5],
-            "time": row[6],
-            "attendees": row[7],
-            "gtd": row[8],
-            "notes": row[9]
+            "event_id": row["event_id"],
+            "date": row["date"].isoformat() if row["date"] else None,
+            "booking_name": row["booking_name"],
+            "event_name": row["event_name"],
+            "category": row["category"],
+            "venue": row["venue"],
+            "time": row["time"],
+            "attendees": row["attendees"],
+            "gtd": row["gtd"],
+            "notes": row["notes"]
         })
 
     return {"events": events, "count": len(events)}
@@ -441,17 +441,17 @@ def get_event_detail(conn, org_id: int, event_identifier: str) -> Dict:
         return {"error": "Event not found"}
 
     return {
-        "event_id": row[0],
-        "date": row[1].isoformat() if row[1] else None,
-        "booking_name": row[2],
-        "event_name": row[3],
-        "category": row[4],
-        "venue": row[5],
-        "time": row[6],
-        "attendees": row[7],
-        "gtd": row[8],
-        "notes": row[9],
-        "event_type": row[10]
+        "event_id": row["event_id"],
+        "date": row["date"].isoformat() if row["date"] else None,
+        "booking_name": row["booking_name"],
+        "event_name": row["event_name"],
+        "category": row["category"],
+        "venue": row["venue"],
+        "time": row["time"],
+        "attendees": row["attendees"],
+        "gtd": row["gtd"],
+        "notes": row["notes"],
+        "event_type": row["event_type"]
     }
 
 
@@ -473,7 +473,7 @@ def get_daily_summary(conn, org_id: int, start_date: str, end_date: str) -> Dict
         ORDER BY date
     """, (org_id, start_date, end_date))
 
-    daily_forecast = {row[0]: row for row in cursor.fetchall()}
+    daily_forecast = {row["date"]: row for row in cursor.fetchall()}
 
     # Get event counts by day
     cursor.execute("""
@@ -487,19 +487,19 @@ def get_daily_summary(conn, org_id: int, start_date: str, end_date: str) -> Dict
         GROUP BY date
     """, (org_id, start_date, end_date))
 
-    daily_events = {row[0]: row for row in cursor.fetchall()}
+    daily_events = {row["date"]: row for row in cursor.fetchall()}
 
     # Combine
     daily_data = []
     for dt, forecast in daily_forecast.items():
-        events = daily_events.get(dt, (dt, 0, 0))
+        events = daily_events.get(dt)
         daily_data.append({
             "date": dt.isoformat(),
-            "occupancy_pct": float(forecast[1]) if forecast[1] else 0,
-            "occupied_rooms": int(forecast[2]) if forecast[2] else 0,
-            "adr": float(forecast[3]) if forecast[3] else 0,
-            "event_count": events[1],
-            "total_catered_covers": events[2] or 0
+            "occupancy_pct": float(forecast["occupancy_pct"]) if forecast["occupancy_pct"] else 0,
+            "occupied_rooms": int(forecast["occupied_rooms"]) if forecast["occupied_rooms"] else 0,
+            "adr": float(forecast["adr"]) if forecast["adr"] else 0,
+            "event_count": events["event_count"] if events else 0,
+            "total_catered_covers": events["total_attendees"] if events and events["total_attendees"] else 0
         })
 
     return {"daily_data": daily_data}
@@ -514,14 +514,14 @@ def compare_periods(conn, org_id: int, p1_start: str, p1_end: str,
     # Get event counts
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT COUNT(*), SUM(attendees)
+        SELECT COUNT(*) as event_count, SUM(attendees) as total_attendees
         FROM potentials_events
         WHERE organization_id = %s AND date >= %s AND date <= %s
     """, (org_id, p1_start, p1_end))
     p1_events = cursor.fetchone()
 
     cursor.execute("""
-        SELECT COUNT(*), SUM(attendees)
+        SELECT COUNT(*) as event_count, SUM(attendees) as total_attendees
         FROM potentials_events
         WHERE organization_id = %s AND date >= %s AND date <= %s
     """, (org_id, p2_start, p2_end))
@@ -532,15 +532,15 @@ def compare_periods(conn, org_id: int, p1_start: str, p1_end: str,
             "start": p1_start,
             "end": p1_end,
             "metrics": period1["metrics"],
-            "event_count": p1_events[0],
-            "total_covers": p1_events[1] or 0
+            "event_count": p1_events["event_count"],
+            "total_covers": p1_events["total_attendees"] or 0
         },
         "period2": {
             "start": p2_start,
             "end": p2_end,
             "metrics": period2["metrics"],
-            "event_count": p2_events[0],
-            "total_covers": p2_events[1] or 0
+            "event_count": p2_events["event_count"],
+            "total_covers": p2_events["total_attendees"] or 0
         }
     }
 
@@ -566,12 +566,12 @@ def get_groups_summary(conn, org_id: int, start_date: str, end_date: str) -> Dic
     groups = []
     for row in cursor.fetchall():
         groups.append({
-            "block_name": row[0],
-            "total_rooms": row[1] or 0,
-            "total_arrivals": row[2] or 0,
-            "total_departures": row[3] or 0,
-            "first_date": row[4].isoformat() if row[4] else None,
-            "last_date": row[5].isoformat() if row[5] else None
+            "block_name": row["block_name"],
+            "total_rooms": row["total_rooms"] or 0,
+            "total_arrivals": row["total_arrivals"] or 0,
+            "total_departures": row["total_departures"] or 0,
+            "first_date": row["first_date"].isoformat() if row["first_date"] else None,
+            "last_date": row["last_date"].isoformat() if row["last_date"] else None
         })
 
     return {"groups": groups, "count": len(groups)}
@@ -591,7 +591,12 @@ def get_or_create_session(conn, session_id: Optional[int], org_id: int, user_id:
         """, (session_id, org_id, user_id))
         row = cursor.fetchone()
         if row:
-            return {"id": row[0], "title": row[1], "created_at": row[2], "updated_at": row[3]}
+            return {
+                "id": row["id"],
+                "title": row["title"],
+                "created_at": row["created_at"],
+                "updated_at": row["updated_at"]
+            }
 
     # Create new session
     cursor.execute("""
@@ -603,7 +608,12 @@ def get_or_create_session(conn, session_id: Optional[int], org_id: int, user_id:
     row = cursor.fetchone()
     conn.commit()
 
-    return {"id": row[0], "title": row[1], "created_at": row[2], "updated_at": row[3]}
+    return {
+        "id": row["id"],
+        "title": row["title"],
+        "created_at": row["created_at"],
+        "updated_at": row["updated_at"]
+    }
 
 
 def save_message(conn, session_id: int, role: str, content: str,
@@ -646,9 +656,9 @@ def get_recent_messages(conn, session_id: int, limit: int = 10) -> List[Dict]:
     messages = []
     for row in reversed(cursor.fetchall()):
         messages.append({
-            "role": row[0],
-            "content": row[1],
-            "created_at": row[2].isoformat() if row[2] else None
+            "role": row["role"],
+            "content": row["content"],
+            "created_at": row["created_at"].isoformat() if row["created_at"] else None
         })
 
     return messages
