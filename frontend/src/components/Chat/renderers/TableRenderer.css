@@ -1,0 +1,38 @@
+.table-renderer {
+  overflow-x: auto;
+  margin-top: var(--space-3);
+}
+
+.chat-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.chat-table thead {
+  background: var(--bg-tertiary);
+  position: sticky;
+  top: 0;
+}
+
+.chat-table th {
+  padding: var(--space-2) var(--space-3);
+  text-align: left;
+  font-weight: 600;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-default);
+}
+
+.chat-table td {
+  padding: var(--space-2) var(--space-3);
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.chat-table tbody tr:hover {
+  background: var(--bg-tertiary);
+}
+
+.chat-table tbody tr:last-child td {
+  border-bottom: none;
+}

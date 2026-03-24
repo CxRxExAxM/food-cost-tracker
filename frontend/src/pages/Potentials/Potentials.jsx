@@ -8,6 +8,7 @@ import {
 import Navigation from '../../components/Navigation';
 import { useToast } from '../../contexts/ToastContext';
 import { useAuth } from '../../contexts/AuthContext';
+import ChatPanel from '../../components/Chat/ChatPanel';
 import './Potentials.css';
 
 // API helper with auth
@@ -1095,6 +1096,7 @@ function Potentials() {
   const [refreshing, setRefreshing] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [groupRooms, setGroupRooms] = useState([]);
+  const [showChatPanel, setShowChatPanel] = useState(false);
 
   const { showToast } = useToast();
   const { user } = useAuth();
@@ -1420,6 +1422,19 @@ function Potentials() {
         isOpen={showUploadModal}
         onClose={() => setShowUploadModal(false)}
         onUploadComplete={handleRefresh}
+      />
+
+      <button
+        className="chat-fab"
+        onClick={() => setShowChatPanel(true)}
+        title="Ask AI Assistant"
+      >
+        💬
+      </button>
+
+      <ChatPanel
+        isOpen={showChatPanel}
+        onClose={() => setShowChatPanel(false)}
       />
     </div>
   );
