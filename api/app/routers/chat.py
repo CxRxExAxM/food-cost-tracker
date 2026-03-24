@@ -9,7 +9,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from api.app.auth import get_current_user, get_current_organization
+from api.app.auth import get_current_user
 from api.app.database import get_db
 from api.app.services.chat_agent import run_agent, get_or_create_session, save_message, get_recent_messages
 
@@ -33,7 +33,6 @@ class ChatResponse(BaseModel):
 async def chat(
     request: ChatRequest,
     current_user: dict = Depends(get_current_user),
-    org_id: int = Depends(get_current_organization),
 ):
     """
     Send a message to the NL reporting agent.
@@ -53,6 +52,9 @@ async def chat(
             status_code=503,
             detail="AI chat service is not configured. Please set ANTHROPIC_API_KEY environment variable."
         )
+
+    # Get organization ID from current user
+    org_id = current_user["organization_id"]
 
     with get_db() as conn:
         # Get or create chat session
@@ -103,9 +105,10 @@ async def chat(
 @router.get("/sessions")
 async def list_sessions(
     current_user: dict = Depends(get_current_user),
-    org_id: int = Depends(get_current_organization),
 ):
     """List all chat sessions for the current user."""
+    org_id = current_user["organization_id"]
+
     with get_db() as conn:
         cursor = conn.cursor()
         cursor.execute("""
@@ -132,9 +135,10 @@ async def list_sessions(
 async def get_session_messages(
     session_id: int,
     current_user: dict = Depends(get_current_user),
-    org_id: int = Depends(get_current_organization),
 ):
     """Get all messages for a specific chat session."""
+    org_id = current_user["organization_id"]
+
     with get_db() as conn:
         # Verify session belongs to user
         cursor = conn.cursor()
@@ -154,9 +158,10 @@ async def get_session_messages(
 async def delete_session(
     session_id: int,
     current_user: dict = Depends(get_current_user),
-    org_id: int = Depends(get_current_organization),
 ):
     """Delete a chat session and all its messages."""
+    org_id = current_user["organization_id"]
+
     with get_db() as conn:
         cursor = conn.cursor()
 
