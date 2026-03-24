@@ -532,11 +532,8 @@ async def upload_hitlist(file: UploadFile = File(...), current_user: dict = Depe
         tmp_path = tmp.name
 
     try:
-        # Read only needed columns to reduce memory
-        df = pd.read_excel(tmp_path, usecols=[
-            "EVENT_ID", "DATE_SORT_COLUMN", "BOOKING_NAME", "EV_NAME", "EV_TYPE",
-            "FUNC_SPACE", "TIME", "ATTENDEES", "GTD", "DISTRO?", "EV_STATUS"
-        ])
+        # Read entire file (column names vary between hitlist exports)
+        df = pd.read_excel(tmp_path)
 
         # Convert dates
         df["event_date"] = pd.to_datetime(df["DATE_SORT_COLUMN"], errors='coerce')

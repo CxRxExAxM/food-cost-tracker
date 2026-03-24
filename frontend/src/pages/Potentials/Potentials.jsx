@@ -904,23 +904,25 @@ function UploadModal({ isOpen, onClose, onUploadComplete }) {
           body: formData
         });
 
+        // Read response as text first, then parse
+        const responseText = await res.text();
+
         // Check status before trying to parse JSON
         if (!res.ok) {
           let errorMessage = `Upload failed (${res.status})`;
           try {
-            const data = await res.json();
+            const data = JSON.parse(responseText);
             errorMessage = data.detail || errorMessage;
           } catch {
-            // If JSON parse fails, try to get text
-            const text = await res.text();
-            if (text) errorMessage = text.substring(0, 200);
+            // If JSON parse fails, use text
+            if (responseText) errorMessage = responseText.substring(0, 200);
           }
           newResults.push({ file: file.name, status: 'error', message: errorMessage });
           continue;
         }
 
         // Parse successful response
-        const data = await res.json();
+        const data = JSON.parse(responseText);
 
         if (isHitlist) {
           newResults.push({
