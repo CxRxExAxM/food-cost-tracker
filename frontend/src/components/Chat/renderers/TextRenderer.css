@@ -3,3 +3,50 @@
   line-height: 1.6;
   color: var(--text-primary);
 }
+
+.text-renderer h1,
+.text-renderer h2,
+.text-renderer h3 {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.text-renderer strong {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.text-renderer code {
+  background: var(--bg-subtle);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-family: 'Monaco', 'Courier New', monospace;
+  font-size: 0.9em;
+}
+
+.text-renderer pre {
+  background: var(--bg-subtle);
+  padding: 12px;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin: 0.5em 0;
+}
+
+.text-renderer pre code {
+  background: transparent;
+  padding: 0;
+}
+
+.text-renderer ul,
+.text-renderer ol {
+  list-style-position: outside;
+}
+
+.text-renderer a {
+  color: var(--color-primary);
+  text-decoration: none;
+}
+
+.text-renderer a:hover {
+  text-decoration: underline;
+}
