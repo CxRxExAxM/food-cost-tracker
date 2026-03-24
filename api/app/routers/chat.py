@@ -5,6 +5,7 @@ Provides conversational interface to query forecasts, events, and potentials dat
 """
 
 import os
+import traceback
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -56,49 +57,57 @@ async def chat(
     # Get organization ID from current user
     org_id = current_user["organization_id"]
 
-    with get_db() as conn:
-        # Get or create chat session
-        session = get_or_create_session(
-            conn=conn,
-            session_id=request.session_id,
-            org_id=org_id,
-            user_id=current_user["id"]
-        )
+    try:
+        with get_db() as conn:
+            # Get or create chat session
+            session = get_or_create_session(
+                conn=conn,
+                session_id=request.session_id,
+                org_id=org_id,
+                user_id=current_user["id"]
+            )
 
-        # Save user message
-        save_message(
-            conn=conn,
-            session_id=session["id"],
-            role="user",
-            content=request.message
-        )
+            # Save user message
+            save_message(
+                conn=conn,
+                session_id=session["id"],
+                role="user",
+                content=request.message
+            )
 
-        # Get conversation history
-        history = get_recent_messages(conn=conn, session_id=session["id"], limit=10)
+            # Get conversation history
+            history = get_recent_messages(conn=conn, session_id=session["id"], limit=10)
 
-        # Run agent
-        result = await run_agent(
-            messages=history,
-            org_id=org_id,
-            conn=conn
-        )
+            # Run agent
+            result = await run_agent(
+                messages=history,
+                org_id=org_id,
+                conn=conn
+            )
 
-        # Save assistant response
-        save_message(
-            conn=conn,
-            session_id=session["id"],
-            role="assistant",
-            content=result["text"],
-            tool_calls=result.get("tool_calls"),
-            result_type=result["render_type"],
-            result_data=result.get("render_data")
-        )
+            # Save assistant response
+            save_message(
+                conn=conn,
+                session_id=session["id"],
+                role="assistant",
+                content=result["text"],
+                tool_calls=result.get("tool_calls"),
+                result_type=result["render_type"],
+                result_data=result.get("render_data")
+            )
 
-        return ChatResponse(
-            message=result["text"],
-            render_type=result["render_type"],
-            render_data=result.get("render_data", {}),
-            session_id=session["id"]
+            return ChatResponse(
+                message=result["text"],
+                render_type=result["render_type"],
+                render_data=result.get("render_data", {}),
+                session_id=session["id"]
+            )
+    except Exception as e:
+        print(f"Chat error: {str(e)}")
+        print(traceback.format_exc())
+        raise HTTPException(
+            status_code=500,
+            detail=f"Chat error: {str(e)}"
         )
 
 
