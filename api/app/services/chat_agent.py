@@ -206,7 +206,7 @@ def run_agent(messages: List[Dict], org_id: int, conn) -> Dict:
                 tool_id = block.id
 
                 # Execute tool
-                tool_result = await execute_tool(tool_name, tool_input, org_id, conn)
+                tool_result = execute_tool(tool_name, tool_input, org_id, conn)
                 tool_calls_made.append({
                     "tool": tool_name,
                     "input": tool_input,
@@ -266,7 +266,7 @@ def run_agent(messages: List[Dict], org_id: int, conn) -> Dict:
         }
 
 
-async def execute_tool(tool_name: str, tool_input: Dict, org_id: int, conn) -> Dict:
+def execute_tool(tool_name: str, tool_input: Dict, org_id: int, conn) -> Dict:
     """Execute a tool and return results."""
     if tool_name == "get_forecast_summary":
         return get_forecast_summary(conn, org_id, tool_input["start_date"], tool_input["end_date"])
