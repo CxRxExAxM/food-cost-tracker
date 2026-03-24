@@ -181,7 +181,14 @@ When a user asks a question:
 4. For holiday questions, use common knowledge of US holidays
 5. Return data in the most useful format
 
-Be concise and focus on answering the specific question asked.
+FORMATTING RULES:
+- Use bullet points (•) instead of paragraphs
+- Keep responses concise and scannable
+- Use outline format with clear hierarchy
+- Only use tables when the render_type is "table"
+- Avoid verbose explanations
+
+Be direct and focus on answering the specific question asked.
 """
 
 
