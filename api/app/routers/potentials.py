@@ -532,68 +532,86 @@ async def upload_hitlist(file: UploadFile = File(...), current_user: dict = Depe
         tmp_path = tmp.name
 
     try:
-        df = pd.read_excel(tmp_path)
-        df = df.copy()
-        df.loc[:, "event_date"] = pd.to_datetime(df["DATE_SORT_COLUMN"])
+        # Read only needed columns to reduce memory
+        df = pd.read_excel(tmp_path, usecols=[
+            "EVENT_ID", "DATE_SORT_COLUMN", "BOOKING_NAME", "EV_NAME", "EV_TYPE",
+            "FUNC_SPACE", "TIME", "ATTENDEES", "GTD", "DISTRO?", "EV_STATUS"
+        ])
 
+        # Convert dates
+        df["event_date"] = pd.to_datetime(df["DATE_SORT_COLUMN"], errors='coerce')
+
+        # Extract to lightweight list of dicts and release dataframe memory
         fb_categories = {"breakfast", "lunch", "dinner", "reception"}
+        events_to_process = []
+
+        for _, row in df.iterrows():
+            # Skip cancelled or invalid events
+            if row.get("DISTRO?") == "CXLD" or row.get("EV_STATUS") == "CAN":
+                continue
+            if pd.isna(row.get("EVENT_ID")):
+                continue
+
+            category = categorize_event_type(row.get("EV_TYPE"))
+            if category not in fb_categories:
+                continue
+
+            events_to_process.append({
+                "event_id": int(row["EVENT_ID"]),
+                "date": row["event_date"].strftime("%Y-%m-%d") if pd.notna(row["event_date"]) else None,
+                "booking_name": str(row["BOOKING_NAME"]) if pd.notna(row.get("BOOKING_NAME")) else "Unknown",
+                "event_name": str(row["EV_NAME"]) if pd.notna(row.get("EV_NAME")) else "",
+                "event_type": str(row["EV_TYPE"]) if pd.notna(row.get("EV_TYPE")) else "",
+                "category": category,
+                "venue": str(row["FUNC_SPACE"]) if pd.notna(row.get("FUNC_SPACE")) else "",
+                "time": str(row["TIME"]) if pd.notna(row.get("TIME")) else "",
+                "attendees": int(row["ATTENDEES"]) if pd.notna(row.get("ATTENDEES")) else 0,
+                "gtd": int(row["GTD"]) if pd.notna(row.get("GTD")) else 0,
+            })
+
+        # Delete dataframe to free memory
+        del df
+
+        # Process in batches
+        BATCH_SIZE = 100
+        added = 0
+        skipped = 0
+        now = datetime.now().isoformat()
 
         with get_db() as conn:
             cursor = conn.cursor()
 
-            added = 0
-            skipped = 0
-            now = datetime.now().isoformat()
+            for i in range(0, len(events_to_process), BATCH_SIZE):
+                batch = events_to_process[i:i + BATCH_SIZE]
 
-            for _, row in df.iterrows():
-                # Skip cancelled events
-                if row.get("DISTRO?") == "CXLD" or row.get("EV_STATUS") == "CAN":
-                    continue
+                for event in batch:
+                    # Check if event exists
+                    cursor.execute("""
+                        SELECT 1 FROM potentials_events
+                        WHERE event_id = %s AND organization_id = %s
+                    """, (event["event_id"], org_id))
 
-                event_id = row.get("EVENT_ID")
-                if pd.isna(event_id):
-                    continue
+                    if cursor.fetchone():
+                        skipped += 1
+                        continue
 
-                category = categorize_event_type(row.get("EV_TYPE"))
+                    # Insert new event
+                    cursor.execute("""
+                        INSERT INTO potentials_events (
+                            organization_id, event_id, date, booking_name, event_name,
+                            event_type, category, venue, time, attendees, gtd, source_file, imported_at
+                        )
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """, (
+                        org_id, event["event_id"], event["date"], event["booking_name"],
+                        event["event_name"], event["event_type"], event["category"],
+                        event["venue"], event["time"], event["attendees"], event["gtd"],
+                        file.filename, now
+                    ))
+                    added += 1
 
-                # Skip non-F&B events
-                if category not in fb_categories:
-                    continue
-
-                # Check if event exists
-                cursor.execute("""
-                    SELECT 1 FROM potentials_events
-                    WHERE event_id = %s AND organization_id = %s
-                """, (int(event_id), org_id))
-
-                if cursor.fetchone():
-                    skipped += 1
-                    continue
-
-                # Insert new event
-                event_date = row["event_date"].strftime("%Y-%m-%d") if pd.notna(row["event_date"]) else None
-                cursor.execute("""
-                    INSERT INTO potentials_events (
-                        organization_id, event_id, date, booking_name, event_name,
-                        event_type, category, venue, time, attendees, gtd, source_file, imported_at
-                    )
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                """, (
-                    org_id,
-                    int(event_id),
-                    event_date,
-                    str(row["BOOKING_NAME"]) if pd.notna(row.get("BOOKING_NAME")) else "Unknown",
-                    str(row["EV_NAME"]) if pd.notna(row.get("EV_NAME")) else "",
-                    str(row["EV_TYPE"]) if pd.notna(row.get("EV_TYPE")) else "",
-                    category,
-                    str(row["FUNC_SPACE"]) if pd.notna(row.get("FUNC_SPACE")) else "",
-                    str(row["TIME"]) if pd.notna(row.get("TIME")) else "",
-                    int(row["ATTENDEES"]) if pd.notna(row.get("ATTENDEES")) else 0,
-                    int(row["GTD"]) if pd.notna(row.get("GTD")) else 0,
-                    file.filename,
-                    now
-                ))
-                added += 1
+                # Commit batch to release transaction memory
+                conn.commit()
 
             # Log the import
             cursor.execute("""
@@ -658,43 +676,57 @@ async def upload_forecast(file: UploadFile = File(...), current_user: dict = Dep
             19: "children_otb",
         }
 
+        # Extract all metrics into lightweight structure before DB operations
+        metrics_to_process = []
+        for i, date_val in enumerate(dates):
+            col_idx = i + 1
+            date_str = date_val.strftime("%Y-%m-%d")
+
+            for row_idx, metric_name in row_mapping.items():
+                val = df.iloc[row_idx, col_idx]
+                if pd.notna(val) and not isinstance(val, str):
+                    metrics_to_process.append({
+                        "date": date_str,
+                        "metric": metric_name,
+                        "value": float(val)
+                    })
+
         with get_db() as conn:
             cursor = conn.cursor()
 
             added = 0
             updated = 0
-            now = datetime.now().isoformat()
 
-            for i, date_val in enumerate(dates):
-                col_idx = i + 1
-                date_str = date_val.strftime("%Y-%m-%d")
+            # Process metrics in batches
+            BATCH_SIZE = 50
+            for i in range(0, len(metrics_to_process), BATCH_SIZE):
+                batch = metrics_to_process[i:i + BATCH_SIZE]
 
-                for row_idx, metric_name in row_mapping.items():
-                    val = df.iloc[row_idx, col_idx]
-                    if pd.notna(val) and not isinstance(val, str):
-                        value = float(val)
+                for item in batch:
+                    # Check if exists
+                    cursor.execute("""
+                        SELECT value FROM potentials_forecast_metrics
+                        WHERE organization_id = %s AND date = %s AND metric_name = %s
+                    """, (org_id, item["date"], item["metric"]))
+                    existing = cursor.fetchone()
 
-                        # Check if exists
+                    if existing is None:
                         cursor.execute("""
-                            SELECT value FROM potentials_forecast_metrics
+                            INSERT INTO potentials_forecast_metrics
+                            (organization_id, date, metric_name, value, source_file)
+                            VALUES (%s, %s, %s, %s, %s)
+                        """, (org_id, item["date"], item["metric"], item["value"], file.filename))
+                        added += 1
+                    elif abs(float(existing['value'] or 0) - item["value"]) > 0.001:
+                        cursor.execute("""
+                            UPDATE potentials_forecast_metrics
+                            SET value = %s, updated_at = NOW(), source_file = %s
                             WHERE organization_id = %s AND date = %s AND metric_name = %s
-                        """, (org_id, date_str, metric_name))
-                        existing = cursor.fetchone()
+                        """, (item["value"], file.filename, org_id, item["date"], item["metric"]))
+                        updated += 1
 
-                        if existing is None:
-                            cursor.execute("""
-                                INSERT INTO potentials_forecast_metrics
-                                (organization_id, date, metric_name, value, source_file)
-                                VALUES (%s, %s, %s, %s, %s)
-                            """, (org_id, date_str, metric_name, value, file.filename))
-                            added += 1
-                        elif abs(float(existing['value'] or 0) - value) > 0.001:
-                            cursor.execute("""
-                                UPDATE potentials_forecast_metrics
-                                SET value = %s, updated_at = NOW(), source_file = %s
-                                WHERE organization_id = %s AND date = %s AND metric_name = %s
-                            """, (value, file.filename, org_id, date_str, metric_name))
-                            updated += 1
+                # Commit batch
+                conn.commit()
 
             # Import group rooms
             groups_imported = import_group_rooms_from_df(cursor, df, dates, org_id, file.filename)
@@ -706,6 +738,9 @@ async def upload_forecast(file: UploadFile = File(...), current_user: dict = Dep
             """, (org_id, file.filename, "forecast", added, updated))
 
             conn.commit()
+
+            # Delete dataframe to free memory
+            del df
 
             return {
                 "status": "ok",
