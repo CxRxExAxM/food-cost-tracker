@@ -159,7 +159,7 @@ Be concise and focus on answering the specific question asked.
 """
 
 
-async def run_agent(messages: List[Dict], org_id: int, conn) -> Dict:
+def run_agent(messages: List[Dict], org_id: int, conn) -> Dict:
     """
     Run the chat agent loop.
 

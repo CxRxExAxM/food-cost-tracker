@@ -31,7 +31,7 @@ class ChatResponse(BaseModel):
 
 
 @router.post("", response_model=ChatResponse)
-async def chat(
+def chat(
     request: ChatRequest,
     current_user: dict = Depends(get_current_user),
 ):
@@ -79,7 +79,7 @@ async def chat(
             history = get_recent_messages(conn=conn, session_id=session["id"], limit=10)
 
             # Run agent
-            result = await run_agent(
+            result = run_agent(
                 messages=history,
                 org_id=org_id,
                 conn=conn
