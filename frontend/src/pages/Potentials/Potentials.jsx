@@ -903,24 +903,37 @@ function UploadModal({ isOpen, onClose, onUploadComplete }) {
           headers: { 'Authorization': `Bearer ${token}` },
           body: formData
         });
+
+        // Check status before trying to parse JSON
+        if (!res.ok) {
+          let errorMessage = `Upload failed (${res.status})`;
+          try {
+            const data = await res.json();
+            errorMessage = data.detail || errorMessage;
+          } catch {
+            // If JSON parse fails, try to get text
+            const text = await res.text();
+            if (text) errorMessage = text.substring(0, 200);
+          }
+          newResults.push({ file: file.name, status: 'error', message: errorMessage });
+          continue;
+        }
+
+        // Parse successful response
         const data = await res.json();
 
-        if (res.ok) {
-          if (isHitlist) {
-            newResults.push({
-              file: file.name,
-              status: 'success',
-              message: `${data.events_added} events added, ${data.events_skipped} skipped`
-            });
-          } else {
-            newResults.push({
-              file: file.name,
-              status: 'success',
-              message: `${data.metrics_added} added, ${data.metrics_updated} updated`
-            });
-          }
+        if (isHitlist) {
+          newResults.push({
+            file: file.name,
+            status: 'success',
+            message: `${data.events_added} events added, ${data.events_skipped} skipped`
+          });
         } else {
-          newResults.push({ file: file.name, status: 'error', message: data.detail });
+          newResults.push({
+            file: file.name,
+            status: 'success',
+            message: `${data.metrics_added} added, ${data.metrics_updated} updated`
+          });
         }
       } catch (err) {
         newResults.push({ file: file.name, status: 'error', message: err.message });
