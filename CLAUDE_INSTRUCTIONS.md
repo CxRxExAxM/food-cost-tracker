@@ -434,6 +434,110 @@ Test these regularly:
 
 ---
 
+## Natural Language Reporting (Chat Agent)
+
+### Overview
+Conversational AI interface for querying potentials, forecasts, and events data using Claude Haiku 4.5.
+
+### Key Components
+
+**Backend (`api/app/services/chat_agent.py`):**
+- Tool-based agent using Anthropic SDK
+- 7 tools for querying forecast, events, and potentials data
+- Session-based conversation history (last 10 messages)
+- Returns structured responses: text, html, table, charts
+
+**Frontend (`frontend/src/components/Chat/`):**
+- Slide-out panel (800px wide)
+- Markdown and HTML rendering support
+- Table and chart renderers for structured data
+- Message persistence per session
+
+### Agent Tools
+
+1. `get_forecast_summary` - Occupancy, ADR, rooms metrics
+2. `get_upcoming_events` - Events/BEOs with filtering
+3. `get_event_detail` - Specific event lookup
+4. `get_daily_summary` - Combined forecast + events by day
+5. `compare_periods` - Period-over-period comparison
+6. `get_groups_summary` - Group-level analytics
+7. `get_high_aloo_periods` - Large group ALOO identification
+
+### Data Fields Available
+
+**Forecast Metrics:**
+- `forecasted_rooms`, `occupancy_pct`, `adr`
+- `adults_children` (IHG - In-House Guests)
+- `kids` (children count)
+- `leisure_guests` (transient_rooms × 2.5) - **Added Mar 2026**
+- `arrivals`, `departures`
+
+**Event Data:**
+- Catered covers by meal period (breakfast/lunch/dinner/reception)
+- Group names, venues, times, attendees
+- Notes field (user-added operational context)
+
+### Response Types
+
+**Text (Markdown):**
+```python
+return {"text": "markdown text", "render_type": "text", "render_data": {}}
+```
+
+**HTML (Custom Styling):**
+```python
+return {"text": "<div>...</div>", "render_type": "html", "render_data": {}}
+```
+
+**Table:**
+```python
+return {
+    "text": "Summary text",
+    "render_type": "table",
+    "render_data": {"columns": [...], "rows": [...]}
+}
+```
+
+**Charts:**
+```python
+return {
+    "text": "Chart description",
+    "render_type": "line_chart" | "bar_chart" | "comparison_bar",
+    "render_data": {"labels": [...], "datasets": [...]}
+}
+```
+
+### HTML Renderer Classes
+
+Pre-styled classes for rich reports:
+- `.metric-card` - Display key metrics
+- `.report-section` - Styled content blocks
+- `.highlight` - Highlighted text
+- `.positive` / `.negative` - Color-coded values
+
+### Adding New Tools
+
+1. Define tool schema in `TOOLS` array
+2. Add case to `execute_tool()` dispatcher
+3. Implement query function (use `build_daily_summary` for consistency)
+4. Update tool description to list available fields
+
+### Current Limitations
+
+- Read-only access (no write tools)
+- Synchronous execution (Anthropic SDK is sync)
+- Session history limited to 10 messages
+- Requires `ANTHROPIC_API_KEY` environment variable
+
+### Future Enhancements (Planned)
+
+See Notion: "Phase 2 — Group Resume Ingestion & Automated Daily Briefs"
+- Write tools (add notes to events)
+- Document ingestion (group resumes)
+- Automated daily operational briefs
+
+---
+
 ## Questions to Ask User
 
 Before making significant changes, confirm:
