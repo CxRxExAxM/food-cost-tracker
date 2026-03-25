@@ -164,6 +164,7 @@ def build_daily_summary(cursor, org_id: int, start_date: str = None, end_date: s
             "adr": round(metrics.get("adr", 0), 2) if metrics.get("adr") else None,
             "adults_children": int(metrics.get("adults_children_forecast", 0)) or None,
             "kids": int(metrics.get("children_otb", 0)) or 0,
+            "leisure_guests": int(metrics.get("transient_rooms_otb", 0) * 2.5) if metrics.get("transient_rooms_otb") else None,
             "has_forecast": has_forecast,
 
             # F&B metrics from events
@@ -671,6 +672,7 @@ async def upload_forecast(file: UploadFile = File(...), current_user: dict = Dep
             17: "adults_children_otb",
             18: "adults_children_forecast",
             19: "children_otb",
+            156: "transient_rooms_otb",  # Transient rooms occupied (for leisure guest calc)
         }
 
         # Extract all metrics into lightweight structure before DB operations
