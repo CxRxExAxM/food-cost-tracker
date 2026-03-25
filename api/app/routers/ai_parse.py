@@ -269,11 +269,33 @@ async def parse_recipe_file(
                 conn
             )
 
-            # Determine if needs review
-            needs_review = len(matches) == 0 or (len(matches) > 0 and matches[0]['confidence'] < 0.95)
+            # Determine auto-match based on match type and confidence
+            # - exact/fuzzy: >= 0.95 confidence
+            # - semantic: >= 0.60 confidence (semantic matches are reliable at lower thresholds)
+            auto_matched_id = None
+            auto_matched_name = None
+            auto_match_type = None
 
-            if matches and matches[0]['confidence'] >= 0.95:
-                ingredients_matched += 1
+            if matches:
+                top_match = matches[0]
+                match_type = top_match.get('match_type', '')
+                confidence = top_match['confidence']
+
+                # Semantic matches are reliable at lower confidence thresholds
+                if match_type == 'semantic' and confidence >= 0.60:
+                    auto_matched_id = top_match['common_product_id']
+                    auto_matched_name = top_match['common_name']
+                    auto_match_type = 'semantic'
+                    ingredients_matched += 1
+                # Exact, contains, and fuzzy matches need higher confidence
+                elif match_type in ('exact', 'contains_in_product', 'product_in_ingredient', 'fuzzy') and confidence >= 0.95:
+                    auto_matched_id = top_match['common_product_id']
+                    auto_matched_name = top_match['common_name']
+                    auto_match_type = match_type
+                    ingredients_matched += 1
+
+            # Needs review if no auto-match was made
+            needs_review = auto_matched_id is None
 
             parsed_ingredients.append(ParsedIngredient(
                 parsed_name=ing_data['name'],
@@ -287,7 +309,10 @@ async def parse_recipe_file(
                 suggested_products=[
                     ProductMatch(**match) for match in matches
                 ],
-                needs_review=needs_review
+                needs_review=needs_review,
+                auto_matched_product_id=auto_matched_id,
+                auto_matched_product_name=auto_matched_name,
+                auto_match_type=auto_match_type
             ))
 
         # Process yield

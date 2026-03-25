@@ -373,6 +373,10 @@ class ParsedIngredient(BaseModel):
     prep_note: Optional[str] = None
     suggested_products: List[ProductMatch] = []
     needs_review: bool = Field(..., description="True if no confident match found")
+    # Auto-match fields - populated when confidence is high enough
+    auto_matched_product_id: Optional[int] = Field(None, description="Auto-selected product ID if confident match")
+    auto_matched_product_name: Optional[str] = Field(None, description="Auto-selected product name")
+    auto_match_type: Optional[str] = Field(None, description="How the match was made: exact, fuzzy, semantic")
 
 
 class YieldInfo(BaseModel):
