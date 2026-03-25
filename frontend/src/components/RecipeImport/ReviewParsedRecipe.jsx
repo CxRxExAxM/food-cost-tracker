@@ -19,9 +19,11 @@ export default function ReviewParsedRecipe({ parseResult, outletId, onClose }) {
     setCreating(true);
 
     try {
-      // Create recipe with all ingredients as text-only (unmapped)
+      // Create recipe - use auto-matched product IDs where available
       const ingredients = parseResult.ingredients.map(ing => ({
-        ingredient_name: ing.parsed_name,
+        // Use common_product_id if auto-matched, otherwise use text name
+        common_product_id: ing.auto_matched_product_id || null,
+        ingredient_name: ing.auto_matched_product_id ? null : ing.parsed_name,
         quantity: ing.normalized_quantity,
         unit_id: ing.normalized_unit_id,
         notes: ing.prep_note
@@ -151,18 +153,29 @@ export default function ReviewParsedRecipe({ parseResult, outletId, onClose }) {
             <div className="ingredients-header">
               <div className="ingredients-count">
                 Ingredients ({parseResult.ingredients.length})
+                <span className="ingredients-matched-count">
+                  {' '}• {parseResult.ingredients.filter(i => i.auto_matched_product_id).length} auto-matched
+                </span>
               </div>
               <div className="ingredients-mapping-note">
-                Product mapping available after saving
+                Unmatched items can be mapped after saving
               </div>
             </div>
 
             <div className="ingredients-list-container">
               {parseResult.ingredients.map((ingredient, idx) => (
-                <div key={idx} className="ingredient-display-row">
+                <div
+                  key={idx}
+                  className={`ingredient-display-row ${ingredient.auto_matched_product_id ? 'ingredient-matched' : 'ingredient-unmatched'}`}
+                >
                   <div className="ingredient-display-info">
                     <div className="ingredient-display-name">
                       {ingredient.parsed_name}
+                      {ingredient.auto_matched_product_id && (
+                        <span className="ingredient-match-indicator" title={`Matched via ${ingredient.auto_match_type}`}>
+                          {' '}→ {ingredient.auto_matched_product_name}
+                        </span>
+                      )}
                     </div>
                     {ingredient.prep_note && (
                       <div className="ingredient-display-prep">

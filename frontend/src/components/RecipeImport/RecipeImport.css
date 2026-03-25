@@ -667,3 +667,35 @@
   background: var(--bg-elevated);
   border-color: var(--border-subtle);
 }
+
+/* ============================================ */
+/* Auto-Match Indicators */
+/* ============================================ */
+
+.ingredients-matched-count {
+  font-size: 0.875rem;
+  font-weight: 400;
+  color: var(--color-green, #10b981);
+}
+
+.ingredient-display-row.ingredient-matched {
+  border-left: 3px solid var(--color-green, #10b981);
+  padding-left: calc(0.75rem - 3px);
+  margin-left: 0;
+}
+
+.ingredient-display-row.ingredient-unmatched {
+  border-left: 3px solid var(--color-orange, #f59e0b);
+  padding-left: calc(0.75rem - 3px);
+  margin-left: 0;
+}
+
+.ingredient-match-indicator {
+  font-weight: 400;
+  color: var(--color-green, #10b981);
+  font-size: 0.875rem;
+}
+
+.ingredient-match-indicator::before {
+  content: '';
+}
