@@ -271,7 +271,7 @@ async def parse_recipe_file(
 
             # Determine auto-match based on match type and confidence
             # - exact/fuzzy: >= 0.95 confidence
-            # - semantic: >= 0.60 confidence (semantic matches are reliable at lower thresholds)
+            # - semantic: >= 0.70 confidence (must be high quality to auto-select)
             auto_matched_id = None
             auto_matched_name = None
             auto_match_type = None
@@ -281,8 +281,8 @@ async def parse_recipe_file(
                 match_type = top_match.get('match_type', '')
                 confidence = top_match['confidence']
 
-                # Semantic matches are reliable at lower confidence thresholds
-                if match_type == 'semantic' and confidence >= 0.60:
+                # Semantic matches need higher threshold to avoid false positives
+                if match_type == 'semantic' and confidence >= 0.70:
                     auto_matched_id = top_match['common_product_id']
                     auto_matched_name = top_match['common_name']
                     auto_match_type = 'semantic'
