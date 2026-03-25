@@ -6,6 +6,7 @@ and pgvector for similarity search.
 """
 import os
 import logging
+import time
 from typing import List, Dict, Any, Optional, Tuple
 import voyageai
 
@@ -92,13 +93,14 @@ def embed_common_product(cursor, product_id: int, common_name: str) -> bool:
         return False
 
 
-def embed_all_common_products(cursor, batch_size: int = 100) -> Tuple[int, int]:
+def embed_all_common_products(cursor, batch_size: int = 100, delay_seconds: float = 0.5) -> Tuple[int, int]:
     """
     Backfill embeddings for all common_products that don't have one.
 
     Args:
         cursor: Database cursor
-        batch_size: Number of products to process at a time
+        batch_size: Number of products to process before logging progress
+        delay_seconds: Delay between API calls to avoid rate limiting
 
     Returns:
         Tuple of (successful_count, failed_count)
@@ -122,8 +124,13 @@ def embed_all_common_products(cursor, batch_size: int = 100) -> Tuple[int, int]:
             fail_count += 1
 
         # Log progress
-        if (success_count + fail_count) % batch_size == 0:
-            logger.info(f"Embedded {success_count + fail_count}/{len(products)} products")
+        total = success_count + fail_count
+        if total % batch_size == 0:
+            logger.info(f"Embedded {total}/{len(products)} products ({success_count} success, {fail_count} failed)")
+
+        # Rate limiting delay
+        if delay_seconds > 0:
+            time.sleep(delay_seconds)
 
     return success_count, fail_count
 

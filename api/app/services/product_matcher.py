@@ -2,11 +2,15 @@
 Product matching algorithm for AI recipe parser.
 
 Matches parsed ingredient names to existing common products using
-exact matching, fuzzy matching, and semantic similarity.
+exact matching, fuzzy matching, and semantic similarity (pgvector).
 """
 
+import os
 from difflib import SequenceMatcher
 from typing import List, Dict, Optional
+
+# Check if semantic search is available
+SEMANTIC_SEARCH_ENABLED = bool(os.getenv("VOYAGE_API_KEY"))
 
 
 def match_products(
@@ -22,6 +26,7 @@ def match_products(
     1. Exact match (case-insensitive)
     2. Contains match (ingredient in product name or vice versa)
     3. Fuzzy match (similarity > 0.7)
+    4. Semantic search (pgvector + Voyage AI) - if enabled and no good matches found
 
     Args:
         ingredient_name: Parsed ingredient name from recipe
@@ -119,8 +124,45 @@ def match_products(
                 'match_type': 'fuzzy'
             })
 
-    # Sort by confidence (highest first), return top N
+    # Sort by confidence (highest first)
     matches.sort(key=lambda x: x['confidence'], reverse=True)
+
+    # Strategy 4: Semantic search fallback
+    # If no good matches from string matching, try semantic search
+    if SEMANTIC_SEARCH_ENABLED and (not matches or matches[0]['confidence'] < 0.8):
+        try:
+            from ..utils.embeddings import search_similar_products
+
+            semantic_results = search_similar_products(
+                cursor,
+                query_text=ingredient_name,
+                organization_id=organization_id,
+                limit=max_results,
+                threshold=0.5  # Lower threshold for suggestions
+            )
+
+            for result in semantic_results:
+                # Check if already in matches (avoid duplicates)
+                if any(m['common_product_id'] == result['id'] for m in matches):
+                    continue
+
+                matches.append({
+                    'common_product_id': result['id'],
+                    'common_name': result['common_name'],
+                    'category': result['category'],
+                    'subcategory': result['subcategory'],
+                    'confidence': result['similarity_score'],
+                    'exact_match': False,
+                    'match_type': 'semantic'
+                })
+
+            # Re-sort after adding semantic matches
+            matches.sort(key=lambda x: x['confidence'], reverse=True)
+
+        except Exception:
+            # Semantic search failed, continue with string matches only
+            pass
+
     return matches[:max_results]
 
 
