@@ -759,6 +759,140 @@
 .ingredient-skipped-note {
   font-size: 0.75rem;
   color: var(--text-tertiary);
-  font-style: italic;
   margin-top: 0.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.skipped-edit-btn {
+  background: none;
+  border: none;
+  color: var(--color-yellow);
+  font-size: 0.75rem;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.skipped-edit-btn:hover {
+  color: var(--color-yellow-bright);
+}
+
+/* Clickable match indicator button */
+.ingredient-match-btn {
+  background: none;
+  border: none;
+  color: var(--color-green, #10b981);
+  font-weight: 400;
+  cursor: pointer;
+  padding: 0;
+  font-size: inherit;
+  transition: all 0.15s;
+}
+
+.ingredient-match-btn:hover {
+  color: var(--color-yellow);
+  text-decoration: underline;
+}
+
+/* Inline edit panel */
+.ingredient-edit-panel {
+  margin-top: 0.5rem;
+  padding: 0.75rem;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+}
+
+.edit-search-row {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.edit-search-input {
+  flex: 1;
+  padding: 0.5rem;
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  font-size: 0.875rem;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.edit-search-input:focus {
+  outline: none;
+  border-color: var(--color-yellow);
+}
+
+.edit-cancel-btn {
+  padding: 0.5rem 0.75rem;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.edit-cancel-btn:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.edit-results-list {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.edit-results-label {
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  padding: 0.25rem 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.edit-result-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  padding: 0.5rem;
+  background: none;
+  border: none;
+  border-radius: 4px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.edit-result-item:hover {
+  background: var(--bg-tertiary);
+}
+
+.edit-result-name {
+  color: var(--text-primary);
+  font-size: 0.875rem;
+}
+
+.edit-result-confidence {
+  color: var(--text-tertiary);
+  font-size: 0.75rem;
+}
+
+.edit-result-category {
+  color: var(--text-tertiary);
+  font-size: 0.75rem;
+}
+
+.edit-skip-item {
+  border-top: 1px solid var(--border-subtle);
+  margin-top: 0.5rem;
+  padding-top: 0.75rem;
+}
+
+.edit-skip-item .edit-result-name {
+  color: var(--text-secondary);
+  font-style: italic;
 }

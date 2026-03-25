@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '../../contexts/ToastContext';
-import { createRecipeFromParse } from '../../services/aiParseService';
+import { createRecipeFromParse, searchProducts } from '../../services/aiParseService';
 import './RecipeImport.css';
 
 export default function ReviewParsedRecipe({ parseResult, outletId, onClose }) {
@@ -16,8 +16,71 @@ export default function ReviewParsedRecipe({ parseResult, outletId, onClose }) {
   // Key: ingredient index, Value: { product_id, product_name } or null (skipped)
   const [userSelections, setUserSelections] = useState({});
 
+  // Track which ingredient row is in edit/search mode
+  const [editingIdx, setEditingIdx] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const searchInputRef = useRef(null);
+
   const navigate = useNavigate();
   const toast = useToast();
+
+  // Focus search input when opening edit mode
+  useEffect(() => {
+    if (editingIdx !== null && searchInputRef.current) {
+      searchInputRef.current.focus();
+    }
+  }, [editingIdx]);
+
+  // Debounced search
+  useEffect(() => {
+    if (!searchQuery.trim() || editingIdx === null) {
+      setSearchResults([]);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const results = await searchProducts(searchQuery);
+        // Results come as array of products
+        setSearchResults(results.products || results || []);
+      } catch (err) {
+        console.error('Search error:', err);
+        setSearchResults([]);
+      }
+      setSearching(false);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery, editingIdx]);
+
+  // Open edit mode for an ingredient
+  const handleOpenEdit = (idx, ingredient) => {
+    setEditingIdx(idx);
+    setSearchQuery(ingredient.parsed_name);
+    setSearchResults([]);
+  };
+
+  // Close edit mode
+  const handleCloseEdit = () => {
+    setEditingIdx(null);
+    setSearchQuery('');
+    setSearchResults([]);
+  };
+
+  // Select a product from search or suggestions
+  const handleSelectProduct = (idx, product) => {
+    setUserSelections(prev => ({
+      ...prev,
+      [idx]: {
+        product_id: product.common_product_id || product.id,
+        product_name: product.common_name
+      }
+    }));
+    handleCloseEdit();
+  };
 
   // Handle user accepting a suggestion
   const handleAcceptSuggestion = (idx, product) => {
@@ -216,7 +279,8 @@ export default function ReviewParsedRecipe({ parseResult, outletId, onClose }) {
                 const isMatched = effectiveMatch && effectiveMatch.product_id;
                 const wasSkipped = idx in userSelections && userSelections[idx] === null;
                 const topSuggestion = ingredient.suggested_products?.[0];
-                const showSuggestion = !isMatched && !wasSkipped && topSuggestion;
+                const showSuggestion = !isMatched && !wasSkipped && topSuggestion && editingIdx !== idx;
+                const isEditing = editingIdx === idx;
 
                 return (
                   <div
@@ -226,10 +290,15 @@ export default function ReviewParsedRecipe({ parseResult, outletId, onClose }) {
                     <div className="ingredient-display-info">
                       <div className="ingredient-display-name">
                         {ingredient.parsed_name}
-                        {isMatched && (
-                          <span className="ingredient-match-indicator">
-                            {' '}→ {effectiveMatch.product_name}
-                          </span>
+                        {isMatched && !isEditing && (
+                          <button
+                            type="button"
+                            className="ingredient-match-btn"
+                            onClick={() => handleOpenEdit(idx, ingredient)}
+                            title="Click to change"
+                          >
+                            → {effectiveMatch.product_name}
+                          </button>
                         )}
                       </div>
                       {ingredient.prep_note && (
@@ -237,6 +306,90 @@ export default function ReviewParsedRecipe({ parseResult, outletId, onClose }) {
                           {ingredient.prep_note}
                         </div>
                       )}
+
+                      {/* Inline product selector when editing */}
+                      {isEditing && (
+                        <div className="ingredient-edit-panel">
+                          <div className="edit-search-row">
+                            <input
+                              ref={searchInputRef}
+                              type="text"
+                              className="edit-search-input"
+                              placeholder="Search products..."
+                              value={searchQuery}
+                              onChange={(e) => setSearchQuery(e.target.value)}
+                            />
+                            <button
+                              type="button"
+                              className="edit-cancel-btn"
+                              onClick={handleCloseEdit}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+
+                          <div className="edit-results-list">
+                            {/* Show suggestions first if no search query */}
+                            {!searchQuery.trim() && ingredient.suggested_products?.length > 0 && (
+                              <>
+                                <div className="edit-results-label">Suggestions:</div>
+                                {ingredient.suggested_products.map((prod, pIdx) => (
+                                  <button
+                                    key={pIdx}
+                                    type="button"
+                                    className="edit-result-item"
+                                    onClick={() => handleSelectProduct(idx, prod)}
+                                  >
+                                    <span className="edit-result-name">{prod.common_name}</span>
+                                    <span className="edit-result-confidence">{Math.round(prod.confidence * 100)}%</span>
+                                  </button>
+                                ))}
+                              </>
+                            )}
+
+                            {/* Show search results */}
+                            {searchQuery.trim() && (
+                              <>
+                                {searching && <div className="edit-results-label">Searching...</div>}
+                                {!searching && searchResults.length === 0 && (
+                                  <div className="edit-results-label">No results found</div>
+                                )}
+                                {!searching && searchResults.length > 0 && (
+                                  <>
+                                    <div className="edit-results-label">Search results:</div>
+                                    {searchResults.slice(0, 10).map((prod, pIdx) => (
+                                      <button
+                                        key={pIdx}
+                                        type="button"
+                                        className="edit-result-item"
+                                        onClick={() => handleSelectProduct(idx, prod)}
+                                      >
+                                        <span className="edit-result-name">{prod.common_name}</span>
+                                        {prod.category && (
+                                          <span className="edit-result-category">{prod.category}</span>
+                                        )}
+                                      </button>
+                                    ))}
+                                  </>
+                                )}
+                              </>
+                            )}
+
+                            {/* Skip option */}
+                            <button
+                              type="button"
+                              className="edit-result-item edit-skip-item"
+                              onClick={() => {
+                                handleSkipSuggestion(idx);
+                                handleCloseEdit();
+                              }}
+                            >
+                              <span className="edit-result-name">Skip - save as text</span>
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
                       {/* "Did you mean?" suggestion for unmatched items */}
                       {showSuggestion && (
                         <div className="ingredient-suggestion">
@@ -253,15 +406,22 @@ export default function ReviewParsedRecipe({ parseResult, outletId, onClose }) {
                           <button
                             type="button"
                             className="suggestion-btn suggestion-skip"
-                            onClick={() => handleSkipSuggestion(idx)}
+                            onClick={() => handleOpenEdit(idx, ingredient)}
                           >
-                            Skip
+                            Search
                           </button>
                         </div>
                       )}
-                      {wasSkipped && (
+                      {wasSkipped && !isEditing && (
                         <div className="ingredient-skipped-note">
-                          Will save as text (map later)
+                          <span>Will save as text</span>
+                          <button
+                            type="button"
+                            className="skipped-edit-btn"
+                            onClick={() => handleOpenEdit(idx, ingredient)}
+                          >
+                            Map now
+                          </button>
                         </div>
                       )}
                     </div>
