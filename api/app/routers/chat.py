@@ -10,9 +10,9 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from api.app.auth import get_current_user
-from api.app.database import get_db
-from api.app.services.chat_agent import run_agent, get_or_create_session, save_message, get_recent_messages
+from ..auth import get_current_user
+from ..database import get_db
+from ..services.chat_agent import run_agent, get_or_create_session, save_message, get_recent_messages
 
 
 router = APIRouter(prefix="/chat", tags=["chat"])

@@ -12,9 +12,7 @@ from typing import Dict, List, Optional, Any
 import anthropic
 
 # Import shared potentials functions
-import sys
-sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from routers.potentials import build_daily_summary
+from ..routers.potentials import build_daily_summary
 
 
 # Tool definitions for Claude

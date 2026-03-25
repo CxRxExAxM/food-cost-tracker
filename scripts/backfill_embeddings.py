@@ -1,0 +1,65 @@
+#!/usr/bin/env python3
+"""
+Backfill embeddings for all common_products.
+
+Run from project root:
+    python scripts/backfill_embeddings.py
+
+Requires:
+    - VOYAGE_API_KEY environment variable
+    - DATABASE_URL environment variable (or local SQLite fallback)
+"""
+import os
+import sys
+
+# Add parent directory to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from api.app.database import get_db
+from api.app.utils.embeddings import embed_all_common_products
+import logging
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+
+def main():
+    # Check for API key
+    if not os.getenv("VOYAGE_API_KEY"):
+        logger.error("VOYAGE_API_KEY environment variable not set")
+        sys.exit(1)
+
+    logger.info("Starting embedding backfill for common_products...")
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Check how many need embedding
+        cursor.execute("""
+            SELECT COUNT(*) as total,
+                   COUNT(embedding) as with_embedding
+            FROM common_products
+            WHERE is_active = 1
+        """)
+        stats = cursor.fetchone()
+        total = stats['total']
+        existing = stats['with_embedding']
+
+        logger.info(f"Found {total} active common_products, {existing} already have embeddings")
+
+        if total == existing:
+            logger.info("All products already have embeddings. Nothing to do.")
+            return
+
+        # Run backfill
+        success, failed = embed_all_common_products(cursor)
+        conn.commit()
+
+        logger.info(f"Backfill complete: {success} succeeded, {failed} failed")
+
+
+if __name__ == "__main__":
+    main()

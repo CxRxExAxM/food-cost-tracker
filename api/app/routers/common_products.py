@@ -1,13 +1,18 @@
 from fastapi import APIRouter, HTTPException, Query, Depends, Request, Body
-from typing import Optional
+from typing import Optional, List
 from ..database import get_db, dicts_from_rows, dict_from_row
 from ..schemas import CommonProduct, CommonProductCreate, CommonProductUpdate, QuickCreateProductRequest, QuickCreateProductResponse, MergeCommonProductsRequest, MergeCommonProductsResponse
 from ..auth import get_current_user
 from ..audit import log_audit
 from ..config import DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT_LARGE
 from ..logger import get_logger
+from ..utils.embeddings import search_similar_products, embed_common_product
+import os
 
 logger = get_logger(__name__)
+
+# Check if embeddings are enabled (requires VOYAGE_API_KEY)
+EMBEDDINGS_ENABLED = bool(os.getenv("VOYAGE_API_KEY"))
 
 router = APIRouter(prefix="/common-products", tags=["common-products"])
 
@@ -28,6 +33,49 @@ def get_categories(current_user: dict = Depends(get_current_user)):
         """, (current_user["organization_id"],))
         rows = cursor.fetchall()
         return [row["category"] for row in rows]
+
+
+@router.get("/search/semantic")
+def semantic_search(
+    query: str = Query(..., min_length=2, description="Text to search for"),
+    limit: int = Query(5, ge=1, le=20, description="Max results to return"),
+    threshold: float = Query(0.3, ge=0.0, le=1.0, description="Min similarity score"),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Semantic search for common products using embeddings.
+
+    Unlike text search, this finds products by meaning, not exact text match.
+    Example: searching "heavy cream" will find "Cream 36% Heavy Whipping".
+
+    Requires OPENAI_API_KEY environment variable to be set.
+    """
+    if not EMBEDDINGS_ENABLED:
+        raise HTTPException(
+            status_code=503,
+            detail="Semantic search not available - VOYAGE_API_KEY not configured"
+        )
+
+    try:
+        with get_db() as conn:
+            cursor = conn.cursor()
+            results = search_similar_products(
+                cursor,
+                query_text=query,
+                organization_id=current_user["organization_id"],
+                limit=limit,
+                threshold=threshold
+            )
+            return {
+                "query": query,
+                "results": results,
+                "count": len(results)
+            }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Semantic search failed: {e}")
+        raise HTTPException(status_code=500, detail="Search failed")
 
 
 @router.get("")
@@ -181,6 +229,14 @@ def create_common_product(common_product: CommonProductCreate, current_user: dic
         ))
 
         result = dict_from_row(cursor.fetchone())
+
+        # Generate embedding for semantic search (non-blocking, failure OK)
+        if EMBEDDINGS_ENABLED:
+            try:
+                embed_common_product(cursor, result['id'], common_product.common_name)
+            except Exception as e:
+                logger.warning(f"Failed to generate embedding for product {result['id']}: {e}")
+
         conn.commit()
 
         return result
@@ -823,6 +879,15 @@ def quick_create_common_product(
 
             result = cursor.fetchone()
             logger.debug(f"quick_create: Product created with ID: {result['id']}")
+
+            # Generate embedding for semantic search (non-blocking, failure OK)
+            if EMBEDDINGS_ENABLED:
+                try:
+                    embed_common_product(cursor, result['id'], product.common_name)
+                    logger.debug(f"quick_create: Embedding generated")
+                except Exception as e:
+                    logger.warning(f"quick_create: Failed to generate embedding: {e}")
+
             conn.commit()
             logger.debug(f"quick_create: Committed to database")
 
