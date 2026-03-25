@@ -11,6 +11,11 @@ from datetime import datetime, date, timedelta
 from typing import Dict, List, Optional, Any
 import anthropic
 
+# Import shared potentials functions
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+from routers.potentials import build_daily_summary
+
 
 # Tool definitions for Claude
 TOOLS = [
@@ -75,7 +80,7 @@ TOOLS = [
     },
     {
         "name": "get_daily_summary",
-        "description": "Get combined forecast and events summary by day for a date range.",
+        "description": "Get combined forecast and events summary by day for a date range. Returns occupancy, rooms, IHG (adults_children), kids, leisure_guests, catered covers by meal period (breakfast/lunch/dinner/reception), ALOO, and event counts.",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -497,52 +502,14 @@ def get_event_detail(conn, org_id: int, event_identifier: str) -> Dict:
 
 
 def get_daily_summary(conn, org_id: int, start_date: str, end_date: str) -> Dict:
-    """Get daily summary combining forecast and events."""
+    """Get daily summary combining forecast and events.
+
+    Uses shared build_daily_summary function to ensure consistency
+    with REST API and includes all fields: occupancy, IHG, kids,
+    leisure_guests, catered meals by period, ALOO, etc.
+    """
     cursor = conn.cursor()
-
-    # Get forecast metrics by day
-    cursor.execute("""
-        SELECT
-            date,
-            MAX(CASE WHEN metric_name = 'occupancy_pct_otb' THEN value END) as occupancy_pct,
-            MAX(CASE WHEN metric_name = 'occupied_rooms_otb' THEN value END) as occupied_rooms,
-            MAX(CASE WHEN metric_name = 'adr' THEN value END) as adr
-        FROM potentials_forecast_metrics
-        WHERE organization_id = %s
-            AND date >= %s AND date <= %s
-        GROUP BY date
-        ORDER BY date
-    """, (org_id, start_date, end_date))
-
-    daily_forecast = {row["date"]: row for row in cursor.fetchall()}
-
-    # Get event counts by day
-    cursor.execute("""
-        SELECT
-            date,
-            COUNT(*) as event_count,
-            SUM(attendees) as total_attendees
-        FROM potentials_events
-        WHERE organization_id = %s
-            AND date >= %s AND date <= %s
-        GROUP BY date
-    """, (org_id, start_date, end_date))
-
-    daily_events = {row["date"]: row for row in cursor.fetchall()}
-
-    # Combine
-    daily_data = []
-    for dt, forecast in daily_forecast.items():
-        events = daily_events.get(dt)
-        daily_data.append({
-            "date": dt.isoformat(),
-            "occupancy_pct": float(forecast["occupancy_pct"]) if forecast["occupancy_pct"] else 0,
-            "occupied_rooms": int(forecast["occupied_rooms"]) if forecast["occupied_rooms"] else 0,
-            "adr": float(forecast["adr"]) if forecast["adr"] else 0,
-            "event_count": events["event_count"] if events else 0,
-            "total_catered_covers": events["total_attendees"] if events and events["total_attendees"] else 0
-        })
-
+    daily_data = build_daily_summary(cursor, org_id, start_date, end_date)
     return {"daily_data": daily_data}
 
 
