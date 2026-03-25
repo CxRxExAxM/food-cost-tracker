@@ -12,22 +12,70 @@ export default function ReviewParsedRecipe({ parseResult, outletId, onClose }) {
   const [yieldUnit, setYieldUnit] = useState(parseResult.yield_info?.unit || '');
   const [creating, setCreating] = useState(false);
 
+  // Track user overrides for unmatched ingredients
+  // Key: ingredient index, Value: { product_id, product_name } or null (skipped)
+  const [userSelections, setUserSelections] = useState({});
+
   const navigate = useNavigate();
   const toast = useToast();
+
+  // Handle user accepting a suggestion
+  const handleAcceptSuggestion = (idx, product) => {
+    setUserSelections(prev => ({
+      ...prev,
+      [idx]: { product_id: product.common_product_id, product_name: product.common_name }
+    }));
+  };
+
+  // Handle user skipping/dismissing a suggestion
+  const handleSkipSuggestion = (idx) => {
+    setUserSelections(prev => ({
+      ...prev,
+      [idx]: null // null means explicitly skipped
+    }));
+  };
+
+  // Get the effective match for an ingredient (user selection > auto-match > none)
+  const getEffectiveMatch = (ingredient, idx) => {
+    // Check user selection first
+    if (idx in userSelections) {
+      return userSelections[idx]; // Could be { product_id, product_name } or null
+    }
+    // Fall back to auto-match
+    if (ingredient.auto_matched_product_id) {
+      return {
+        product_id: ingredient.auto_matched_product_id,
+        product_name: ingredient.auto_matched_product_name
+      };
+    }
+    return undefined; // No match yet, show suggestion if available
+  };
+
+  // Count total matched (auto + user accepted)
+  const getMatchedCount = () => {
+    return parseResult.ingredients.filter((ing, idx) => {
+      const match = getEffectiveMatch(ing, idx);
+      return match && match.product_id;
+    }).length;
+  };
 
   const handleCreateRecipe = async () => {
     setCreating(true);
 
     try {
-      // Create recipe - use auto-matched product IDs where available
-      const ingredients = parseResult.ingredients.map(ing => ({
-        // Use common_product_id if auto-matched, otherwise use text name
-        common_product_id: ing.auto_matched_product_id || null,
-        ingredient_name: ing.auto_matched_product_id ? null : ing.parsed_name,
-        quantity: ing.normalized_quantity,
-        unit_id: ing.normalized_unit_id,
-        notes: ing.prep_note
-      }));
+      // Create recipe - use user selections > auto-matched > text name
+      const ingredients = parseResult.ingredients.map((ing, idx) => {
+        const effectiveMatch = getEffectiveMatch(ing, idx);
+        const productId = effectiveMatch?.product_id || null;
+
+        return {
+          common_product_id: productId,
+          ingredient_name: productId ? null : ing.parsed_name,
+          quantity: ing.normalized_quantity,
+          unit_id: ing.normalized_unit_id,
+          notes: ing.prep_note
+        };
+      });
 
       await createRecipeFromParse({
         parse_id: parseResult.parse_id,
@@ -148,13 +196,13 @@ export default function ReviewParsedRecipe({ parseResult, outletId, onClose }) {
             </div>
           </div>
 
-          {/* Ingredients Section - Read-only Display */}
+          {/* Ingredients Section */}
           <div className="ingredients-section">
             <div className="ingredients-header">
               <div className="ingredients-count">
                 Ingredients ({parseResult.ingredients.length})
                 <span className="ingredients-matched-count">
-                  {' '}• {parseResult.ingredients.filter(i => i.auto_matched_product_id).length} auto-matched
+                  {' '}• {getMatchedCount()} matched
                 </span>
               </div>
               <div className="ingredients-mapping-note">
@@ -163,31 +211,66 @@ export default function ReviewParsedRecipe({ parseResult, outletId, onClose }) {
             </div>
 
             <div className="ingredients-list-container">
-              {parseResult.ingredients.map((ingredient, idx) => (
-                <div
-                  key={idx}
-                  className={`ingredient-display-row ${ingredient.auto_matched_product_id ? 'ingredient-matched' : 'ingredient-unmatched'}`}
-                >
-                  <div className="ingredient-display-info">
-                    <div className="ingredient-display-name">
-                      {ingredient.parsed_name}
-                      {ingredient.auto_matched_product_id && (
-                        <span className="ingredient-match-indicator" title={`Matched via ${ingredient.auto_match_type}`}>
-                          {' '}→ {ingredient.auto_matched_product_name}
-                        </span>
+              {parseResult.ingredients.map((ingredient, idx) => {
+                const effectiveMatch = getEffectiveMatch(ingredient, idx);
+                const isMatched = effectiveMatch && effectiveMatch.product_id;
+                const wasSkipped = idx in userSelections && userSelections[idx] === null;
+                const topSuggestion = ingredient.suggested_products?.[0];
+                const showSuggestion = !isMatched && !wasSkipped && topSuggestion;
+
+                return (
+                  <div
+                    key={idx}
+                    className={`ingredient-display-row ${isMatched ? 'ingredient-matched' : 'ingredient-unmatched'}`}
+                  >
+                    <div className="ingredient-display-info">
+                      <div className="ingredient-display-name">
+                        {ingredient.parsed_name}
+                        {isMatched && (
+                          <span className="ingredient-match-indicator">
+                            {' '}→ {effectiveMatch.product_name}
+                          </span>
+                        )}
+                      </div>
+                      {ingredient.prep_note && (
+                        <div className="ingredient-display-prep">
+                          {ingredient.prep_note}
+                        </div>
+                      )}
+                      {/* "Did you mean?" suggestion for unmatched items */}
+                      {showSuggestion && (
+                        <div className="ingredient-suggestion">
+                          <span className="suggestion-label">Did you mean:</span>
+                          <span className="suggestion-name">{topSuggestion.common_name}</span>
+                          <span className="suggestion-confidence">({Math.round(topSuggestion.confidence * 100)}%)</span>
+                          <button
+                            type="button"
+                            className="suggestion-btn suggestion-yes"
+                            onClick={() => handleAcceptSuggestion(idx, topSuggestion)}
+                          >
+                            Yes
+                          </button>
+                          <button
+                            type="button"
+                            className="suggestion-btn suggestion-skip"
+                            onClick={() => handleSkipSuggestion(idx)}
+                          >
+                            Skip
+                          </button>
+                        </div>
+                      )}
+                      {wasSkipped && (
+                        <div className="ingredient-skipped-note">
+                          Will save as text (map later)
+                        </div>
                       )}
                     </div>
-                    {ingredient.prep_note && (
-                      <div className="ingredient-display-prep">
-                        {ingredient.prep_note}
-                      </div>
-                    )}
+                    <div className="ingredient-display-quantity">
+                      {displayQuantity(ingredient)}
+                    </div>
                   </div>
-                  <div className="ingredient-display-quantity">
-                    {displayQuantity(ingredient)}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>
