@@ -40,6 +40,7 @@ def semantic_search(
     query: str = Query(..., min_length=2, description="Text to search for"),
     limit: int = Query(5, ge=1, le=20, description="Max results to return"),
     threshold: float = Query(0.3, ge=0.0, le=1.0, description="Min similarity score"),
+    debug: bool = Query(False, description="Include debug info in response"),
     current_user: dict = Depends(get_current_user)
 ):
     """
@@ -48,7 +49,7 @@ def semantic_search(
     Unlike text search, this finds products by meaning, not exact text match.
     Example: searching "heavy cream" will find "Cream 36% Heavy Whipping".
 
-    Requires OPENAI_API_KEY environment variable to be set.
+    Requires VOYAGE_API_KEY environment variable to be set.
     """
     if not EMBEDDINGS_ENABLED:
         raise HTTPException(
@@ -59,18 +60,41 @@ def semantic_search(
     try:
         with get_db() as conn:
             cursor = conn.cursor()
+
+            org_id = current_user["organization_id"]
+            logger.info(f"[SEMANTIC] Query='{query}' org_id={org_id} limit={limit} threshold={threshold}")
+
             results = search_similar_products(
                 cursor,
                 query_text=query,
-                organization_id=current_user["organization_id"],
+                organization_id=org_id,
                 limit=limit,
                 threshold=threshold
             )
-            return {
+
+            logger.info(f"[SEMANTIC] Returned {len(results)} results, top: {results[0]['common_name'] if results else 'none'}")
+
+            response = {
                 "query": query,
                 "results": results,
                 "count": len(results)
             }
+
+            if debug:
+                # Add debug info
+                cursor.execute(
+                    "SELECT COUNT(*) as cnt FROM common_products WHERE organization_id = %s AND embedding IS NOT NULL AND is_active = 1",
+                    (org_id,)
+                )
+                emb_count = cursor.fetchone()['cnt']
+                response["debug"] = {
+                    "organization_id": org_id,
+                    "products_with_embeddings": emb_count,
+                    "threshold_used": threshold,
+                    "limit_used": limit
+                }
+
+            return response
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:

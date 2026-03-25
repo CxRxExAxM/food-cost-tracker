@@ -159,6 +159,9 @@ def search_similar_products(
     query_embedding = generate_embedding(query_text, input_type="query")
     embedding_str = format_embedding_for_postgres(query_embedding)
 
+    # Debug: log first few embedding values to verify consistency
+    logger.info(f"[EMBED] query='{query_text}' first_5_values={query_embedding[:5]}")
+
     # pgvector uses cosine distance, so we convert to similarity (1 - distance)
     # Lower distance = more similar, so we order by distance ascending
     # Filter by organization_id for multi-tenant isolation
