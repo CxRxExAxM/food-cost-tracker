@@ -13,6 +13,69 @@ from typing import List, Dict, Optional
 SEMANTIC_SEARCH_ENABLED = bool(os.getenv("VOYAGE_API_KEY"))
 
 
+def normalize_singular(word: str) -> str:
+    """
+    Simple plural-to-singular normalization for ingredient matching.
+
+    Handles common English plural patterns to improve matching:
+    - onions -> onion
+    - tomatoes -> tomato
+    - berries -> berry
+    """
+    word = word.lower().strip()
+
+    # Common irregular plurals in cooking
+    irregulars = {
+        'potatoes': 'potato',
+        'tomatoes': 'tomato',
+        'mangoes': 'mango',
+        'avocados': 'avocado',
+        'jalapenos': 'jalapeno',
+        'chiles': 'chile',
+        'chilis': 'chili',
+        'chilies': 'chile',
+    }
+    if word in irregulars:
+        return irregulars[word]
+
+    # -ies -> -y (berries -> berry)
+    if word.endswith('ies') and len(word) > 4:
+        return word[:-3] + 'y'
+
+    # -es -> remove (dishes -> dish, but not "cheese")
+    if word.endswith('es') and len(word) > 3 and word not in ('cheese', 'grease'):
+        # Check if removing 'es' leaves a valid-looking word
+        base = word[:-2]
+        if base.endswith(('sh', 'ch', 'ss', 'x', 'z')):
+            return base
+        # tomatoes special case handled above
+        # Otherwise try removing just 's'
+        return word[:-1] if word.endswith('s') else word
+
+    # -s -> remove (onions -> onion)
+    if word.endswith('s') and len(word) > 2 and not word.endswith('ss'):
+        return word[:-1]
+
+    return word
+
+
+def get_base_ingredient(name: str) -> str:
+    """
+    Extract the base ingredient word from a name.
+
+    'onions' -> 'onion'
+    'diced onions' -> 'onion'
+    'Onion, White, 1/2" Dice' -> 'onion'
+    """
+    # Get first word before comma (handles "Onion, White" format)
+    base = name.split(',')[0].strip().lower()
+    # Get last word (handles "diced onions" -> "onions")
+    words = base.split()
+    if words:
+        base = words[-1] if len(words) > 1 else words[0]
+    return normalize_singular(base)
+
+
 def match_products(
     ingredient_name: str,
     organization_id: int,
@@ -65,9 +128,11 @@ def match_products(
 
     matches = []
     ingredient_lower = ingredient_name.lower().strip()
+    ingredient_base = get_base_ingredient(ingredient_name)
 
     for product in products:
         product_name_lower = product['common_name'].lower().strip()
+        product_base = get_base_ingredient(product['common_name'])
 
         # Strategy 1: Exact match (case-insensitive)
         if ingredient_lower == product_name_lower:
@@ -79,6 +144,24 @@ def match_products(
                 'confidence': 1.0,
                 'exact_match': True,
                 'match_type': 'exact'
+            })
+            continue
+
+        # Strategy 1.5: Base word match (handles plurals and "Onion, White" format)
+        # "onions" matches "Onion, White, 1/2" Dice" because base words are both "onion"
+        if ingredient_base == product_base and len(ingredient_base) >= 3:
+            # High confidence since the core ingredient matches
+            # Prefer shorter names (simpler products) by boosting based on name length
+            length_factor = min(1.0, 15 / len(product_name_lower))  # Boost shorter names
+            confidence = 0.90 * length_factor  # Base 0.90, adjusted by length
+            matches.append({
+                'common_product_id': product['id'],
+                'common_name': product['common_name'],
+                'category': product['category'],
+                'subcategory': product['subcategory'],
+                'confidence': confidence,
+                'exact_match': False,
+                'match_type': 'base_match'
             })
             continue
 

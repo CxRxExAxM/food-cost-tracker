@@ -182,7 +182,7 @@ def search_similar_products(
               AND is_active = 1
               AND organization_id = %s
               AND 1 - (embedding <=> %s) > %s
-            ORDER BY embedding <=> %s
+            ORDER BY embedding <=> %s, common_name ASC
             LIMIT %s
         """, (embedding_str, organization_id, embedding_str, threshold, embedding_str, limit))
     else:
@@ -198,7 +198,7 @@ def search_similar_products(
             WHERE embedding IS NOT NULL
               AND is_active = 1
               AND 1 - (embedding <=> %s) > %s
-            ORDER BY embedding <=> %s
+            ORDER BY embedding <=> %s, common_name ASC
             LIMIT %s
         """, (embedding_str, embedding_str, threshold, embedding_str, limit))
 

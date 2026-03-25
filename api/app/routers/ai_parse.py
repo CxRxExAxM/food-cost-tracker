@@ -270,8 +270,10 @@ async def parse_recipe_file(
             )
 
             # Determine auto-match based on match type and confidence
-            # - exact/fuzzy: >= 0.95 confidence
-            # - semantic: >= 0.70 confidence (must be high quality to auto-select)
+            # - exact: always (confidence = 1.0)
+            # - base_match: >= 0.85 (core ingredient word matches, e.g., "onions" -> "Onion, White")
+            # - fuzzy/contains: >= 0.95
+            # - semantic: >= 0.70 (must be high quality to auto-select)
             auto_matched_id = None
             auto_matched_name = None
             auto_match_type = None
@@ -281,8 +283,14 @@ async def parse_recipe_file(
                 match_type = top_match.get('match_type', '')
                 confidence = top_match['confidence']
 
+                # Base match handles plurals and "Onion, White" format - reliable at 0.85+
+                if match_type == 'base_match' and confidence >= 0.85:
+                    auto_matched_id = top_match['common_product_id']
+                    auto_matched_name = top_match['common_name']
+                    auto_match_type = 'base_match'
+                    ingredients_matched += 1
                 # Semantic matches need higher threshold to avoid false positives
-                if match_type == 'semantic' and confidence >= 0.70:
+                elif match_type == 'semantic' and confidence >= 0.70:
                     auto_matched_id = top_match['common_product_id']
                     auto_matched_name = top_match['common_name']
                     auto_match_type = 'semantic'
