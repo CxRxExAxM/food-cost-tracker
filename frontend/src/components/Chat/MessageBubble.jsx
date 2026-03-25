@@ -1,6 +1,7 @@
 import TextRenderer from './renderers/TextRenderer';
 import TableRenderer from './renderers/TableRenderer';
 import ChartRenderer from './renderers/ChartRenderer';
+import HTMLRenderer from './renderers/HTMLRenderer';
 import './MessageBubble.css';
 
 export default function MessageBubble({ message }) {
@@ -15,6 +16,8 @@ export default function MessageBubble({ message }) {
     const renderType = message.result_type || 'text';
 
     switch (renderType) {
+      case 'html':
+        return <HTMLRenderer content={message.content} />;
       case 'table':
         return (
           <>
