@@ -162,6 +162,9 @@ def search_similar_products(
     # Debug: log first few embedding values to verify consistency
     logger.info(f"[EMBED] query='{query_text}' first_5_values={query_embedding[:5]}")
 
+    # Increase IVFFlat probes for more accurate results (default is 1, which can miss matches)
+    cursor.execute("SET ivfflat.probes = 10")
+
     # pgvector uses cosine distance, so we convert to similarity (1 - distance)
     # Lower distance = more similar, so we order by distance ascending
     # Filter by organization_id for multi-tenant isolation
