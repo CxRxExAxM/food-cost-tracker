@@ -164,11 +164,9 @@ export default function ReviewParsedRecipe({ parseResult, outletId, onClose }) {
   };
 
   const displayQuantity = (ing) => {
-    const qty = `${ing.quantity} ${ing.unit}`;
-    if (ing.quantity !== ing.normalized_quantity) {
-      return `${qty} (${ing.normalized_quantity} ${ing.normalized_unit})`;
-    }
-    return qty;
+    // Show original quantity and unit (no conversion display)
+    const qty = ing.quantity % 1 === 0 ? ing.quantity : ing.quantity.toFixed(2);
+    return `${qty} ${ing.unit}`;
   };
 
   return (

@@ -26,7 +26,7 @@ from ..schemas import (
 from ..services.file_processor import extract_text_from_file, validate_file_before_parse
 from ..services.recipe_parser import parse_recipe_with_claude, determine_parse_status
 from ..services.product_matcher import match_products
-from ..services.unit_converter import normalize_quantity, format_quantity_for_display
+from ..services.unit_converter import normalize_quantity
 from ..utils.tier_limits import (
     check_parse_limit,
     check_rate_limit,
