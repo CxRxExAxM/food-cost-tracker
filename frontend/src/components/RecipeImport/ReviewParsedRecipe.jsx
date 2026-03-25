@@ -404,6 +404,13 @@ export default function ReviewParsedRecipe({ parseResult, outletId, onClose }) {
                           <button
                             type="button"
                             className="suggestion-btn suggestion-skip"
+                            onClick={() => handleSkipSuggestion(idx)}
+                          >
+                            Skip
+                          </button>
+                          <button
+                            type="button"
+                            className="suggestion-btn suggestion-search"
                             onClick={() => handleOpenEdit(idx, ingredient)}
                           >
                             Search

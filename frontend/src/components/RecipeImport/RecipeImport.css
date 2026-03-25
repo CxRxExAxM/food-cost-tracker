@@ -756,6 +756,17 @@
   color: var(--text-primary);
 }
 
+.suggestion-btn.suggestion-search {
+  background: var(--bg-tertiary);
+  color: var(--color-yellow);
+  border: 1px solid var(--border-default);
+}
+
+.suggestion-btn.suggestion-search:hover {
+  background: var(--bg-secondary);
+  border-color: var(--color-yellow);
+}
+
 .ingredient-skipped-note {
   font-size: 0.75rem;
   color: var(--text-tertiary);
