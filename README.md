@@ -1,167 +1,166 @@
 # Food Cost Tracker - RestauranTek Platform
 
-A comprehensive multi-tenant SaaS platform for F&B operations to manage food costs, track distributor prices, and calculate recipe costs with real-time pricing updates.
+A comprehensive multi-tenant SaaS platform for F&B operations to manage food costs, track distributor prices, calculate recipe costs, and plan daily operations with real-time forecasting.
 
 **Live Production:** https://www.restaurantek.io
 **Dev Environment:** https://food-cost-tracker-dev.onrender.com
 
 ---
 
-## Current Status (January 2025)
+## Current Status (March 2026)
 
-**Food Cost Tracking MVP:** ✅ **COMPLETE** + Banquet Menus & Enhanced Features
+**Platform Status:** Production-ready with active development
 
-All core features implemented and production-ready:
-- ✅ Multi-tenancy & organization management
-- ✅ Multi-outlet support with data isolation
-- ✅ Outlet-level user access control
+### Completed Modules
+
+**Food Cost Tracking** - ✅ Complete
+- Multi-distributor price tracking with automated imports
+- Recipe costing with real-time price updates
+- Allergen and dietary tracking (16 flags)
+- Sub-recipe support
+- Banquet menu management with PDF export
+
+**AI Recipe Parser** - ✅ Complete
+- Parse Word/PDF/Excel recipe documents
+- Claude API-powered ingredient extraction
+- Multi-strategy product matching (learned, exact, fuzzy, semantic)
+- Learning loop for user corrections
+
+**Potentials Module (F&B Planning)** - ✅ Complete
+- Opera PMS integration (forecasts, hit lists)
+- Daily occupancy, covers, and group tracking
+- Event and BEO management
+- Visual dashboards with charts
+
+**Natural Language Chat Agent** - ✅ Complete
+- Conversational queries for forecast data
+- Claude Haiku-powered tool-based agent
+- Supports tables, charts, and rich HTML responses
+
+**Infrastructure:**
+- ✅ Multi-tenancy with complete data isolation
+- ✅ Multi-outlet support with per-location pricing
+- ✅ Role-based access control
 - ✅ Super admin management suite
 - ✅ Audit logging and compliance tracking
-- ✅ Recipe costing with real-time price updates
-- ✅ Multi-distributor price tracking
-- ✅ Excel-like recipe ingredient editing with autocomplete
-- 🔥 **NEW:** Banquet menu management with prep planning & PDF export
-- 🔥 **NEW:** Auto unit conversion for recipe ingredients
-- 🔥 **NEW:** Last login tracking for users
-
-**Latest Update (Jan 30, 2025):** Banquet menu system, products page pagination & filters, recipe unit auto-conversion, user last login tracking. See [CHANGELOG.md](CHANGELOG.md) for details.
-
-**Next Steps:** See [FUTURE_PLANS.md](FUTURE_PLANS.md) for post-MVP roadmap (HACCP module, AI recipe parser, advanced features).
+- ✅ Semantic search with pgvector embeddings
 
 ---
 
 ## Quick Links
 
-- **📝 Changelog:** [CHANGELOG.md](CHANGELOG.md) - Recent updates and release notes
-- **📖 Future Roadmap:** [FUTURE_PLANS.md](FUTURE_PLANS.md) - Multi-module platform architecture, HACCP plans
-- **🎨 Design Guidelines:** [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md) - UI/UX patterns and styling
-- **💻 Developer Guide:** [DEVELOPMENT.md](DEVELOPMENT.md) - Local setup, git workflow, deployment
-- **🤖 Claude Instructions:** [CLAUDE_INSTRUCTIONS.md](CLAUDE_INSTRUCTIONS.md) - Guidelines for AI-assisted development
-- **📋 Completed Phases:** [docs/completed/](docs/completed/) - Historical phase documentation
-- **📚 API Documentation:** https://food-cost-tracker-dev.onrender.com/docs
+- **Changelog:** [CHANGELOG.md](CHANGELOG.md) - Recent updates
+- **Future Roadmap:** [FUTURE_PLANS.md](FUTURE_PLANS.md) - Development priorities
+- **Design Guidelines:** [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md) - UI/UX patterns
+- **Developer Guide:** [DEVELOPMENT.md](DEVELOPMENT.md) - Local setup, deployment
+- **Claude Instructions:** [CLAUDE.md](CLAUDE.md) - AI development guidelines
+- **API Documentation:** https://food-cost-tracker-dev.onrender.com/docs
 
 ---
 
 ## Core Features
 
-### Multi-Tenant SaaS Platform ✅
+### AI Recipe Parser
 
-**Organizations & Subscriptions**
-- Multi-tenant architecture with complete data isolation
-- Subscription tiers: Free, Basic, Pro, Enterprise
-- Organization-specific settings and branding
-- Tier-based limits (users, recipes, outlets)
+**Automated ingredient extraction:**
+- Upload Word, PDF, or Excel recipe documents
+- Claude API extracts ingredients, quantities, units
+- Multi-strategy product matching:
+  1. **Learned** - User's previous selections (highest priority)
+  2. **Exact** - Case-insensitive name match
+  3. **Base match** - Core ingredient word matching
+  4. **Contains** - Partial name matching
+  5. **Fuzzy** - String similarity
+  6. **Semantic** - pgvector embedding similarity (Voyage AI)
+- User reviews and confirms before import
+- Corrections recorded for future parses (learning loop)
 
-**User Management**
-- Role-based access control (Admin, Chef, Viewer)
-- JWT authentication with secure password hashing
-- User activation/deactivation
-- Password reset functionality
+**Usage limits:**
+- Free tier: 10 parses/month
+- Basic+: 100 parses/month
 
-**Multi-Outlet Support** 🔥
-- Multiple locations per organization (restaurants, hotels, franchises)
-- Outlet-specific products, recipes, and pricing
-- Same recipe costs differently at each outlet
-- Outlet-level user access control (admins see all, others see assigned outlets only)
-- Perfect for hotel groups, multi-location operators, franchises
+### Potentials Module (F&B Planning Dashboard)
 
-### Food Cost Tracking ✅
+**Daily operations forecasting:**
+- Import Opera PMS forecasts and hit lists
+- Track occupancy, ADR, arrivals/departures
+- Monitor group rooms and ALOO
+- Event calendar with catered covers
+- Visual charts for occupancy and covers trends
 
-**Product & Price Management**
-- Multi-distributor support (Sysco, Vesta, SM Seafood, Shamrock, Noble Bread, Sterling)
+**Data fields:**
+- In-House Guests (adults + children)
+- Leisure guests calculation (transient × 2.5)
+- Breakfast/lunch/dinner/reception covers
+- Group-level analytics
+
+### Natural Language Chat Agent
+
+**Conversational data queries:**
+- "What's the occupancy for next week?"
+- "Show me all events with over 100 covers"
+- "Compare this month to last month"
+
+**Response formats:**
+- Markdown text
+- Rich HTML with styled reports
+- Data tables
+- Line/bar charts
+
+### Food Cost Tracking
+
+**Product & Price Management:**
+- Multi-distributor support (Sysco, Vesta, SM Seafood, Shamrock, etc.)
 - Automated CSV/Excel import with vendor-specific cleaning
-- Historical price tracking with trend analysis
-- Product-to-common-product mapping for consistency
-- Catch weight support for variable-weight items
+- Historical price tracking
+- Catch weight support
 
-**Recipe Management** 🔥 *NEW: Excel-like Editing*
-- **Inline editing** - Click any cell to edit directly in table
-- **Autocomplete product search** - Type to find and map products instantly
-- **Keyboard navigation** - Tab, Enter, Escape for rapid data entry
-- **Visual mapping indicators** - ✓/× shows ingredient mapping status
-- Folder/category organization with nested structure
-- Live cost calculation with automatic price updates
-- Yield percentage support for prep waste calculation
-- Sub-recipe support (recipes within recipes)
-- Cost breakdown per ingredient with percentages
-- "Refresh Costs" button for instant price updates
+**Recipe Management:**
+- Inline editing with autocomplete
+- Live cost calculation
+- Yield percentage for prep waste
+- Sub-recipe support
+- Cost breakdown with percentages
+- Allergen aggregation
 
-**Allergen & Dietary Tracking**
-- 16 allergen flags per ingredient (Vegan, Vegetarian, Gluten, Dairy, etc.)
-- Auto-aggregation from recipe ingredients
-- Compliance-ready allergen reporting
+### Multi-Tenant Platform
 
-### Banquet Menu Management ✅ *NEW*
+**Organizations & Subscriptions:**
+- Complete data isolation
+- Tier-based limits (users, recipes, AI parses)
+- Organization-specific settings
 
-**Menu Structure**
-- Hierarchical organization: Meal Period → Service Type → Menu Name
-- Menu items with optional choice counts (e.g., "Choose Two")
-- Prep items linked to common products for cost calculation
-- Drag-and-drop reordering for items and prep items
+**Multi-Outlet Support:**
+- Per-location products and pricing
+- Same recipe costs differently at each outlet
+- Outlet-level user access control
 
-**Prep Planning**
-- Guest count input for quantity scaling
-- Amount modes: per person, at minimum, fixed
-- Vessel capacity management (e.g., chafing dish holds 18 fish filets)
-- PDF export for prep lists
-
-**Data Import**
-- CSV import with duplicate detection at menu/item/prep levels
-- Preserves existing data while adding new items
-
-### Super Admin Platform ✅
-
-**Organization Management**
-- Platform-wide dashboard with statistics
-- Create and manage organizations
-- Subscription tier management
-- Organization suspend/activate
-- Full visibility into all organizations
-
-**User Administration**
-- Cross-organization user management
-- Edit user details, roles, passwords
-- Activate/deactivate users
-- Create users for any organization
-- Outlet assignment management
-
-**Audit & Compliance**
-- Comprehensive audit logging system
-- Track subscription changes
-- Monitor impersonation sessions
-- IP address tracking
-- Before/after change tracking
-
-**Organization Impersonation**
-- Super admin can impersonate any organization
-- Test features as customer
-- Debug issues in customer accounts
-- Provide hands-on support
-- All actions tagged as impersonation in audit logs
+**Super Admin Platform:**
+- Organization management
+- Subscription tier control
+- Impersonation for support
+- Audit logging
 
 ---
 
 ## Tech Stack
 
 ### Backend
-- **Framework:** FastAPI 0.104+ (Python 3.12+)
-- **Database:** PostgreSQL 16+ (Render PostgreSQL)
-- **Authentication:** JWT tokens with bcrypt
-- **Migrations:** Alembic
-- **File Processing:** pandas, openpyxl for CSV/Excel imports
+- **Framework:** FastAPI (Python 3.12+)
+- **Database:** PostgreSQL 16+ with pgvector extension
+- **AI:** Claude API (Anthropic), Voyage AI (embeddings)
+- **Migrations:** Alembic (auto-runs on deploy)
 
 ### Frontend
 - **Framework:** React 19 + Vite 7
 - **Routing:** React Router v7
 - **HTTP Client:** Axios with JWT interceptors
-- **State Management:** React Context API
-- **Styling:** Custom CSS with responsive design
+- **State:** React Context API
 
 ### Deployment
 - **Platform:** Render.com
+- **Build:** Multi-stage Docker (frontend + backend)
 - **Environments:** Production (main), Development (dev)
-- **Build:** Multi-stage Docker (frontend + backend combined)
-- **Migrations:** Auto-run on deploy
 
 ---
 
@@ -172,7 +171,7 @@ All core features implemented and production-ready:
 **Prerequisites:**
 - Python 3.12+
 - Node.js 20+
-- PostgreSQL 16+ (local or Render)
+- PostgreSQL 16+ with pgvector extension
 
 **Setup:**
 
@@ -205,7 +204,12 @@ npm run dev
 # Click "Initial Setup" to create admin account
 ```
 
-**See [DEVELOPMENT.md](DEVELOPMENT.md) for detailed setup instructions, git workflow, and deployment guide.**
+**Environment Variables:**
+- `DATABASE_URL` - PostgreSQL connection string
+- `ANTHROPIC_API_KEY` - For AI recipe parser
+- `VOYAGE_API_KEY` - For semantic search (optional)
+
+See [DEVELOPMENT.md](DEVELOPMENT.md) for detailed setup.
 
 ---
 
@@ -216,167 +220,76 @@ Clean_Invoices/
 ├── api/                           # FastAPI backend
 │   ├── app/
 │   │   ├── routers/              # API endpoints
-│   │   │   ├── auth.py           # Authentication & users
-│   │   │   ├── products.py       # Product management
+│   │   │   ├── ai_parse.py       # AI recipe parser
+│   │   │   ├── potentials.py     # F&B planning dashboard
 │   │   │   ├── recipes.py        # Recipe management
-│   │   │   ├── banquet_menus.py  # Banquet menu management
-│   │   │   ├── outlets.py        # Outlet management
-│   │   │   ├── super_admin.py    # Super admin features
-│   │   │   └── uploads.py        # CSV import
-│   │   ├── database.py           # PostgreSQL connection
-│   │   ├── audit.py              # Audit logging utilities
-│   │   └── main.py               # FastAPI app
-│   └── ...
+│   │   │   ├── products.py       # Product management
+│   │   │   └── ...
+│   │   ├── services/             # Business logic
+│   │   │   ├── chat_agent.py     # NL chat agent
+│   │   │   ├── recipe_parser.py  # Claude API integration
+│   │   │   ├── product_matcher.py # Multi-strategy matching
+│   │   │   ├── ingredient_mapper.py # Learning loop
+│   │   │   └── ...
+│   │   ├── utils/
+│   │   │   └── embeddings.py     # Voyage AI / pgvector
+│   │   └── ...
 ├── frontend/                      # React + Vite frontend
 │   ├── src/
-│   │   ├── pages/                # Page components
-│   │   │   ├── Products.jsx
-│   │   │   ├── Recipes.jsx
-│   │   │   ├── BanquetMenus/     # Banquet menu management
-│   │   │   ├── Outlets.jsx
-│   │   │   └── SuperAdmin/       # Super admin pages
-│   │   ├── components/           # Reusable components
-│   │   ├── contexts/             # React contexts
-│   │   │   ├── AuthContext.jsx
-│   │   │   └── OutletContext.jsx
-│   │   └── App.jsx
-│   └── ...
+│   │   ├── pages/
+│   │   │   ├── Potentials/       # F&B planning dashboard
+│   │   │   └── ...
+│   │   ├── components/
+│   │   │   ├── Chat/             # NL chat interface
+│   │   │   ├── RecipeImport/     # AI parser UI
+│   │   │   └── ...
+│   │   └── ...
 ├── alembic/                       # Database migrations
 ├── docs/                          # Documentation
-│   ├── archive/                  # Historical planning docs
-│   ├── completed/                # Completed phase docs
-│   └── recipes/                  # Recipe module docs
-├── README.md                      # This file
-├── FUTURE_PLANS.md               # Post-MVP roadmap
-├── DESIGN_SYSTEM.md              # UI/UX guidelines
-├── DEVELOPMENT.md                # Developer guide
-└── CLAUDE_INSTRUCTIONS.md        # AI development guidelines
+└── ...
 ```
 
 ---
 
-## Database Schema Overview
+## Database Schema
 
-### Multi-Tenancy Structure
+### Key Tables
 
-```
-organizations (tier, subscription_status, limits)
-    ├── users (role, assigned outlets)
-    ├── outlets (location, active status)
-    │   ├── products (distributor items, prices)
-    │   └── recipes (costs vary per outlet)
-    └── common_products (shared ingredient library)
-```
+**Core:**
+- `organizations` - Tenants with subscription tiers
+- `users` - Role-based access control
+- `outlets` - Multi-location support
 
-**Key Relationships:**
-- **Organizations** contain users, outlets, and common products
-- **Outlets** have specific products and recipes
-- **Users** can be org-wide (admin) or outlet-specific (chef/viewer)
-- **Common Products** are shared across organization but products/recipes are outlet-specific
-- **Price History** is outlet-specific, enabling per-location recipe costing
+**Food Cost:**
+- `recipes`, `recipe_ingredients`
+- `products`, `common_products`
+- `price_history`
 
-**Multi-Outlet Benefits:**
-- Same recipe costs differently at each location
-- Price comparison across outlets
-- Data isolation between locations
-- Perfect for hotel groups and franchises
+**AI & Search:**
+- `common_products.embedding` - pgvector for semantic search
+- `ingredient_mappings` - Learning loop storage
+- `ai_parse_history` - Parse tracking and limits
+
+**Potentials:**
+- `property_events` - BEOs, hit list items
+- `forecast_metrics` - Daily occupancy, ADR, IHG
+- `group_rooms` - Group arrivals/departures
 
 ---
 
-## Git Workflow
+## Development Roadmap
 
-**Current Branch Strategy:**
-```
-main (production)
-  └── dev (development)
-      ├── feature/* (short-lived)
-      └── fix/* (short-lived)
-```
+### Current Priorities
+- AI Recipe Parser enhancements (method step parsing)
+- Potentials Phase 2 (group resume ingestion)
+- Database refactor (ingredient taxonomy)
 
-**Development Process:**
-```bash
-# Create feature branch from dev
-git checkout dev
-git pull origin dev
-git checkout -b feature/your-feature
-
-# Work and commit
-git add .
-git commit -m "feat: description"
-
-# Push and test in dev environment
-git push origin feature/your-feature
-git checkout dev
-git merge feature/your-feature
-git push origin dev  # Auto-deploys to dev.onrender.com
-
-# Deploy to production when ready
-git checkout main
-git merge dev
-git push origin main  # Auto-deploys to production
-```
-
-**See [DEVELOPMENT.md](DEVELOPMENT.md) for detailed git workflow and deployment guide.**
-
----
-
-## Roadmap
-
-### ✅ MVP Complete (December 2024)
-
-**Food Cost Tracking:**
-- Multi-distributor price import and tracking
-- Recipe builder with live cost calculation
-- Allergen and dietary tracking
-- Historical price tracking
-
-**Multi-Tenant Platform:**
-- Organization management with subscription tiers
-- Multi-outlet support with data isolation
-- Outlet-level user access control
-- Super admin management suite
-- Audit logging and compliance tracking
-
-### 📋 Next Phase (Post-MVP)
-
-**See [FUTURE_PLANS.md](FUTURE_PLANS.md) for comprehensive roadmap:**
-
-**High Priority:**
-- AI Recipe Parser (Claude API integration)
-- Advanced features (recipe scaling, shopping lists, price trend charts)
-
-**Future Modules:**
+### Future Considerations
 - HACCP & Temperature Monitoring
 - Inventory Management
-- Labor Scheduling & Cost Tracking
-- Menu Engineering & Profitability
+- Labor Scheduling
 
-**Platform Evolution:**
-- Three-branch workflow (main/staging/dev)
-- Feature flag system for module access
-- Modular architecture for multi-module platform
-
----
-
-## Key Competitive Advantages
-
-1. **🔥 Multi-Outlet Support** - True per-location pricing and costing (most competitors fake it)
-2. **💰 Real-Time Cost Calculation** - Instant recipe cost updates when prices change
-3. **🏢 Multi-Tenant SaaS** - Complete data isolation, tier-based access
-4. **📊 Super Admin Platform** - Full platform oversight and customer support tools
-5. **🔍 Audit Logging** - Complete compliance trail for all critical actions
-6. **👥 Outlet-Level Access Control** - Flexible permissions for multi-location operations
-
----
-
-## Documentation
-
-- **[FUTURE_PLANS.md](FUTURE_PLANS.md)** - Post-MVP roadmap, multi-module architecture, HACCP plans
-- **[DEVELOPMENT.md](DEVELOPMENT.md)** - Local setup, git workflow, deployment, testing
-- **[DESIGN_SYSTEM.md](DESIGN_SYSTEM.md)** - UI/UX guidelines, color palette, component patterns
-- **[CLAUDE_INSTRUCTIONS.md](CLAUDE_INSTRUCTIONS.md)** - Guidelines for AI-assisted development
-- **[docs/completed/](docs/completed/)** - Completed phase documentation
-- **[docs/recipes/](docs/recipes/)** - Recipe module implementation details
+See [FUTURE_PLANS.md](FUTURE_PLANS.md) for detailed roadmap.
 
 ---
 
@@ -386,4 +299,4 @@ Proprietary - All Rights Reserved
 
 ---
 
-**Built by an operator, for operators** 🍽️
+**Built by an operator, for operators**

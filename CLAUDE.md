@@ -16,11 +16,11 @@
    - Quick start guide
    - Links to other documentation
 
-2. **FUTURE_PLANS.md** - Post-MVP roadmap
+2. **FUTURE_PLANS.md** - Roadmap and architecture
+   - Current development priorities
+   - Completed vs planned features
    - Multi-module architecture plans
-   - Branching strategy (main/staging/dev)
-   - Feature flag system design
-   - HACCP module plans
+   - Technical debt and enhancements
 
 3. **DESIGN_SYSTEM.md** - UI/UX guidelines
    - Color palette
@@ -49,6 +49,46 @@ docs/
 - Outdated planning docs → `docs/archive/`
 - Completed major phases → `docs/completed/`
 - Module-specific implementation → `docs/<module>/`
+
+---
+
+## Before Starting a Major Feature
+
+**STOP and document BEFORE writing code when:**
+- Adding a new module/page (e.g., new dashboard, new management area)
+- Adding 3+ related API endpoints
+- Creating new database tables
+- Integrating external services (PMS systems, AI APIs, etc.)
+- Making architectural changes
+
+**Required steps:**
+
+1. **Create planning doc** `docs/[feature-name]_PLAN.md` with:
+   - Problem being solved
+   - Proposed solution approach
+   - Database schema changes (if any)
+   - API endpoints planned
+   - UI components/pages needed
+   - Dependencies and integrations
+
+2. **Update FUTURE_PLANS.md:**
+   - Move feature from "planned" to "in progress"
+   - Note approximate start date
+
+3. **THEN begin implementation**
+
+**Why this matters:**
+- Forces thinking before coding
+- Creates searchable project history
+- Prevents documentation debt
+- Helps Claude understand context in future sessions
+- Makes handoffs and reviews easier
+
+**Exceptions (no planning doc needed):**
+- Bug fixes
+- Minor UI tweaks
+- Small enhancements to existing features
+- Refactoring without behavior changes
 
 ---
 
@@ -538,17 +578,171 @@ See Notion: "Phase 2 — Group Resume Ingestion & Automated Daily Briefs"
 
 ---
 
+## Potentials Module (F&B Planning Dashboard)
+
+### Overview
+Forecasting and event planning dashboard for F&B operations. Integrates with Opera PMS data exports to provide daily operational insights.
+
+### Key Components
+
+**Backend (`api/app/routers/potentials.py`):**
+- 20+ endpoints for events, forecasts, and group data
+- File import handling (Excel-based forecasts and hit lists)
+- Daily summary aggregation
+
+**Frontend (`frontend/src/pages/Potentials/`):**
+- `Potentials.jsx` - Main dashboard (~50KB)
+- Charts for occupancy, covers, group activity
+- Date range navigation
+- Event detail views
+
+### Database Tables
+
+```sql
+property_events      -- BEOs, hit list items, local events
+forecast_metrics     -- Daily occupancy, ADR, rooms, IHG, arrivals
+group_rooms          -- Group arrivals/departures by day
+import_logs          -- Track file imports and processing
+```
+
+### Data Fields
+
+**Forecast Metrics:**
+- `forecasted_rooms`, `occupancy_pct`, `adr`
+- `adults_children` (IHG - In-House Guests)
+- `kids` (children count)
+- `leisure_guests` (transient_rooms × 2.5)
+- `arrivals`, `departures`
+
+**Events:**
+- Catered covers by meal period (breakfast/lunch/dinner/reception)
+- Group names, venues, times, attendees
+- Notes field for operational context
+
+### Integration Points
+- Opera PMS exports (forecast, hit list)
+- Feeds into NL Chat Agent for querying
+
+---
+
+## AI Recipe Parser
+
+### Overview
+Automates recipe ingredient entry by parsing Word/PDF/Excel documents using Claude API, with semantic matching to existing products.
+
+### Key Components
+
+**Backend:**
+- `api/app/routers/ai_parse.py` - Main endpoints
+- `api/app/services/recipe_parser.py` - Claude API integration
+- `api/app/services/product_matcher.py` - Multi-strategy matching
+- `api/app/services/file_processor.py` - Text extraction
+
+**Frontend:**
+- `frontend/src/components/RecipeImport/UploadRecipeModal.jsx`
+- `frontend/src/components/RecipeImport/ReviewParsedRecipe.jsx`
+
+### Matching Strategies (Priority Order)
+
+1. **Learned** (0.90+) - User previously selected this mapping
+2. **Exact** (1.0) - Case-insensitive exact match
+3. **Base match** (0.85+) - Core ingredient word matches (handles plurals)
+4. **Contains** (0.95+) - Ingredient in product name or vice versa
+5. **Fuzzy** (0.95+) - String similarity
+6. **Semantic** (0.70+) - pgvector embedding similarity
+
+### Auto-Match Thresholds
+- `learned` ≥ 0.90 → auto-select
+- `base_match` ≥ 0.85 → auto-select
+- `semantic` ≥ 0.70 → auto-select
+- Others ≥ 0.95 → auto-select
+
+### Usage Limits
+- Free tier: 10 parses/month
+- Basic+: 100 parses/month
+- Rate limit: 10 uploads/hour per org
+- Only successful/partial parses count toward limit
+
+---
+
+## Semantic Search (pgvector)
+
+### Overview
+Vector similarity search for ingredient matching using Voyage AI embeddings stored in PostgreSQL with pgvector.
+
+### Configuration
+- **Model:** Voyage AI `voyage-3.5-lite`
+- **Dimensions:** 1024
+- **Index:** IVFFlat with cosine distance
+- **Table:** `common_products.embedding` column
+
+### Key Files
+- `api/app/utils/embeddings.py` - Voyage API, embedding generation, similarity search
+- Migration `023_add_pgvector_embeddings.py` - Schema setup
+
+### Usage
+```python
+from api.app.utils.embeddings import search_similar_products
+
+results = search_similar_products(
+    cursor,
+    query_text="cilantro",
+    organization_id=org_id,
+    limit=5,
+    threshold=0.5
+)
+```
+
+### Environment Variables
+- `VOYAGE_API_KEY` - Required for semantic search (falls back to string matching if not set)
+
+---
+
+## Learning Loop (Ingredient Mappings)
+
+### Overview
+Records user ingredient→product corrections to improve future AI recipe parsing. Designed for future network effect across tenants.
+
+### Database Table
+```sql
+ingredient_mappings
+  - organization_id    -- Tenant isolation
+  - raw_name           -- Normalized parsed text ("cilantro")
+  - common_product_id  -- What user selected
+  - is_shared          -- Opt-in for network effect (default FALSE)
+  - confidence_score   -- Match quality when recorded
+  - match_type         -- 'user_selected', 'accepted_suggestion', 'search'
+  - use_count          -- Times this mapping applied
+```
+
+### Three-Tier Security Model
+1. **Tenant-private:** Pricing, volumes (never shared)
+2. **Anonymized shared:** Ingredient mappings (opt-in via `is_shared`)
+3. **Fully public:** Taxonomy, unit normalizations
+
+### Key Files
+- `api/app/services/ingredient_mapper.py` - Record/retrieve mappings
+- Migration `024_add_ingredient_mappings.py` - Schema
+
+### How It Works
+1. User parses recipe with "cilantro"
+2. No match found, user searches and selects "Herb, Cilantro"
+3. Mapping recorded: `cilantro → Herb, Cilantro`
+4. Next recipe with "cilantro" → auto-matches with "🧠 Remembered" badge
+
+---
+
 ## Questions to Ask User
 
 Before making significant changes, confirm:
 
-1. **Major restructure?** "This would reorganize the codebase significantly. Should we wait until HACCP development per FUTURE_PLANS.md?"
+1. **Major feature?** "This looks like a new module/feature. Should I create a planning doc in `docs/` first per the documentation guidelines?"
 
 2. **New documentation?** "Should I create a new .md file or add to existing documentation?"
 
-3. **Breaking changes?** "This change affects existing functionality. Should we implement with feature flags?"
+3. **Breaking changes?** "This change affects existing functionality. How should we handle backward compatibility?"
 
-4. **Branching strategy?** "Ready to implement three-branch workflow (main/staging/dev) or stay with two-branch?"
+4. **Architecture decision?** "This involves a significant technical choice. Want me to document the options and tradeoffs first?"
 
 ---
 
@@ -587,9 +781,9 @@ At the end of each session, provide:
 ## Project Philosophy
 
 ### Keep It Simple
-- Two branches until HACCP development
 - Minimal .md files in root
 - Don't over-engineer for future needs
+- Use existing patterns before creating new ones
 
 ### Multi-Tenant First
 - Every feature must work with multiple organizations
@@ -609,5 +803,5 @@ At the end of each session, provide:
 
 ---
 
-**Last Updated:** January 30, 2025
-**Next Review:** When starting HACCP module development
+**Last Updated:** March 26, 2026
+**Next Review:** After next major feature completion
