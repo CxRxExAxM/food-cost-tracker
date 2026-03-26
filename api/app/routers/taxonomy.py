@@ -357,18 +357,6 @@ def get_variant_attribute_values(current_user: dict = Depends(get_current_user))
         return attributes
 
 
-@router.get("/variants/{variant_id}", response_model=IngredientVariant)
-def get_variant(variant_id: int, current_user: dict = Depends(get_current_user)):
-    """Get a single variant by ID."""
-    with get_db() as conn:
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM ingredient_variants WHERE id = %s", (variant_id,))
-        row = cursor.fetchone()
-        if not row:
-            raise HTTPException(status_code=404, detail="Variant not found")
-        return dict_from_row(row)
-
-
 @router.get("/variants/{variant_id}/common-products")
 def get_variant_common_products(
     variant_id: int,
@@ -485,6 +473,20 @@ def find_similar_variants(
         ))
 
         return dicts_from_rows(cursor.fetchall())
+
+
+# NOTE: This route must come AFTER more specific routes like /common-products and /similar
+# because FastAPI matches routes in order and {variant_id} would match "common-products" as a string
+@router.get("/variants/{variant_id}", response_model=IngredientVariant)
+def get_variant(variant_id: int, current_user: dict = Depends(get_current_user)):
+    """Get a single variant by ID."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM ingredient_variants WHERE id = %s", (variant_id,))
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Variant not found")
+        return dict_from_row(row)
 
 
 @router.post("/variants", response_model=IngredientVariant, status_code=201)
