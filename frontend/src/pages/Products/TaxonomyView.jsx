@@ -655,16 +655,18 @@ function TaxonomyView() {
                                       {cp.linked_products?.length > 0 && (
                                         <div className="linked-products">
                                           {cp.linked_products.map(product => (
-                                            <div key={product.id} className="linked-product-row">
+                                            <div key={product.distributor_product_id} className="linked-product-row">
                                               <span className="lp-indent">│  └─</span>
-                                              <span className="lp-vendor">{product.vendor_name}</span>
-                                              <span className="lp-description">{product.description}</span>
-                                              {product.pack_size && (
-                                                <span className="lp-pack">{product.pack_size}</span>
+                                              <span className="lp-vendor">{product.distributor_name}</span>
+                                              <span className="lp-description">{product.product_name}</span>
+                                              {(product.pack || product.size) && (
+                                                <span className="lp-pack">
+                                                  {product.pack && `${product.pack}x`}{product.size}{product.unit_name && ` ${product.unit_name}`}
+                                                </span>
                                               )}
-                                              <span className="lp-price">{formatPrice(product.price)}</span>
-                                              {product.vendor_code && (
-                                                <span className="lp-code">#{product.vendor_code}</span>
+                                              <span className="lp-price">{formatPrice(product.latest_price)}</span>
+                                              {product.distributor_sku && (
+                                                <span className="lp-code">#{product.distributor_sku}</span>
                                               )}
                                             </div>
                                           ))}

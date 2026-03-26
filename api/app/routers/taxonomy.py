@@ -399,26 +399,37 @@ def get_variant_common_products(
         cp_ids = [cp["id"] for cp in common_products]
 
         # Get linked vendor products for these common products
+        # Schema: products -> distributor_products (has org_id) -> distributors + price_history
         cursor.execute("""
             SELECT
                 p.id,
                 p.common_product_id,
+                p.name as product_name,
                 p.description,
-                p.vendor_id,
-                v.name as vendor_name,
+                p.pack,
+                p.size,
                 p.unit_id,
                 u.name as unit_name,
-                p.pack_size,
-                p.price,
-                p.vendor_code,
-                p.is_active
+                dp.id as distributor_product_id,
+                dp.distributor_sku,
+                d.id as distributor_id,
+                d.name as distributor_name,
+                (
+                    SELECT ph.unit_price
+                    FROM price_history ph
+                    WHERE ph.distributor_product_id = dp.id
+                    ORDER BY ph.effective_date DESC
+                    LIMIT 1
+                ) as latest_price
             FROM products p
-            JOIN vendors v ON v.id = p.vendor_id
+            JOIN distributor_products dp ON dp.product_id = p.id
+            JOIN distributors d ON d.id = dp.distributor_id
             LEFT JOIN units u ON u.id = p.unit_id
             WHERE p.common_product_id = ANY(%s)
-              AND p.organization_id = %s
+              AND dp.organization_id = %s
               AND p.is_active = 1
-            ORDER BY v.name, p.description
+              AND dp.is_available = 1
+            ORDER BY d.name, p.name
         """, (cp_ids, org_id))
         products = dicts_from_rows(cursor.fetchall())
 
