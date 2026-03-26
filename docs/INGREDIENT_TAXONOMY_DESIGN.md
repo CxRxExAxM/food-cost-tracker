@@ -82,19 +82,26 @@ CREATE TABLE base_ingredients (
 );
 
 -- Specific forms/variants (cherry tomato, diced carrot)
+-- NOTE: pack_size intentionally NOT here - it's a product/SKU attribute, not ingredient
 CREATE TABLE ingredient_variants (
     id SERIAL PRIMARY KEY,
     base_ingredient_id INTEGER NOT NULL REFERENCES base_ingredients(id),
 
-    -- Structured attributes
+    -- Structured attributes (ingredient characteristics)
     variety VARCHAR(50),                   -- "Orange", "Rainbow", "Roma"
     form VARCHAR(50),                      -- "Baby", "Jumbo", "Petite"
     prep VARCHAR(50),                      -- "Diced", "Peeled", "Sliced"
     cut_size VARCHAR(30),                  -- "1/2 inch", "1/4 inch"
-    pack_size VARCHAR(30),                 -- "5 lb", "25 lb", "1 ct"
+
+    -- Protein-specific attributes
+    cut VARCHAR(50),                       -- "Breast", "Thigh", "Loin"
+    bone VARCHAR(30),                      -- "Boneless", "Bone-In"
+    skin VARCHAR(30),                      -- "Skin On", "Skinless"
+    grade VARCHAR(30),                     -- "Natural", "Choice", "Prime"
+    state VARCHAR(30),                     -- "Fresh", "Frozen", "IQF"
 
     -- Display name (computed or user-set)
-    display_name VARCHAR(255) NOT NULL,    -- "Carrot, Orange, Jumbo, 25#"
+    display_name VARCHAR(255) NOT NULL,    -- "Carrot, Orange, Jumbo"
 
     -- Override allergens if different from base
     allergen_override JSONB,               -- {"allergen_gluten": true}
@@ -103,8 +110,8 @@ CREATE TABLE ingredient_variants (
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW(),
 
-    -- Ensure unique combinations
-    UNIQUE(base_ingredient_id, variety, form, prep, cut_size, pack_size)
+    -- Ensure unique combinations (no pack_size = fewer duplicates)
+    UNIQUE(base_ingredient_id, variety, form, prep, cut_size, cut, bone, skin, grade, state)
 );
 
 -- Indexes for attribute queries
@@ -271,6 +278,182 @@ ADD COLUMN variant_id INTEGER REFERENCES ingredient_variants(id);
 
 ---
 
+## Variant Management & Merge Strategy
+
+### The Proliferation Problem
+
+Without controls, we could end up with the same fragmentation we're trying to solve:
+
+```
+❌ Bad: 15 "basically the same" variants
+─────────────────────────────────────
+Carrot, Orange, Jumbo, 25#
+Carrot, Orange, Jumbo, 50#
+Carrot, Orange, Large
+Carrot, Jumbo
+Carrot, Orange Jumbo
+...still have to pick "which carrot?"
+```
+
+### Design Decision: Separate Pack Size from Variant
+
+**Key insight:** `pack_size` is a *purchasing attribute*, not an *ingredient attribute*.
+
+A recipe calls for "jumbo orange carrots" - it doesn't care if they came in a 25# or 50# bag.
+
+```sql
+-- REVISED: Remove pack_size from ingredient_variants
+-- pack_size stays on products table (vendor SKU level)
+
+ingredient_variants:
+  - variety, form, prep, cut_size  -- Ingredient characteristics
+  - cut, bone, skin, grade, state  -- Protein characteristics
+  -- NO pack_size here
+
+products:
+  - variant_id                      -- Links to ingredient
+  - pack, size, unit                -- Packaging info (already exists)
+```
+
+This reduces variant count significantly:
+```
+✅ Good: Variants describe the ingredient, not the package
+──────────────────────────────────────────────────────────
+Carrot (base)
+  ├─ Orange, Jumbo           ← One variant
+  │    └─ Sysco 25# bag      ← Product with pack info
+  │    └─ Sysco 50# bag      ← Product with pack info
+  │    └─ Vesta 10# bag      ← Product with pack info
+  ├─ Diced, 1/2"             ← Another variant
+  └─ Baby, Peeled            ← Another variant
+```
+
+### Variant Merge Feature
+
+Even with good design, duplicates will happen. Users need the ability to merge:
+
+**UI Flow:**
+```
+┌─────────────────────────────────────────────────────────────┐
+│ Carrot Variants                                    [Merge]  │
+├─────────────────────────────────────────────────────────────┤
+│ ☑ Orange, Jumbo                    [5 products, 3 recipes]  │
+│ ☑ Jumbo Orange                     [2 products, 1 recipe]   │
+│ ☐ Diced, 1/2"                      [3 products, 2 recipes]  │
+└─────────────────────────────────────────────────────────────┘
+                          ↓ Click Merge
+┌─────────────────────────────────────────────────────────────┐
+│ Merge 2 variants into:                                      │
+│                                                             │
+│ Keep: ◉ Orange, Jumbo (more usage)                         │
+│       ○ Jumbo Orange                                        │
+│                                                             │
+│ This will update:                                           │
+│   • 2 products → point to "Orange, Jumbo"                  │
+│   • 1 recipe → use "Orange, Jumbo"                         │
+│   • Delete "Jumbo Orange" variant                          │
+│                                                             │
+│                              [Cancel]  [Merge Variants]     │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Backend Merge Operation:**
+```python
+def merge_variants(keep_id: int, merge_ids: List[int], conn):
+    """Merge multiple variants into one."""
+
+    # 1. Update all products pointing to merged variants
+    cursor.execute("""
+        UPDATE products
+        SET variant_id = %s
+        WHERE variant_id = ANY(%s)
+    """, (keep_id, merge_ids))
+
+    # 2. Update all recipe_ingredients (if applicable)
+    cursor.execute("""
+        UPDATE recipe_ingredients
+        SET variant_id = %s
+        WHERE variant_id = ANY(%s)
+    """, (keep_id, merge_ids))
+
+    # 3. Update ingredient_mappings to prevent future duplicates
+    cursor.execute("""
+        UPDATE ingredient_mappings
+        SET variant_id = %s
+        WHERE variant_id = ANY(%s)
+    """, (keep_id, merge_ids))
+
+    # 4. Delete merged variants
+    cursor.execute("""
+        DELETE FROM ingredient_variants
+        WHERE id = ANY(%s)
+    """, (merge_ids,))
+
+    # 5. Log merge for audit
+    log_variant_merge(keep_id, merge_ids, conn)
+```
+
+### Duplicate Prevention
+
+**At Creation Time:**
+```python
+def suggest_existing_variants(base_id: int, attributes: dict, conn) -> List[dict]:
+    """Before creating a variant, show potential matches."""
+
+    similar = find_similar_variants(base_id, attributes, conn)
+
+    if similar:
+        return {
+            "action": "confirm",
+            "message": f"Found {len(similar)} similar variants",
+            "similar": similar,
+            "suggested_match": similar[0] if similar[0]["confidence"] > 0.8 else None
+        }
+
+    return {"action": "create", "message": "No similar variants found"}
+```
+
+**UI Warning:**
+```
+┌─────────────────────────────────────────────────────────────┐
+│ ⚠️  Similar variant exists                                  │
+│                                                             │
+│ You're creating: "Carrot, Jumbo, Orange"                    │
+│                                                             │
+│ Did you mean one of these?                                  │
+│   • Carrot, Orange, Jumbo (92% match) [Use This]           │
+│   • Carrot, Orange, Large (78% match) [Use This]           │
+│                                                             │
+│                    [Create Anyway]  [Cancel]                │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Attribute Normalization
+
+Enforce consistent attribute values to reduce drift:
+
+```python
+# Standard allowed values (expandable by admin)
+ATTRIBUTE_VALUES = {
+    "form": ["Baby", "Petite", "Medium", "Large", "Jumbo", "Colossal"],
+    "prep": ["Whole", "Diced", "Sliced", "Julienne", "Peeled", "Shredded", "IQF"],
+    "variety": None,  # Free text - too many valid values
+    "cut_size": ["1/4\"", "3/8\"", "1/2\"", "3/4\"", "1\""],
+}
+
+def normalize_attribute(attr_name: str, value: str) -> str:
+    """Normalize to standard value if possible."""
+    allowed = ATTRIBUTE_VALUES.get(attr_name)
+    if allowed is None:
+        return value.strip().title()
+
+    # Fuzzy match to allowed values
+    match = find_closest_match(value, allowed)
+    return match if match else value
+```
+
+---
+
 ## Implementation Checklist
 
 ### Phase 1: Preparation
@@ -312,9 +495,24 @@ ADD COLUMN variant_id INTEGER REFERENCES ingredient_variants(id);
 - 1/4", 1/2", 3/4", 1"
 - Small dice, Medium dice, Large dice, Brunoise
 
-### pack_size (packaging)
-- 1 lb, 5 lb, 10 lb, 25 lb, 50 lb
-- 1 ct, 6 ct, 12 ct, case
+### cut (protein cuts)
+- Breast, Thigh, Leg, Wing (poultry)
+- Loin, Rib, Shoulder, Belly (pork)
+- Chuck, Rib, Loin, Round (beef)
+
+### bone / skin (protein modifiers)
+- Boneless, Bone-In, Frenched
+- Skin On, Skinless
+
+### grade (quality grades)
+- Natural, Organic, Choice, Prime, Select
+- Grade A, Grade B
+
+### state (temperature/processing state)
+- Fresh, Frozen, IQF (Individually Quick Frozen)
+- Canned, Dried, Smoked
+
+*Note: `pack_size` (5 lb, 25 lb, etc.) stays on the `products` table as a purchasing attribute, not an ingredient characteristic.*
 
 ---
 

@@ -93,7 +93,7 @@ async def detect_columns(csv_content: str) -> dict:
 
     response = await call_claude(
         COLUMN_DETECTION_PROMPT.format(csv_sample=sample),
-        model="claude-3-5-haiku"  # Fast, cheap for structured extraction
+        model="claude-sonnet"  # Use existing configured model
     )
 
     return parse_json_response(response)
@@ -146,7 +146,7 @@ async def extract_attributes(
             brand=brand or "unknown",
             packaging=packaging or "none"
         ),
-        model="claude-3-5-haiku"
+        model="claude-sonnet"
     )
 
     return parse_json_response(response)
@@ -399,10 +399,12 @@ POST /api/invoices/confirm-import
 
 | Operation | Model | Cost per call | Calls per import |
 |-----------|-------|---------------|------------------|
-| Column detection | Haiku | ~$0.001 | 1 |
-| Attribute extraction | Haiku | ~$0.002 | Per unique product |
-| Total (50 products, first time) | — | ~$0.10 | — |
-| Total (50 products, 80% learned) | — | ~$0.02 | — |
+| Column detection | Sonnet | ~$0.01 | 1 |
+| Attribute extraction | Sonnet | ~$0.02 | Per unique product |
+| Total (50 products, first time) | — | ~$1.00 | — |
+| Total (50 products, 80% learned) | — | ~$0.20 | — |
+
+*Note: Using existing Sonnet configuration for simplicity. Can optimize to Haiku later if cost becomes a concern.*
 
 ---
 
