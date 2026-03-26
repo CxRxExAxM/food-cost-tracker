@@ -420,6 +420,7 @@ class ParseFileResponse(BaseModel):
     description: Optional[str] = None
     category: Optional[str] = None
     ingredients: List[ParsedIngredient]
+    method: List[RecipeMethodStep] = Field(default_factory=list, description="Extracted cooking instructions")
     usage: UsageStats
     credits_used: bool = Field(..., description="True if this parse counted toward limit")
 
@@ -457,6 +458,7 @@ class CreateRecipeFromParseRequest(BaseModel):
     description: Optional[str] = None
     category: Optional[str] = None
     ingredients: List[CreateRecipeIngredient]
+    method: Optional[List[RecipeMethodStep]] = None
 
 
 class CreateRecipeFromParseResponse(BaseModel):

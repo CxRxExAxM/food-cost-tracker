@@ -22,6 +22,7 @@ from ..schemas import (
     MonthlyLimitErrorResponse,
     CreateRecipeFromParseRequest,
     CreateRecipeFromParseResponse,
+    RecipeMethodStep,
 )
 from ..services.file_processor import extract_text_from_file, validate_file_before_parse
 from ..services.recipe_parser import parse_recipe_with_claude, determine_parse_status
@@ -407,6 +408,16 @@ async def parse_recipe_file(
         logger.debug(f"parse: - recipe_name: {recipe_data['name']}")
         logger.debug(f"parse: - ingredients count: {len(parsed_ingredients)}")
 
+        # Process method steps
+        method_steps = []
+        if recipe_data.get('method'):
+            for step in recipe_data['method']:
+                if isinstance(step, dict) and 'step_number' in step and 'instruction' in step:
+                    method_steps.append(RecipeMethodStep(
+                        step_number=step['step_number'],
+                        instruction=step['instruction']
+                    ))
+
         try:
             response = ParseFileResponse(
                 parse_id=parse_id,
@@ -415,6 +426,7 @@ async def parse_recipe_file(
                 description=recipe_data.get('description'),
                 category=recipe_data.get('category'),
                 ingredients=parsed_ingredients,
+                method=method_steps,
                 usage=UsageStats(**updated_usage),
                 credits_used=credits_used
             )
@@ -498,12 +510,18 @@ async def create_recipe_from_parse(
                 detail="Outlet not found"
             )
 
+        # Serialize method steps to JSON if present
+        import json
+        method_json = None
+        if data.method:
+            method_json = json.dumps([step.dict() for step in data.method])
+
         # Create recipe
         cursor.execute("""
             INSERT INTO recipes (
                 organization_id, outlet_id, name, description, category,
-                yield_amount, yield_unit_id, imported_from_ai, import_filename
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, TRUE, %s)
+                yield_amount, yield_unit_id, method, imported_from_ai, import_filename
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, TRUE, %s)
             RETURNING id
         """, (
             organization_id,
@@ -513,6 +531,7 @@ async def create_recipe_from_parse(
             data.category,
             data.yield_quantity,
             data.yield_unit_id,
+            method_json,
             parse_record['filename']
         ))
 

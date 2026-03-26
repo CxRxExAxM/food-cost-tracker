@@ -158,6 +158,12 @@ Required JSON format:
       "unit": "LB",
       "prep_note": "chopped (optional)"
     }}
+  ],
+  "method": [
+    {{
+      "step_number": 1,
+      "instruction": "First step description"
+    }}
   ]
 }}
 
@@ -180,6 +186,11 @@ Extraction rules:
    - Each/piece -> EA
 6. For ranges (e.g., "2-3 cups"), use the average (2.5)
 7. If no clear unit, use "EA" (each)
+8. Extract method/instructions if present:
+   - Parse each step as a separate item
+   - Number steps sequentially starting from 1
+   - Keep each instruction clear and complete
+   - If no method steps found, return empty array []
 
 Recipe text:
 {text}

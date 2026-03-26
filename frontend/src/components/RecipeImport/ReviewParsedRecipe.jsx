@@ -12,6 +12,10 @@ export default function ReviewParsedRecipe({ parseResult, outletId, onClose }) {
   const [yieldUnit, setYieldUnit] = useState(parseResult.yield_info?.unit || '');
   const [creating, setCreating] = useState(false);
 
+  // Method steps state
+  const [methodSteps, setMethodSteps] = useState(parseResult.method || []);
+  const [methodExpanded, setMethodExpanded] = useState(true);
+
   // Track user overrides for unmatched ingredients
   // Key: ingredient index, Value: { product_id, product_name } or null (skipped)
   const [userSelections, setUserSelections] = useState({});
@@ -127,6 +131,28 @@ export default function ReviewParsedRecipe({ parseResult, outletId, onClose }) {
     }).length;
   };
 
+  // Method step handlers
+  const handleUpdateStep = (idx, newInstruction) => {
+    setMethodSteps(prev => prev.map((step, i) =>
+      i === idx ? { ...step, instruction: newInstruction } : step
+    ));
+  };
+
+  const handleDeleteStep = (idx) => {
+    setMethodSteps(prev => {
+      const updated = prev.filter((_, i) => i !== idx);
+      // Renumber steps
+      return updated.map((step, i) => ({ ...step, step_number: i + 1 }));
+    });
+  };
+
+  const handleAddStep = () => {
+    setMethodSteps(prev => [
+      ...prev,
+      { step_number: prev.length + 1, instruction: '' }
+    ]);
+  };
+
   const handleCreateRecipe = async () => {
     setCreating(true);
 
@@ -157,6 +183,11 @@ export default function ReviewParsedRecipe({ parseResult, outletId, onClose }) {
         };
       });
 
+      // Filter out empty method steps
+      const validMethodSteps = methodSteps
+        .filter(step => step.instruction?.trim())
+        .map((step, idx) => ({ step_number: idx + 1, instruction: step.instruction.trim() }));
+
       await createRecipeFromParse({
         parse_id: parseResult.parse_id,
         name: recipeName,
@@ -165,7 +196,8 @@ export default function ReviewParsedRecipe({ parseResult, outletId, onClose }) {
         yield_unit_id: parseResult.yield_info?.unit_id || null,
         description,
         category,
-        ingredients
+        ingredients,
+        method: validMethodSteps.length > 0 ? validMethodSteps : null
       });
 
       // Close modal and navigate
@@ -461,6 +493,71 @@ export default function ReviewParsedRecipe({ parseResult, outletId, onClose }) {
                 );
               })}
             </div>
+          </div>
+
+          {/* Method Steps Section */}
+          <div className="method-section">
+            <div
+              className="method-header"
+              onClick={() => setMethodExpanded(!methodExpanded)}
+            >
+              <div className="method-header-left">
+                <span className="method-expand-icon">{methodExpanded ? '▼' : '▶'}</span>
+                <span className="method-title">
+                  Method Steps ({methodSteps.length})
+                </span>
+              </div>
+              {methodSteps.length === 0 && (
+                <span className="method-empty-note">No steps extracted</span>
+              )}
+            </div>
+
+            {methodExpanded && (
+              <div className="method-steps-container">
+                {methodSteps.length === 0 ? (
+                  <div className="method-empty-state">
+                    <p>No method steps were extracted from the document.</p>
+                    <button
+                      type="button"
+                      className="btn-secondary btn-sm"
+                      onClick={handleAddStep}
+                    >
+                      + Add Step
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    {methodSteps.map((step, idx) => (
+                      <div key={idx} className="method-step-row">
+                        <span className="method-step-number">{idx + 1}.</span>
+                        <textarea
+                          className="method-step-input"
+                          value={step.instruction}
+                          onChange={(e) => handleUpdateStep(idx, e.target.value)}
+                          rows={2}
+                          placeholder="Enter instruction..."
+                        />
+                        <button
+                          type="button"
+                          className="method-step-delete"
+                          onClick={() => handleDeleteStep(idx)}
+                          title="Remove step"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      className="btn-secondary btn-sm method-add-btn"
+                      onClick={handleAddStep}
+                    >
+                      + Add Step
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
