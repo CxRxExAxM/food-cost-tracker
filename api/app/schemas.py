@@ -432,6 +432,20 @@ class CreateRecipeIngredient(BaseModel):
     unit_id: int
     notes: Optional[str] = None
 
+    # Learning loop fields - for recording user corrections
+    original_parsed_name: Optional[str] = Field(
+        None,
+        description="Original text from parsing, used for learning loop"
+    )
+    was_user_selected: bool = Field(
+        False,
+        description="True if user manually selected this product (not auto-matched)"
+    )
+    selection_type: Optional[str] = Field(
+        None,
+        description="How selection was made: 'user_selected', 'accepted_suggestion', 'search'"
+    )
+
 
 class CreateRecipeFromParseRequest(BaseModel):
     """Request to create recipe from parse results."""

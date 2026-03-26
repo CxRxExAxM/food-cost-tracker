@@ -2,12 +2,25 @@
 Product matching algorithm for AI recipe parser.
 
 Matches parsed ingredient names to existing common products using
-exact matching, fuzzy matching, and semantic similarity (pgvector).
+learned mappings, exact matching, fuzzy matching, and semantic similarity (pgvector).
+
+Matching strategies (in priority order):
+0. Learned mapping (user previously selected this) - from ingredient_mappings table
+1. Exact match (case-insensitive)
+1.5. Base word match (handles plurals and "Onion, White" format)
+2. Contains match (ingredient in product name or vice versa)
+3. Fuzzy match (similarity > 0.7)
+4. Semantic search (pgvector + Voyage AI)
+5. Shared mappings (cross-tenant, if no good match) - future network effect
 """
 
 import os
 from difflib import SequenceMatcher
 from typing import List, Dict, Optional
+
+from ..logger import get_logger
+
+logger = get_logger(__name__)
 
 # Check if semantic search is available
 SEMANTIC_SEARCH_ENABLED = bool(os.getenv("VOYAGE_API_KEY"))
@@ -85,11 +98,14 @@ def match_products(
     """
     Find matching common products using multi-strategy matching.
 
-    Matching strategies (in order):
+    Matching strategies (in priority order):
+    0. Learned mapping (user previously selected this)
     1. Exact match (case-insensitive)
+    1.5. Base word match (handles plurals and "Onion, White" format)
     2. Contains match (ingredient in product name or vice versa)
     3. Fuzzy match (similarity > 0.7)
-    4. Semantic search (pgvector + Voyage AI) - if enabled and no good matches found
+    4. Semantic search (pgvector + Voyage AI)
+    5. Shared mappings (cross-tenant, future network effect)
 
     Args:
         ingredient_name: Parsed ingredient name from recipe
@@ -113,6 +129,61 @@ def match_products(
         ]
     """
 
+    # Strategy 0: Check learned mappings FIRST (highest priority)
+    # This applies user corrections from previous recipe parses
+    try:
+        from .ingredient_mapper import get_learned_mapping, get_shared_mapping
+
+        learned = get_learned_mapping(organization_id, ingredient_name, conn)
+
+        if learned:
+            logger.debug(f"Found learned mapping for '{ingredient_name}' -> '{learned['common_name']}'")
+            # Learned mapping takes priority, but still show alternatives
+            matches = [learned]
+            other_matches = _get_algorithmic_matches(
+                ingredient_name, organization_id, conn, max_results=max_results
+            )
+            for m in other_matches:
+                if m['common_product_id'] != learned['common_product_id']:
+                    matches.append(m)
+                    if len(matches) >= max_results:
+                        break
+            return matches
+
+    except Exception as e:
+        # If ingredient_mappings table doesn't exist yet, continue with algorithmic matching
+        logger.debug(f"Learned mapping lookup skipped: {e}")
+
+    # No learned mapping — use algorithmic matching
+    matches = _get_algorithmic_matches(ingredient_name, organization_id, conn, max_results)
+
+    # Strategy 5: If no confident matches, check shared mappings (future network effect)
+    if not matches or matches[0]['confidence'] < 0.7:
+        try:
+            from .ingredient_mapper import get_shared_mapping
+            shared = get_shared_mapping(ingredient_name, conn, exclude_org_id=organization_id)
+            if shared:
+                # Add as suggestion, not auto-match (cap confidence for review)
+                shared['confidence'] = min(shared['confidence'], 0.80)
+                matches.insert(0, shared)
+                matches = matches[:max_results]
+        except Exception:
+            pass
+
+    return matches
+
+
+def _get_algorithmic_matches(
+    ingredient_name: str,
+    organization_id: int,
+    conn,
+    max_results: int = 3
+) -> List[Dict]:
+    """
+    Get matches using algorithmic strategies (exact, base, contains, fuzzy, semantic).
+
+    Separated from match_products() to allow learned mappings to wrap it.
+    """
     # Get all common products for organization
     cursor = conn.cursor()
     cursor.execute("""

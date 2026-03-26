@@ -270,6 +270,7 @@ async def parse_recipe_file(
             )
 
             # Determine auto-match based on match type and confidence
+            # - learned: >= 0.90 (user previously selected this mapping)
             # - exact: always (confidence = 1.0)
             # - base_match: >= 0.85 (core ingredient word matches, e.g., "onions" -> "Onion, White")
             # - fuzzy/contains: >= 0.95
@@ -283,8 +284,14 @@ async def parse_recipe_file(
                 match_type = top_match.get('match_type', '')
                 confidence = top_match['confidence']
 
+                # Learned mappings are trusted (user explicitly chose this before)
+                if match_type == 'learned' and confidence >= 0.90:
+                    auto_matched_id = top_match['common_product_id']
+                    auto_matched_name = top_match['common_name']
+                    auto_match_type = 'learned'
+                    ingredients_matched += 1
                 # Base match handles plurals and "Onion, White" format - reliable at 0.85+
-                if match_type == 'base_match' and confidence >= 0.85:
+                elif match_type == 'base_match' and confidence >= 0.85:
                     auto_matched_id = top_match['common_product_id']
                     auto_matched_name = top_match['common_name']
                     auto_match_type = 'base_match'
@@ -511,7 +518,9 @@ async def create_recipe_from_parse(
 
         recipe_id = cursor.fetchone()['id']
 
-        # Create recipe ingredients
+        # Create recipe ingredients and record learned mappings
+        from ..services.ingredient_mapper import record_ingredient_mapping
+
         for ingredient in data.ingredients:
             cursor.execute("""
                 INSERT INTO recipe_ingredients (
@@ -525,6 +534,25 @@ async def create_recipe_from_parse(
                 ingredient.unit_id,
                 ingredient.notes
             ))
+
+            # Record user-selected mappings for learning loop
+            # Only record if user explicitly selected a product (not auto-matched or skipped)
+            if (ingredient.common_product_id and
+                ingredient.was_user_selected and
+                ingredient.original_parsed_name):
+                try:
+                    record_ingredient_mapping(
+                        organization_id=organization_id,
+                        raw_name=ingredient.original_parsed_name,
+                        common_product_id=ingredient.common_product_id,
+                        user_id=user_id,
+                        conn=conn,
+                        match_type=ingredient.selection_type or 'user_selected',
+                        is_shared=False  # Default off, user opts in via settings later
+                    )
+                except Exception as e:
+                    # Don't fail recipe creation if mapping recording fails
+                    logger.warning(f"Failed to record ingredient mapping: {e}")
 
         # Update parse record with recipe_id
         cursor.execute("""

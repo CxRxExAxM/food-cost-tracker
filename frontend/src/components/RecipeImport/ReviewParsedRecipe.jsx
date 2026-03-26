@@ -70,23 +70,28 @@ export default function ReviewParsedRecipe({ parseResult, outletId, onClose }) {
     setSearchResults([]);
   };
 
-  // Select a product from search or suggestions
+  // Select a product from search results
   const handleSelectProduct = (idx, product) => {
     setUserSelections(prev => ({
       ...prev,
       [idx]: {
         product_id: product.common_product_id || product.id,
-        product_name: product.common_name
+        product_name: product.common_name,
+        selection_type: 'search'  // User searched and selected
       }
     }));
     handleCloseEdit();
   };
 
-  // Handle user accepting a suggestion
+  // Handle user accepting a suggestion ("Yes" on "Did you mean?")
   const handleAcceptSuggestion = (idx, product) => {
     setUserSelections(prev => ({
       ...prev,
-      [idx]: { product_id: product.common_product_id, product_name: product.common_name }
+      [idx]: {
+        product_id: product.common_product_id,
+        product_name: product.common_name,
+        selection_type: 'accepted_suggestion'  // User accepted AI suggestion
+      }
     }));
   };
 
@@ -130,13 +135,25 @@ export default function ReviewParsedRecipe({ parseResult, outletId, onClose }) {
       const ingredients = parseResult.ingredients.map((ing, idx) => {
         const effectiveMatch = getEffectiveMatch(ing, idx);
         const productId = effectiveMatch?.product_id || null;
+        const userSelection = userSelections[idx];
+
+        // Determine if this was a user action (for learning loop)
+        // User selected = they explicitly chose via search, suggestion, or edit
+        // Not user selected = auto-matched or skipped
+        const wasUserSelected = userSelection !== undefined &&
+                                userSelection !== null &&
+                                userSelection.product_id;
 
         return {
           common_product_id: productId,
           ingredient_name: productId ? null : ing.parsed_name,
           quantity: ing.normalized_quantity,
           unit_id: ing.normalized_unit_id,
-          notes: ing.prep_note
+          notes: ing.prep_note,
+          // Learning loop fields
+          original_parsed_name: ing.parsed_name,
+          was_user_selected: wasUserSelected,
+          selection_type: userSelection?.selection_type || null
         };
       });
 
@@ -289,14 +306,21 @@ export default function ReviewParsedRecipe({ parseResult, outletId, onClose }) {
                       <div className="ingredient-display-name">
                         {ingredient.parsed_name}
                         {isMatched && !isEditing && (
-                          <button
-                            type="button"
-                            className="ingredient-match-btn"
-                            onClick={() => handleOpenEdit(idx, ingredient)}
-                            title="Click to change"
-                          >
-                            → {effectiveMatch.product_name}
-                          </button>
+                          <>
+                            <button
+                              type="button"
+                              className="ingredient-match-btn"
+                              onClick={() => handleOpenEdit(idx, ingredient)}
+                              title="Click to change"
+                            >
+                              → {effectiveMatch.product_name}
+                            </button>
+                            {ingredient.auto_match_type === 'learned' && (
+                              <span className="match-badge match-badge-learned" title="You selected this before">
+                                🧠 Remembered
+                              </span>
+                            )}
+                          </>
                         )}
                       </div>
                       {ingredient.prep_note && (
