@@ -720,7 +720,7 @@ function Products() {
                 onClick={() => setCommonProductsView('taxonomy')}
                 title="Nested taxonomy view"
               >
-                🌳 Taxonomy
+                ⊞ Taxonomy
               </button>
             </div>
           </div>

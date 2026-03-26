@@ -72,15 +72,18 @@ def get_base_ingredient_categories(current_user: dict = Depends(get_current_user
         return [row["category"] for row in cursor.fetchall()]
 
 
-@router.get("/base-ingredients/with-variants", response_model=List[BaseIngredientWithVariants])
+@router.get("/base-ingredients/with-variants")
 def list_base_ingredients_with_variants(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     search: Optional[str] = None,
     category: Optional[str] = None,
+    include_counts: bool = Query(True, description="Include recipe/product counts"),
     current_user: dict = Depends(get_current_user)
 ):
-    """List base ingredients with their variants (tree view)."""
+    """List base ingredients with their variants (tree view) including usage counts."""
+    org_id = current_user["organization_id"]
+
     with get_db() as conn:
         cursor = conn.cursor()
 
@@ -89,8 +92,11 @@ def list_base_ingredients_with_variants(
         params = []
 
         if search:
-            query += " AND LOWER(name) LIKE LOWER(%s)"
-            params.append(f"%{search}%")
+            # Search in both base name and variant display names
+            query += """ AND (LOWER(name) LIKE LOWER(%s)
+                OR id IN (SELECT base_ingredient_id FROM ingredient_variants
+                          WHERE LOWER(display_name) LIKE LOWER(%s) AND is_active = 1))"""
+            params.extend([f"%{search}%", f"%{search}%"])
 
         if category:
             query += " AND category = %s"
@@ -105,13 +111,55 @@ def list_base_ingredients_with_variants(
         if not bases:
             return []
 
-        # Get variants for these base ingredients
+        # Get variants for these base ingredients with counts
         base_ids = [b["id"] for b in bases]
-        cursor.execute("""
-            SELECT * FROM ingredient_variants
-            WHERE base_ingredient_id = ANY(%s) AND is_active = 1
-            ORDER BY display_name
-        """, (base_ids,))
+
+        if include_counts:
+            # Get variants with linked common_products count and recipe usage
+            cursor.execute("""
+                SELECT
+                    v.*,
+                    COALESCE(cp_counts.common_product_count, 0) as common_product_count,
+                    COALESCE(cp_counts.linked_product_count, 0) as linked_product_count,
+                    COALESCE(recipe_counts.recipe_count, 0) as recipe_count
+                FROM ingredient_variants v
+                LEFT JOIN (
+                    SELECT
+                        variant_id,
+                        COUNT(*) as common_product_count,
+                        SUM(COALESCE(linked_count, 0)) as linked_product_count
+                    FROM common_products cp
+                    LEFT JOIN (
+                        SELECT common_product_id, COUNT(*) as linked_count
+                        FROM products
+                        WHERE organization_id = %s AND is_active = 1
+                        GROUP BY common_product_id
+                    ) p ON p.common_product_id = cp.id
+                    WHERE cp.variant_id IS NOT NULL AND cp.is_active = 1
+                    GROUP BY variant_id
+                ) cp_counts ON cp_counts.variant_id = v.id
+                LEFT JOIN (
+                    SELECT
+                        cp.variant_id,
+                        COUNT(DISTINCT ri.recipe_id) as recipe_count
+                    FROM recipe_ingredients ri
+                    JOIN common_products cp ON cp.id = ri.common_product_id
+                    JOIN recipes r ON r.id = ri.recipe_id
+                    WHERE cp.variant_id IS NOT NULL
+                      AND r.organization_id = %s
+                      AND r.is_active = 1
+                    GROUP BY cp.variant_id
+                ) recipe_counts ON recipe_counts.variant_id = v.id
+                WHERE v.base_ingredient_id = ANY(%s) AND v.is_active = 1
+                ORDER BY v.display_name
+            """, (org_id, org_id, base_ids))
+        else:
+            cursor.execute("""
+                SELECT * FROM ingredient_variants
+                WHERE base_ingredient_id = ANY(%s) AND is_active = 1
+                ORDER BY display_name
+            """, (base_ids,))
+
         variants = dicts_from_rows(cursor.fetchall())
 
         # Group variants by base ingredient
@@ -319,6 +367,87 @@ def get_variant(variant_id: int, current_user: dict = Depends(get_current_user))
         if not row:
             raise HTTPException(status_code=404, detail="Variant not found")
         return dict_from_row(row)
+
+
+@router.get("/variants/{variant_id}/common-products")
+def get_variant_common_products(
+    variant_id: int,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Get common products linked to a variant, along with their vendor SKUs.
+    Returns the third level of the taxonomy tree: Common Products → Linked SKUs.
+    """
+    org_id = current_user["organization_id"]
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Verify variant exists
+        cursor.execute("SELECT id FROM ingredient_variants WHERE id = %s", (variant_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Variant not found")
+
+        # Get common products with their linked vendor products
+        cursor.execute("""
+            SELECT
+                cp.id,
+                cp.common_name,
+                cp.description,
+                cp.standard_unit_id,
+                u.name as unit_name,
+                cp.created_at,
+                cp.updated_at
+            FROM common_products cp
+            LEFT JOIN units u ON u.id = cp.standard_unit_id
+            WHERE cp.variant_id = %s AND cp.is_active = 1
+            ORDER BY cp.common_name
+        """, (variant_id,))
+        common_products = dicts_from_rows(cursor.fetchall())
+
+        if not common_products:
+            return []
+
+        cp_ids = [cp["id"] for cp in common_products]
+
+        # Get linked vendor products for these common products
+        cursor.execute("""
+            SELECT
+                p.id,
+                p.common_product_id,
+                p.description,
+                p.vendor_id,
+                v.name as vendor_name,
+                p.unit_id,
+                u.name as unit_name,
+                p.pack_size,
+                p.price,
+                p.vendor_code,
+                p.is_active
+            FROM products p
+            JOIN vendors v ON v.id = p.vendor_id
+            LEFT JOIN units u ON u.id = p.unit_id
+            WHERE p.common_product_id = ANY(%s)
+              AND p.organization_id = %s
+              AND p.is_active = 1
+            ORDER BY v.name, p.description
+        """, (cp_ids, org_id))
+        products = dicts_from_rows(cursor.fetchall())
+
+        # Group products by common_product_id
+        products_by_cp = {}
+        for p in products:
+            cp_id = p["common_product_id"]
+            if cp_id not in products_by_cp:
+                products_by_cp[cp_id] = []
+            products_by_cp[cp_id].append(p)
+
+        # Attach linked products to common products
+        for cp in common_products:
+            cp["linked_products"] = products_by_cp.get(cp["id"], [])
+            cp["linked_count"] = len(cp["linked_products"])
+
+        return common_products
 
 
 @router.get("/variants/{variant_id}/similar")
