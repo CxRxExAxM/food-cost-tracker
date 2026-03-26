@@ -6,6 +6,7 @@ import { useOutlet } from '../contexts/OutletContext';
 import { useToast } from '../contexts/ToastContext';
 import OutletBadge from '../components/outlets/OutletBadge';
 import CommonProductsTable from './Products/CommonProductsTable';
+import TaxonomyView from './Products/TaxonomyView';
 import './Products.css';
 
 const API_URL = import.meta.env.VITE_API_URL ?? '';
@@ -38,6 +39,7 @@ function Products() {
   const toast = useToast();
   const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState('products');
+  const [commonProductsView, setCommonProductsView] = useState('list'); // 'list' or 'taxonomy'
   const [products, setProducts] = useState([]);
   const [commonProducts, setCommonProducts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -701,7 +703,35 @@ function Products() {
       </div>
 
       {activeTab === 'common' ? (
-        <CommonProductsTable />
+        <div className="common-products-wrapper">
+          {/* View Toggle */}
+          <div className="view-toggle-bar">
+            <span className="view-toggle-label">View:</span>
+            <div className="view-toggle-buttons">
+              <button
+                className={`view-toggle-btn ${commonProductsView === 'list' ? 'active' : ''}`}
+                onClick={() => setCommonProductsView('list')}
+                title="Flat list view"
+              >
+                ☰ List
+              </button>
+              <button
+                className={`view-toggle-btn ${commonProductsView === 'taxonomy' ? 'active' : ''}`}
+                onClick={() => setCommonProductsView('taxonomy')}
+                title="Nested taxonomy view"
+              >
+                🌳 Taxonomy
+              </button>
+            </div>
+          </div>
+
+          {/* Conditional View Rendering */}
+          {commonProductsView === 'list' ? (
+            <CommonProductsTable />
+          ) : (
+            <TaxonomyView />
+          )}
+        </div>
       ) : (
       <>
       {/* Upload Section */}

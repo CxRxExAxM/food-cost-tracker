@@ -133,8 +133,14 @@ def migrate_taxonomy(dry_run: bool = False, verbose: bool = False):
         # Step 4: Create ingredient_variants and update common_products
         variants_created = 0
         products_updated = 0
+        total_products = len(parsed_products)
 
-        for parsed_prod in parsed_products:
+        print(f"\nProcessing {total_products} products...")
+
+        for i, parsed_prod in enumerate(parsed_products):
+            if (i + 1) % 50 == 0 or (i + 1) == total_products:
+                print(f"  Progress: {i + 1}/{total_products} ({variants_created} new variants)")
+
             base_name = parsed_prod["base_name"]
             base_id = base_id_map.get(base_name)
 
