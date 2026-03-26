@@ -48,6 +48,67 @@ class Unit(Base):
     created_at = Column(DateTime, server_default=func.now())
 
 
+class BaseIngredient(Base):
+    """Base ingredient concept (e.g., Carrot, Chicken, Tomato)."""
+    __tablename__ = 'base_ingredients'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(100), unique=True, nullable=False)
+    category = Column(String(50))       # "Produce", "Protein", "Dairy"
+    subcategory = Column(String(50))    # "Vegetables", "Poultry", "Cheese"
+    default_unit_id = Column(Integer, ForeignKey('units.id'))
+
+    # Allergen flags (inherited by variants)
+    allergen_vegan = Column(Integer, default=0)
+    allergen_vegetarian = Column(Integer, default=0)
+    allergen_gluten = Column(Integer, default=0)
+    allergen_crustation = Column(Integer, default=0)
+    allergen_egg = Column(Integer, default=0)
+    allergen_mollusk = Column(Integer, default=0)
+    allergen_fish = Column(Integer, default=0)
+    allergen_lupin = Column(Integer, default=0)
+    allergen_dairy = Column(Integer, default=0)
+    allergen_tree_nuts = Column(Integer, default=0)
+    allergen_peanuts = Column(Integer, default=0)
+    allergen_sesame = Column(Integer, default=0)
+    allergen_soy = Column(Integer, default=0)
+    allergen_sulphur_dioxide = Column(Integer, default=0)
+    allergen_mustard = Column(Integer, default=0)
+    allergen_celery = Column(Integer, default=0)
+
+    is_active = Column(Integer, default=1)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class IngredientVariant(Base):
+    """Specific form/variant of a base ingredient (e.g., Diced Carrot, Chicken Breast Boneless)."""
+    __tablename__ = 'ingredient_variants'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    base_ingredient_id = Column(Integer, ForeignKey('base_ingredients.id', ondelete='CASCADE'), nullable=False)
+
+    # General attributes
+    variety = Column(String(50))        # "Orange", "Rainbow", "Roma"
+    form = Column(String(50))           # "Baby", "Jumbo", "Petite"
+    prep = Column(String(50))           # "Diced", "Peeled", "Sliced"
+    cut_size = Column(String(30))       # "1/2 inch", "1/4 inch"
+
+    # Protein-specific attributes
+    cut = Column(String(50))            # "Breast", "Thigh", "Loin"
+    bone = Column(String(30))           # "Boneless", "Bone-In"
+    skin = Column(String(30))           # "Skin On", "Skinless"
+    grade = Column(String(30))          # "Natural", "Choice", "Prime"
+    state = Column(String(30))          # "Fresh", "Frozen", "IQF"
+
+    display_name = Column(String(255), nullable=False)
+    allergen_override = Column(Text)    # JSON: {"allergen_gluten": 1}
+
+    is_active = Column(Integer, default=1)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
 class CommonProduct(Base):
     __tablename__ = 'common_products'
 
@@ -58,6 +119,11 @@ class CommonProduct(Base):
     preferred_unit_id = Column(Integer, ForeignKey('units.id'))
     notes = Column(Text)
     is_active = Column(Integer, default=1)
+
+    # Taxonomy bridge columns (Phase 1 migration)
+    base_ingredient_id = Column(Integer, ForeignKey('base_ingredients.id', ondelete='SET NULL'))
+    variant_id = Column(Integer, ForeignKey('ingredient_variants.id', ondelete='SET NULL'))
+    migrated_at = Column(DateTime)
 
     # Allergen flags
     allergen_vegan = Column(Integer, default=0)

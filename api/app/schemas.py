@@ -64,9 +64,144 @@ class CommonProduct(CommonProductBase):
     is_active: bool
     created_at: datetime
     updated_at: datetime
+    # Taxonomy bridge (optional until migrated)
+    base_ingredient_id: Optional[int] = None
+    variant_id: Optional[int] = None
 
     class Config:
         from_attributes = True
+
+
+# =============================================================================
+# Ingredient Taxonomy
+# =============================================================================
+
+class BaseIngredientBase(BaseModel):
+    """Base ingredient concept (e.g., Carrot, Chicken, Tomato)."""
+    name: str
+    category: Optional[str] = None
+    subcategory: Optional[str] = None
+    default_unit_id: Optional[int] = None
+    # Allergen flags
+    allergen_vegan: bool = False
+    allergen_vegetarian: bool = False
+    allergen_gluten: bool = False
+    allergen_crustation: bool = False
+    allergen_egg: bool = False
+    allergen_mollusk: bool = False
+    allergen_fish: bool = False
+    allergen_lupin: bool = False
+    allergen_dairy: bool = False
+    allergen_tree_nuts: bool = False
+    allergen_peanuts: bool = False
+    allergen_sesame: bool = False
+    allergen_soy: bool = False
+    allergen_sulphur_dioxide: bool = False
+    allergen_mustard: bool = False
+    allergen_celery: bool = False
+
+
+class BaseIngredientCreate(BaseIngredientBase):
+    pass
+
+
+class BaseIngredientUpdate(BaseModel):
+    name: Optional[str] = None
+    category: Optional[str] = None
+    subcategory: Optional[str] = None
+    default_unit_id: Optional[int] = None
+    is_active: Optional[bool] = None
+    allergen_vegan: Optional[bool] = None
+    allergen_vegetarian: Optional[bool] = None
+    allergen_gluten: Optional[bool] = None
+    allergen_crustation: Optional[bool] = None
+    allergen_egg: Optional[bool] = None
+    allergen_mollusk: Optional[bool] = None
+    allergen_fish: Optional[bool] = None
+    allergen_lupin: Optional[bool] = None
+    allergen_dairy: Optional[bool] = None
+    allergen_tree_nuts: Optional[bool] = None
+    allergen_peanuts: Optional[bool] = None
+    allergen_sesame: Optional[bool] = None
+    allergen_soy: Optional[bool] = None
+    allergen_sulphur_dioxide: Optional[bool] = None
+    allergen_mustard: Optional[bool] = None
+    allergen_celery: Optional[bool] = None
+
+
+class BaseIngredient(BaseIngredientBase):
+    id: int
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class IngredientVariantBase(BaseModel):
+    """Specific form/variant of a base ingredient."""
+    base_ingredient_id: int
+    display_name: str
+    # General attributes
+    variety: Optional[str] = None       # "Orange", "Rainbow", "Roma"
+    form: Optional[str] = None          # "Baby", "Jumbo", "Petite"
+    prep: Optional[str] = None          # "Diced", "Peeled", "Sliced"
+    cut_size: Optional[str] = None      # "1/2 inch", "1/4 inch"
+    # Protein-specific attributes
+    cut: Optional[str] = None           # "Breast", "Thigh", "Loin"
+    bone: Optional[str] = None          # "Boneless", "Bone-In"
+    skin: Optional[str] = None          # "Skin On", "Skinless"
+    grade: Optional[str] = None         # "Natural", "Choice", "Prime"
+    state: Optional[str] = None         # "Fresh", "Frozen", "IQF"
+
+
+class IngredientVariantCreate(IngredientVariantBase):
+    pass
+
+
+class IngredientVariantUpdate(BaseModel):
+    display_name: Optional[str] = None
+    variety: Optional[str] = None
+    form: Optional[str] = None
+    prep: Optional[str] = None
+    cut_size: Optional[str] = None
+    cut: Optional[str] = None
+    bone: Optional[str] = None
+    skin: Optional[str] = None
+    grade: Optional[str] = None
+    state: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+class IngredientVariant(IngredientVariantBase):
+    id: int
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class BaseIngredientWithVariants(BaseIngredient):
+    """Base ingredient with its variants for tree view."""
+    variants: List[IngredientVariant] = []
+
+
+class VariantMergeRequest(BaseModel):
+    """Request to merge multiple variants into one."""
+    keep_variant_id: int
+    merge_variant_ids: List[int]
+
+
+class VariantMergeResponse(BaseModel):
+    """Response from variant merge operation."""
+    success: bool
+    kept_variant_id: int
+    merged_count: int
+    products_updated: int
+    mappings_updated: int
 
 
 # Products
