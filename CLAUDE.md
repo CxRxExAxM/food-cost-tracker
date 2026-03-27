@@ -265,10 +265,12 @@ Examples:
 
 ### Running Migrations
 
-**Local:**
+**Local (run from project root, NOT from api/):**
 ```bash
 alembic upgrade head
 ```
+
+⚠️ **IMPORTANT:** The `alembic.ini` config file is in the project root. Always run alembic commands from the project root directory, never from `api/` or any subdirectory.
 
 **Production (Render):**
 - Runs automatically on deploy via Dockerfile.render
@@ -412,29 +414,33 @@ Test these regularly:
 
 ### ❌ Don't Do This:
 
-1. **Use hardcoded colors in CSS** - ALWAYS use CSS variables from DESIGN_SYSTEM.md
-2. **Create new .md files in root** without archiving old ones
-3. **Restructure code** before HACCP development starts
-4. **Force push to main or dev branches**
-5. **Implement features without testing multi-tenancy**
-6. **Skip audit logging for critical actions**
-7. **Modify completed migrations**
-8. **Use `localStorage` directly** (use AuthContext.setToken)
-9. **Add emojis to code** unless explicitly requested
-10. **Create new components without checking DESIGN_SYSTEM.md first**
+1. **Make assumptions** - Don't assume directory structures, commands, or paths. Read the actual files and check the actual project structure before suggesting commands.
+2. **Use hardcoded colors in CSS** - ALWAYS use CSS variables from DESIGN_SYSTEM.md
+3. **Create new .md files in root** without archiving old ones
+4. **Restructure code** before HACCP development starts
+5. **Force push to main or dev branches**
+6. **Implement features without testing multi-tenancy**
+7. **Skip audit logging for critical actions**
+8. **Modify completed migrations**
+9. **Use `localStorage` directly** (use AuthContext.setToken)
+10. **Add emojis to code** unless explicitly requested
+11. **Create new components without checking DESIGN_SYSTEM.md first**
+12. **Run alembic from api/ directory** - alembic.ini is in project root, run from there
 
 ### ✅ Do This Instead:
 
-1. **Use CSS variables from DESIGN_SYSTEM.md** for all styling
-2. **Check DESIGN_SYSTEM.md BEFORE creating components** - every time
-3. **Update existing docs** or archive outdated ones
-4. **Wait for modular restructure** per FUTURE_PLANS.md
-5. **Use normal git workflow** (commits, PRs)
-6. **Test with multiple orgs/outlets**
-7. **Log all subscription, user, impersonation changes**
-8. **Create new migrations** for schema changes
-9. **Use React contexts and hooks** for state management
-10. **Keep code professional** and clean
+1. **Verify before suggesting** - Read files, check paths, confirm structure exists before giving commands
+2. **Use CSS variables from DESIGN_SYSTEM.md** for all styling
+3. **Check DESIGN_SYSTEM.md BEFORE creating components** - every time
+4. **Update existing docs** or archive outdated ones
+5. **Wait for modular restructure** per FUTURE_PLANS.md
+6. **Use normal git workflow** (commits, PRs)
+7. **Test with multiple orgs/outlets**
+8. **Log all subscription, user, impersonation changes**
+9. **Create new migrations** for schema changes
+10. **Use React contexts and hooks** for state management
+11. **Keep code professional** and clean
+12. **Run alembic from project root** - where alembic.ini lives
 
 ---
 
