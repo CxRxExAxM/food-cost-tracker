@@ -330,6 +330,24 @@ function EHC() {
     }
   }
 
+  async function updateAuditDate(dateString) {
+    try {
+      await fetchWithAuth(`${API_BASE}/cycles/${activeCycle.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ target_date: dateString })
+      });
+      // Update local state
+      setActiveCycle(prev => ({ ...prev, target_date: dateString }));
+      setCycles(prev => prev.map(c =>
+        c.id === activeCycle.id ? { ...c, target_date: dateString } : c
+      ));
+      loadDashboard(activeCycle.id);
+      toast.success('Audit date updated');
+    } catch (error) {
+      toast.error('Failed to update audit date');
+    }
+  }
+
   async function loadRecords() {
     try {
       let url = `${API_BASE}/records?`;
@@ -791,6 +809,17 @@ function EHC() {
               ))}
             </select>
 
+            {/* Audit Date Picker */}
+            <div className="audit-date-picker">
+              <label>Audit Date:</label>
+              <input
+                type="date"
+                value={activeCycle?.target_date || ''}
+                onChange={e => updateAuditDate(e.target.value)}
+                className="date-input"
+              />
+            </div>
+
             {/* View tabs */}
             <div className="view-tabs">
               <button
@@ -977,41 +1006,89 @@ function EHC() {
                         <td className="point-area">{point.responsible_area || '-'}</td>
                         <td className="point-records">
                           {point.linked_record_count > 0 ? (
-                            <span className="record-count">{point.linked_record_count}</span>
+                            <div className="records-progress">
+                              <span className="record-count" title={point.linked_record_names}>
+                                {point.approved_submissions}/{point.total_submissions}
+                              </span>
+                              {point.total_submissions > 0 && (
+                                <div className="mini-progress-bar">
+                                  <div
+                                    className="mini-progress-fill"
+                                    style={{ width: `${(point.approved_submissions / point.total_submissions) * 100}%` }}
+                                  />
+                                </div>
+                              )}
+                            </div>
                           ) : (
-                            <span className="no-records">Obs</span>
+                            <span className="no-records" title="Observational - no linked records">Obs</span>
                           )}
                         </td>
                         <td className="point-actions" onClick={e => e.stopPropagation()}>
-                          <select
-                            value={point.status}
-                            onChange={e => updatePointStatus(point.id, e.target.value)}
-                            className="status-select"
-                          >
-                            <option value="not_started">Not Started</option>
-                            <option value="in_progress">In Progress</option>
-                            <option value="evidence_collected">Evidence Collected</option>
-                            <option value="verified">Verified</option>
-                            <option value="flagged">Flagged</option>
-                          </select>
+                          {/* Only show manual status for observational points (no linked records) */}
+                          {point.linked_record_count === 0 ? (
+                            <select
+                              value={point.status}
+                              onChange={e => updatePointStatus(point.id, e.target.value)}
+                              className="status-select"
+                            >
+                              <option value="not_started">Not Started</option>
+                              <option value="in_progress">In Progress</option>
+                              <option value="evidence_collected">Evidence Collected</option>
+                              <option value="verified">Verified</option>
+                              <option value="flagged">Flagged</option>
+                            </select>
+                          ) : (
+                            <span className="auto-status" title="Status computed from records">
+                              Auto
+                            </span>
+                          )}
                         </td>
                       </tr>
                       {expandedPoint === point.id && (
                         <tr className="point-expanded-row">
                           <td colSpan="7">
                             <div className="point-details">
-                              <div className="point-detail-section">
-                                <strong>Section:</strong> {point.section_name}
-                              </div>
-                              <div className="point-detail-section">
-                                <strong>Subsection:</strong> {point.subsection_code} - {point.subsection_name}
-                              </div>
-                              <div className="point-detail-section">
-                                <strong>Max Score:</strong> {point.max_score} pts
+                              <div className="point-detail-grid">
+                                <div className="point-detail-section">
+                                  <strong>Section:</strong> {point.section_name}
+                                </div>
+                                <div className="point-detail-section">
+                                  <strong>Subsection:</strong> {point.subsection_code} - {point.subsection_name}
+                                </div>
+                                <div className="point-detail-section">
+                                  <strong>Max Score:</strong> {point.max_score} pts
+                                </div>
                               </div>
                               {point.notes && (
                                 <div className="point-detail-section">
                                   <strong>Notes:</strong> {point.notes}
+                                </div>
+                              )}
+                              {/* Linked Records */}
+                              {point.linked_record_count > 0 && (
+                                <div className="point-linked-records">
+                                  <strong>Required Records:</strong>
+                                  <div className="linked-records-list">
+                                    {point.linked_record_names?.split(', ').map((rec, idx) => (
+                                      <span key={idx} className="linked-record-chip">
+                                        {rec}
+                                      </span>
+                                    ))}
+                                  </div>
+                                  <div className="completion-summary">
+                                    {point.approved_submissions === point.total_submissions ? (
+                                      <span className="completion-complete">All {point.total_submissions} submissions approved</span>
+                                    ) : (
+                                      <span className="completion-pending">
+                                        {point.approved_submissions} of {point.total_submissions} submissions approved
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                              {point.linked_record_count === 0 && (
+                                <div className="point-observational">
+                                  <strong>Observational Point:</strong> Verified during audit walk-through (no linked records)
                                 </div>
                               )}
                             </div>

@@ -484,20 +484,36 @@ def get_points(
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Cycle not found")
 
-        # Build query
+        # Build query with computed status from linked records
+        # Points with records: status derived from record completion
+        # Points without records (observational): use manual status
         query = """
             SELECT
                 ap.id, ap.ref_code, ap.question_text, ap.nc_level, ap.max_score,
-                ap.actual_score, ap.status, ap.flag_color, ap.responsible_area, ap.notes,
+                ap.actual_score, ap.status as manual_status, ap.flag_color, ap.responsible_area, ap.notes,
                 ss.ref_code as subsection_code, ss.name as subsection_name,
                 s.ref_number as section_number, s.name as section_name,
-                (SELECT COUNT(*) FROM ehc_point_record_link WHERE audit_point_id = ap.id) as linked_record_count
+                COALESCE(rec_stats.record_count, 0) as linked_record_count,
+                COALESCE(rec_stats.total_submissions, 0) as total_submissions,
+                COALESCE(rec_stats.approved_submissions, 0) as approved_submissions,
+                rec_stats.linked_record_names
             FROM ehc_audit_point ap
             JOIN ehc_subsection ss ON ss.id = ap.subsection_id
             JOIN ehc_section s ON s.id = ss.section_id
+            LEFT JOIN LATERAL (
+                SELECT
+                    COUNT(DISTINCT prl.record_id) as record_count,
+                    COUNT(rs.id) as total_submissions,
+                    SUM(CASE WHEN rs.status = 'approved' THEN 1 ELSE 0 END) as approved_submissions,
+                    STRING_AGG(DISTINCT r.record_number || ': ' || r.name, ', ' ORDER BY r.record_number || ': ' || r.name) as linked_record_names
+                FROM ehc_point_record_link prl
+                JOIN ehc_record r ON r.id = prl.record_id
+                LEFT JOIN ehc_record_submission rs ON rs.record_id = r.id AND rs.audit_cycle_id = %s
+                WHERE prl.audit_point_id = ap.id
+            ) rec_stats ON true
             WHERE s.audit_cycle_id = %s
         """
-        params = [cycle_id]
+        params = [cycle_id, cycle_id]  # First for LATERAL, second for WHERE
 
         if section:
             query += " AND s.ref_number = %s"
@@ -511,10 +527,6 @@ def get_points(
             query += " AND ap.nc_level = %s"
             params.append(nc_level)
 
-        if status:
-            query += " AND ap.status = %s"
-            params.append(status)
-
         if area:
             query += " AND LOWER(ap.responsible_area) LIKE %s"
             params.append(f"%{area.lower()}%")
@@ -523,6 +535,30 @@ def get_points(
 
         cursor.execute(query, params)
         points = dicts_from_rows(cursor.fetchall())
+
+        # Compute status from linked records
+        for point in points:
+            if point['linked_record_count'] > 0:
+                # Has records: derive status from submissions
+                total = point['total_submissions']
+                approved = point['approved_submissions']
+                if total > 0 and approved == total:
+                    point['status'] = 'verified'
+                    point['computed_status'] = True
+                elif approved > 0:
+                    point['status'] = 'in_progress'
+                    point['computed_status'] = True
+                else:
+                    point['status'] = 'not_started'
+                    point['computed_status'] = True
+            else:
+                # No records (observational): use manual status
+                point['status'] = point['manual_status']
+                point['computed_status'] = False
+
+        # Filter by status (after computing)
+        if status:
+            points = [p for p in points if p['status'] == status]
 
         # Optionally filter by has_records
         if has_records is not None:
