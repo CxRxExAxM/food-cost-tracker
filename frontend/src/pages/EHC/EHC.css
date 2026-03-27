@@ -1460,6 +1460,64 @@
   display: none;
 }
 
+/* File attachment styles */
+.file-attached-group {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  justify-content: center;
+}
+
+.file-link {
+  color: var(--color-green);
+  text-decoration: none;
+  font-size: var(--text-xs);
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-link:hover {
+  color: var(--color-green-bright);
+  text-decoration: underline;
+}
+
+.file-replace-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  font-size: 10px;
+  cursor: pointer;
+  background: transparent;
+  color: var(--text-tertiary);
+  border-radius: var(--radius-sm);
+  opacity: 0.6;
+  transition: opacity 0.15s;
+}
+
+.file-replace-btn:hover {
+  opacity: 1;
+  color: var(--text-secondary);
+}
+
+.file-replace-btn input {
+  display: none;
+}
+
+.file-uploading {
+  font-size: var(--text-xs);
+  color: var(--color-yellow);
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
 /* Flat Submissions Table (for office_book) */
 .submissions-table-flat {
   width: 100%;

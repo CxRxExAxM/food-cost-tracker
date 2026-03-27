@@ -193,7 +193,7 @@ function RecordTypeBadge({ type }) {
 
 // Main EHC Component
 function EHC() {
-  const { showToast } = useToast();
+  const toast = useToast();
   const { user, isAdmin } = useAuth();
 
   // State
@@ -267,7 +267,7 @@ function EHC() {
       const active = data.data?.find(c => c.status === 'preparing' || c.status === 'in_progress') || data.data?.[0];
       setActiveCycle(active || null);
     } catch (error) {
-      showToast('Failed to load audit cycles', 'error');
+      toast.error('Failed to load audit cycles');
       console.error(error);
     } finally {
       setLoading(false);
@@ -279,7 +279,7 @@ function EHC() {
       const data = await fetchWithAuth(`${API_BASE}/cycles/${cycleId}/dashboard`);
       setDashboard(data);
     } catch (error) {
-      showToast('Failed to load dashboard', 'error');
+      toast.error('Failed to load dashboard');
       console.error(error);
     }
   }
@@ -294,7 +294,7 @@ function EHC() {
       const data = await fetchWithAuth(url);
       setPoints(data.data || []);
     } catch (error) {
-      showToast('Failed to load audit points', 'error');
+      toast.error('Failed to load audit points');
       console.error(error);
     }
   }
@@ -306,11 +306,11 @@ function EHC() {
         method: 'POST',
         body: JSON.stringify({ year: newCycleYear })
       });
-      showToast(`Audit cycle ${newCycleYear} created successfully!`, 'success');
+      toast.success(`Audit cycle ${newCycleYear} created successfully!`);
       setShowCreateModal(false);
       loadCycles();
     } catch (error) {
-      showToast(error.message || 'Failed to create cycle', 'error');
+      toast.error(error.message || 'Failed to create cycle');
     } finally {
       setCreatingCycle(false);
     }
@@ -322,11 +322,11 @@ function EHC() {
         method: 'PATCH',
         body: JSON.stringify({ status })
       });
-      showToast('Status updated', 'success');
+      toast.success('Status updated');
       loadPoints(activeCycle.id);
       loadDashboard(activeCycle.id);
     } catch (error) {
-      showToast('Failed to update status', 'error');
+      toast.error('Failed to update status');
     }
   }
 
@@ -354,7 +354,7 @@ function EHC() {
 
       setRecords(sorted);
     } catch (error) {
-      showToast('Failed to load records', 'error');
+      toast.error('Failed to load records');
       console.error(error);
     }
   }
@@ -364,7 +364,7 @@ function EHC() {
       const data = await fetchWithAuth(`${API_BASE}/cycles/${cycleId}/submissions`);
       setSubmissions(data.data || []);
     } catch (error) {
-      showToast('Failed to load submissions', 'error');
+      toast.error('Failed to load submissions');
       console.error(error);
     }
   }
@@ -375,11 +375,11 @@ function EHC() {
         method: 'PATCH',
         body: JSON.stringify(updates)
       });
-      showToast('Submission updated', 'success');
+      toast.success('Submission updated');
       loadSubmissions(activeCycle.id);
       loadDashboard(activeCycle.id);
     } catch (error) {
-      showToast('Failed to update submission', 'error');
+      toast.error('Failed to update submission');
     }
   }
 
@@ -402,10 +402,10 @@ function EHC() {
         throw new Error('Upload failed');
       }
 
-      showToast('File uploaded successfully', 'success');
+      toast.success('File uploaded successfully');
       loadSubmissions(activeCycle.id);
     } catch (error) {
-      showToast('Failed to upload file', 'error');
+      toast.error('Failed to upload file');
     } finally {
       setUploadingSubmission(null);
     }
@@ -413,7 +413,7 @@ function EHC() {
 
   async function bulkUpdateSubmissions(status) {
     if (selectedSubmissions.size === 0) {
-      showToast('No submissions selected', 'error');
+      toast.error('No submissions selected');
       return;
     }
 
@@ -425,12 +425,12 @@ function EHC() {
         })
       );
       await Promise.all(promises);
-      showToast(`${selectedSubmissions.size} submissions updated`, 'success');
+      toast.success(`${selectedSubmissions.size} submissions updated`);
       setSelectedSubmissions(new Set());
       loadSubmissions(activeCycle.id);
       loadDashboard(activeCycle.id);
     } catch (error) {
-      showToast('Failed to update submissions', 'error');
+      toast.error('Failed to update submissions');
     }
   }
 
@@ -505,7 +505,7 @@ function EHC() {
   async function approvePeriod(periodGroup) {
     const pendingSubs = periodGroup.submissions.filter(s => s.status !== 'approved');
     if (pendingSubs.length === 0) {
-      showToast('All submissions already approved', 'info');
+      toast.info('All submissions already approved');
       return;
     }
     try {
@@ -515,11 +515,11 @@ function EHC() {
           body: JSON.stringify({ status: 'approved' })
         })
       ));
-      showToast(`${pendingSubs.length} submissions approved`, 'success');
+      toast.success(`${pendingSubs.length} submissions approved`);
       loadSubmissions(activeCycle.id);
       loadDashboard(activeCycle.id);
     } catch (error) {
-      showToast('Failed to approve submissions', 'error');
+      toast.error('Failed to approve submissions');
     }
   }
 
@@ -556,12 +556,12 @@ function EHC() {
         method: 'PATCH',
         body: JSON.stringify(recordData)
       });
-      showToast('Record updated', 'success');
+      toast.success('Record updated');
       setEditingRecord(null);
       setEditValues({});
       loadRecords();
     } catch (error) {
-      showToast('Failed to update record', 'error');
+      toast.error('Failed to update record');
     }
   }
 
@@ -572,11 +572,11 @@ function EHC() {
         method: 'POST',
         body: JSON.stringify({ outlet_name: outletName })
       });
-      showToast('Outlet added', 'success');
+      toast.success('Outlet added');
       loadRecordOutlets(recordId);
       loadRecords();
     } catch (error) {
-      showToast(error.message || 'Failed to add outlet', 'error');
+      toast.error(error.message || 'Failed to add outlet');
     }
   }
 
@@ -586,11 +586,11 @@ function EHC() {
       await fetchWithAuth(`${API_BASE}/records/${recordId}/outlets/${encodeURIComponent(outletName)}`, {
         method: 'DELETE'
       });
-      showToast('Outlet removed', 'success');
+      toast.success('Outlet removed');
       loadRecordOutlets(recordId);
       loadRecords();
     } catch (error) {
-      showToast('Failed to remove outlet', 'error');
+      toast.error('Failed to remove outlet');
     }
   }
 
@@ -613,10 +613,10 @@ function EHC() {
           responsibility_code: responsibilityCode,
         })
       });
-      showToast('Submission created', 'success');
+      toast.success('Submission created');
       loadSubmissions(activeCycle.id);
     } catch (error) {
-      showToast(error.message || 'Failed to create submission', 'error');
+      toast.error(error.message || 'Failed to create submission');
     }
   }
 
@@ -627,10 +627,10 @@ function EHC() {
       await fetchWithAuth(`${API_BASE}/submissions/${submissionId}`, {
         method: 'DELETE'
       });
-      showToast('Submission deleted', 'success');
+      toast.success('Submission deleted');
       loadSubmissions(activeCycle.id);
     } catch (error) {
-      showToast('Failed to delete submission', 'error');
+      toast.error('Failed to delete submission');
     }
   }
 
@@ -643,7 +643,7 @@ function EHC() {
       });
       loadSubmissions(activeCycle.id);
     } catch (error) {
-      showToast('Failed to update', 'error');
+      toast.error('Failed to update');
     }
   }
 
@@ -1213,8 +1213,49 @@ function EHC() {
                                                   />
                                                 </td>
                                                 <td className="file-cell">
-                                                  {sub.file_path ? (
-                                                    <span className="file-attached" title={sub.file_path}>📎</span>
+                                                  {uploadingSubmission === sub.id ? (
+                                                    <span className="file-uploading">Uploading...</span>
+                                                  ) : sub.file_path ? (
+                                                    <div className="file-attached-group">
+                                                      <a
+                                                        href={`${API_BASE}/submissions/${sub.id}/download`}
+                                                        className="file-link"
+                                                        title={sub.original_filename || 'Download file'}
+                                                        onClick={e => {
+                                                          e.preventDefault();
+                                                          // Download with auth header
+                                                          const token = localStorage.getItem('token');
+                                                          fetch(`${API_BASE}/submissions/${sub.id}/download`, {
+                                                            headers: { 'Authorization': `Bearer ${token}` }
+                                                          })
+                                                          .then(res => res.blob())
+                                                          .then(blob => {
+                                                            const url = window.URL.createObjectURL(blob);
+                                                            const a = document.createElement('a');
+                                                            a.href = url;
+                                                            a.download = sub.original_filename || 'file';
+                                                            a.click();
+                                                            window.URL.revokeObjectURL(url);
+                                                          });
+                                                        }}
+                                                      >
+                                                        {sub.original_filename
+                                                          ? (sub.original_filename.length > 15
+                                                            ? sub.original_filename.substring(0, 12) + '...'
+                                                            : sub.original_filename)
+                                                          : '📎'}
+                                                      </a>
+                                                      <label className="file-replace-btn" title="Replace file">
+                                                        <input
+                                                          type="file"
+                                                          accept=".pdf,.jpg,.jpeg,.png,.docx,.xlsx"
+                                                          onChange={e => {
+                                                            if (e.target.files[0]) uploadSubmissionFile(sub.id, e.target.files[0]);
+                                                          }}
+                                                        />
+                                                        ↻
+                                                      </label>
+                                                    </div>
                                                   ) : (
                                                     <label className="file-upload-label-sm">
                                                       <input
@@ -1310,8 +1351,48 @@ function EHC() {
                                       />
                                     </td>
                                     <td className="file-cell">
-                                      {sub.file_path ? (
-                                        <span className="file-attached" title={sub.file_path}>📎</span>
+                                      {uploadingSubmission === sub.id ? (
+                                        <span className="file-uploading">Uploading...</span>
+                                      ) : sub.file_path ? (
+                                        <div className="file-attached-group">
+                                          <a
+                                            href={`${API_BASE}/submissions/${sub.id}/download`}
+                                            className="file-link"
+                                            title={sub.original_filename || 'Download file'}
+                                            onClick={e => {
+                                              e.preventDefault();
+                                              const token = localStorage.getItem('token');
+                                              fetch(`${API_BASE}/submissions/${sub.id}/download`, {
+                                                headers: { 'Authorization': `Bearer ${token}` }
+                                              })
+                                              .then(res => res.blob())
+                                              .then(blob => {
+                                                const url = window.URL.createObjectURL(blob);
+                                                const a = document.createElement('a');
+                                                a.href = url;
+                                                a.download = sub.original_filename || 'file';
+                                                a.click();
+                                                window.URL.revokeObjectURL(url);
+                                              });
+                                            }}
+                                          >
+                                            {sub.original_filename
+                                              ? (sub.original_filename.length > 15
+                                                ? sub.original_filename.substring(0, 12) + '...'
+                                                : sub.original_filename)
+                                              : '📎'}
+                                          </a>
+                                          <label className="file-replace-btn" title="Replace file">
+                                            <input
+                                              type="file"
+                                              accept=".pdf,.jpg,.jpeg,.png,.docx,.xlsx"
+                                              onChange={e => {
+                                                if (e.target.files[0]) uploadSubmissionFile(sub.id, e.target.files[0]);
+                                              }}
+                                            />
+                                            ↻
+                                          </label>
+                                        </div>
                                       ) : (
                                         <label className="file-upload-label-sm">
                                           <input

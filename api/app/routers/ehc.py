@@ -5,6 +5,7 @@ Organization-scoped audit cycle management with section/subsection/point hierarc
 """
 
 from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, Query
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime, date
@@ -896,7 +897,7 @@ def get_submissions(
             SELECT
                 rs.id, rs.record_id, rs.outlet_name, rs.period_label,
                 rs.period_start, rs.period_end, rs.status, rs.is_physical,
-                rs.file_path, rs.notes, rs.submitted_at, rs.approved_at,
+                rs.file_path, rs.original_filename, rs.notes, rs.submitted_at, rs.approved_at,
                 rs.responsibility_code,
                 r.record_number, r.name as record_name, r.location_type
             FROM ehc_record_submission rs
@@ -1118,12 +1119,12 @@ async def upload_submission_file(
         with open(file_path, "wb") as f:
             f.write(content)
 
-        # Update submission
+        # Update submission with file path and original filename
         cursor.execute("""
             UPDATE ehc_record_submission
-            SET file_path = %s, updated_at = NOW()
+            SET file_path = %s, original_filename = %s, updated_at = NOW()
             WHERE id = %s
-        """, (file_path, submission_id))
+        """, (file_path, file.filename, submission_id))
 
         conn.commit()
 
@@ -1131,8 +1132,45 @@ async def upload_submission_file(
             "status": "ok",
             "submission_id": submission_id,
             "file_path": file_path,
-            "original_name": file.filename
+            "original_filename": file.filename
         }
+
+
+@router.get("/submissions/{submission_id}/download")
+async def download_submission_file(
+    submission_id: int,
+    current_user: dict = Depends(get_current_user)
+):
+    """Download the file attached to a submission."""
+    org_id = current_user["organization_id"]
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Verify ownership and get file info
+        cursor.execute("""
+            SELECT rs.file_path, rs.original_filename
+            FROM ehc_record_submission rs
+            JOIN ehc_audit_cycle c ON c.id = rs.audit_cycle_id
+            WHERE rs.id = %s AND c.organization_id = %s
+        """, (submission_id, org_id))
+
+        submission = cursor.fetchone()
+        if not submission:
+            raise HTTPException(status_code=404, detail="Submission not found")
+
+        if not submission['file_path']:
+            raise HTTPException(status_code=404, detail="No file attached to this submission")
+
+        if not os.path.exists(submission['file_path']):
+            raise HTTPException(status_code=404, detail="File not found on server")
+
+        # Return file with original filename
+        return FileResponse(
+            path=submission['file_path'],
+            filename=submission['original_filename'] or os.path.basename(submission['file_path']),
+            media_type='application/octet-stream'
+        )
 
 
 # ============================================
