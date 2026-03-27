@@ -414,21 +414,22 @@ def get_variant_common_products(
                 dp.distributor_sku,
                 d.id as distributor_id,
                 d.name as distributor_name,
-                (
-                    SELECT ph.unit_price
-                    FROM price_history ph
-                    WHERE ph.distributor_product_id = dp.id
-                    ORDER BY ph.effective_date DESC
-                    LIMIT 1
-                ) as latest_price
+                ph.unit_price as latest_price
             FROM products p
             JOIN distributor_products dp ON dp.product_id = p.id
             JOIN distributors d ON d.id = dp.distributor_id
             LEFT JOIN units u ON u.id = p.unit_id
+            LEFT JOIN LATERAL (
+                SELECT unit_price
+                FROM price_history
+                WHERE distributor_product_id = dp.id
+                ORDER BY effective_date DESC
+                LIMIT 1
+            ) ph ON true
             WHERE p.common_product_id = ANY(%s)
               AND dp.organization_id = %s
               AND p.is_active = 1
-              AND dp.is_available = 1
+              AND COALESCE(dp.is_available, 1) = 1
             ORDER BY d.name, p.name
         """, (cp_ids, org_id))
         products = dicts_from_rows(cursor.fetchall())
