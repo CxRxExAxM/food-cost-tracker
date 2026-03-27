@@ -212,7 +212,28 @@ def list_base_ingredients_with_variants(
 
         variants = dicts_from_rows(cursor.fetchall())
 
-        # Group variants by base ingredient
+        # Build hierarchical tree structure for variants
+        def build_variant_tree(variants_list):
+            """Build a tree of variants where children are nested under parents."""
+            # Index variants by id for quick lookup
+            variants_by_id = {v["id"]: v for v in variants_list}
+
+            # Initialize children arrays
+            for v in variants_list:
+                v["children"] = []
+
+            # Build tree - attach children to parents
+            root_variants = []
+            for v in variants_list:
+                parent_id = v.get("parent_variant_id")
+                if parent_id and parent_id in variants_by_id:
+                    variants_by_id[parent_id]["children"].append(v)
+                else:
+                    root_variants.append(v)
+
+            return root_variants
+
+        # Group variants by base ingredient first
         variants_by_base = {}
         for v in variants:
             base_id = v["base_ingredient_id"]
@@ -220,9 +241,10 @@ def list_base_ingredients_with_variants(
                 variants_by_base[base_id] = []
             variants_by_base[base_id].append(v)
 
-        # Attach variants to bases
+        # Build tree for each base's variants and attach
         for base in bases:
-            base["variants"] = variants_by_base.get(base["id"], [])
+            base_variants = variants_by_base.get(base["id"], [])
+            base["variants"] = build_variant_tree(base_variants)
 
         return bases
 
@@ -645,6 +667,108 @@ def update_variant(
         conn.commit()
 
         return dict_from_row(row)
+
+
+# =============================================================================
+# Variant Hierarchy Management
+# =============================================================================
+
+class VariantMoveRequest(BaseModel):
+    parent_variant_id: Optional[int] = None  # None = move to root level
+
+
+@router.patch("/variants/{variant_id}/move")
+def move_variant(
+    variant_id: int,
+    data: VariantMoveRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Move a variant to a new parent (or to root level).
+
+    This updates the parent_variant_id and recalculates depth.
+    """
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Get the variant
+        cursor.execute("SELECT * FROM ingredient_variants WHERE id = %s", (variant_id,))
+        variant = cursor.fetchone()
+        if not variant:
+            raise HTTPException(status_code=404, detail="Variant not found")
+
+        new_parent_id = data.parent_variant_id
+        new_depth = 0
+
+        if new_parent_id:
+            # Verify parent exists and is from the same base ingredient
+            cursor.execute(
+                "SELECT id, base_ingredient_id, depth FROM ingredient_variants WHERE id = %s",
+                (new_parent_id,)
+            )
+            parent = cursor.fetchone()
+            if not parent:
+                raise HTTPException(status_code=400, detail="Parent variant not found")
+            if parent["base_ingredient_id"] != variant["base_ingredient_id"]:
+                raise HTTPException(status_code=400, detail="Cannot move to variant from different base ingredient")
+
+            # Prevent circular reference
+            if new_parent_id == variant_id:
+                raise HTTPException(status_code=400, detail="Variant cannot be its own parent")
+
+            # Check for circular reference in ancestors
+            ancestor_id = new_parent_id
+            while ancestor_id:
+                if ancestor_id == variant_id:
+                    raise HTTPException(status_code=400, detail="Circular reference detected")
+                cursor.execute(
+                    "SELECT parent_variant_id FROM ingredient_variants WHERE id = %s",
+                    (ancestor_id,)
+                )
+                row = cursor.fetchone()
+                ancestor_id = row["parent_variant_id"] if row else None
+
+            new_depth = (parent["depth"] or 0) + 1
+
+        # Update the variant
+        cursor.execute("""
+            UPDATE ingredient_variants
+            SET parent_variant_id = %s, depth = %s, updated_at = NOW()
+            WHERE id = %s
+            RETURNING *
+        """, (new_parent_id, new_depth, variant_id))
+        updated = cursor.fetchone()
+
+        # Update depths of all descendants
+        def update_descendant_depths(parent_id, parent_depth):
+            cursor.execute(
+                "SELECT id FROM ingredient_variants WHERE parent_variant_id = %s",
+                (parent_id,)
+            )
+            children = cursor.fetchall()
+            for child in children:
+                child_depth = parent_depth + 1
+                cursor.execute(
+                    "UPDATE ingredient_variants SET depth = %s WHERE id = %s",
+                    (child_depth, child["id"])
+                )
+                update_descendant_depths(child["id"], child_depth)
+
+        update_descendant_depths(variant_id, new_depth)
+
+        conn.commit()
+
+        log_audit(cursor, "variant_moved", "ingredient_variant", variant_id,
+                  current_user["id"], current_user["organization_id"],
+                  {"old_parent_id": variant["parent_variant_id"], "new_parent_id": new_parent_id})
+        conn.commit()
+
+        return {
+            "id": variant_id,
+            "parent_variant_id": new_parent_id,
+            "depth": new_depth,
+            "message": f"Moved to {'root level' if not new_parent_id else f'under variant {new_parent_id}'}"
+        }
 
 
 # =============================================================================

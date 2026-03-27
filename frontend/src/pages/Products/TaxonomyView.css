@@ -826,3 +826,103 @@
 .btn-secondary:hover {
   background: var(--bg-tertiary);
 }
+
+/* Hierarchical Tree Styles */
+.tree-line {
+  color: var(--border-default);
+  margin-right: 4px;
+}
+
+.variant-row.depth-1,
+.variant-row.depth-2,
+.variant-row.depth-3 {
+  border-left: 1px dashed var(--border-subtle);
+  margin-left: 0;
+}
+
+.variant-row.depth-1 {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.variant-row.depth-2 {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.variant-row.depth-3 {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.count-children {
+  background: var(--color-purple-dim, rgba(155, 89, 182, 0.15));
+  color: var(--color-purple, #9b59b6);
+}
+
+/* Move Button */
+.btn-move {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+}
+
+.btn-move:hover {
+  background: var(--color-purple-dim, rgba(155, 89, 182, 0.15));
+  color: var(--color-purple, #9b59b6);
+}
+
+/* Move Modal */
+.move-modal {
+  max-width: 450px;
+}
+
+.move-hint {
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+  margin-bottom: var(--space-4);
+}
+
+.move-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-height: 300px;
+  overflow-y: auto;
+  padding: var(--space-2) 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-primary);
+}
+
+.move-option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  cursor: pointer;
+  transition: background-color var(--transition-fast);
+}
+
+.move-option:hover {
+  background: var(--bg-tertiary);
+}
+
+.move-option.selected {
+  background: var(--color-yellow-dim);
+}
+
+.move-option input[type="radio"] {
+  accent-color: var(--color-yellow);
+}
+
+.move-option .option-label {
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}

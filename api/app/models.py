@@ -88,6 +88,10 @@ class IngredientVariant(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     base_ingredient_id = Column(Integer, ForeignKey('base_ingredients.id', ondelete='CASCADE'), nullable=False)
 
+    # Hierarchical structure - variants can have parent variants
+    parent_variant_id = Column(Integer, ForeignKey('ingredient_variants.id', ondelete='SET NULL'), nullable=True)
+    depth = Column(Integer, default=0)  # 0 = top-level, 1 = child, 2 = grandchild, etc.
+
     # General attributes
     variety = Column(String(50))        # "Orange", "Rainbow", "Roma"
     form = Column(String(50))           # "Baby", "Jumbo", "Petite"

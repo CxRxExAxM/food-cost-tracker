@@ -21,6 +21,331 @@ const ATTRIBUTE_LABELS = {
 // Editable attributes list
 const EDITABLE_ATTRS = ['variety', 'form', 'prep', 'cut_size', 'cut', 'bone', 'skin', 'grade', 'state'];
 
+// Recursive component for rendering variant tree
+function VariantTree({
+  variants,
+  baseId,
+  depth,
+  expandedVariants,
+  toggleVariantExpanded,
+  mergeMode,
+  selectedForMerge,
+  toggleMergeSelection,
+  editingVariant,
+  editForm,
+  setEditForm,
+  startEditing,
+  saveVariantEdit,
+  cancelEditing,
+  openMoveModal,
+  getVariantBadges,
+  loadingVariants,
+  commonProductsCache,
+  editingCP,
+  editCPName,
+  setEditCPName,
+  startEditingCP,
+  saveCPEdit,
+  cancelEditingCP,
+  attributeTooltips,
+  loadingTooltip,
+  fetchAttributeTooltip,
+  formatTooltipContent,
+  formatPrice,
+  attributeValues,
+  EDITABLE_ATTRS,
+  ATTRIBUTE_LABELS,
+}) {
+  return variants.map(variant => {
+    const isVariantExpanded = expandedVariants.has(variant.id);
+    const isEditing = editingVariant === variant.id;
+    const commonProducts = commonProductsCache[variant.id] || [];
+    const isLoadingProducts = loadingVariants.has(variant.id);
+    const isSelectedForMerge = selectedForMerge.includes(variant.id);
+    const hasProducts = variant.common_product_count > 0;
+    const hasChildren = variant.children?.length > 0;
+    const canExpand = hasProducts || hasChildren;
+
+    return (
+      <div key={variant.id} className="variant-group" style={{ marginLeft: depth * 20 }}>
+        {/* Variant Row */}
+        <div
+          className={`variant-row ${isVariantExpanded ? 'expanded' : ''} ${isSelectedForMerge ? 'selected-merge' : ''} depth-${depth}`}
+          onClick={() => canExpand && toggleVariantExpanded(variant.id)}
+        >
+          {mergeMode ? (
+            <input
+              type="checkbox"
+              checked={isSelectedForMerge}
+              onChange={(e) => toggleMergeSelection(variant, baseId, e)}
+              className="merge-checkbox"
+              onClick={(e) => e.stopPropagation()}
+            />
+          ) : (
+            <span className="variant-indent">
+              {depth > 0 && <span className="tree-line">└</span>}
+              {canExpand ? (isVariantExpanded ? '▼' : '▶') : '•'}
+            </span>
+          )}
+
+          {isEditing ? (
+            <input
+              type="text"
+              value={editForm.display_name}
+              onChange={(e) => setEditForm(prev => ({ ...prev, display_name: e.target.value }))}
+              className="edit-input edit-name"
+              onClick={(e) => e.stopPropagation()}
+            />
+          ) : (
+            <span className="variant-display-name">
+              {variant.display_name}
+            </span>
+          )}
+
+          <div className="variant-badges">
+            {getVariantBadges(variant).map(({ attr, value }) => (
+              <span
+                key={attr}
+                className={`variant-badge badge-${attr}`}
+                title={ATTRIBUTE_LABELS[attr]}
+              >
+                {value}
+              </span>
+            ))}
+          </div>
+
+          {/* Usage counts */}
+          <div className="variant-counts">
+            {hasChildren && (
+              <span className="count-badge count-children" title="Child variants">
+                {variant.children.length} sub
+              </span>
+            )}
+            {variant.common_product_count > 0 && (
+              <span className="count-badge count-products" title="Common products">
+                {variant.common_product_count} CP
+              </span>
+            )}
+            {variant.linked_product_count > 0 && (
+              <span className="count-badge count-skus" title="Linked vendor SKUs">
+                {variant.linked_product_count} SKU
+              </span>
+            )}
+            {variant.recipe_count > 0 && (
+              <span className="count-badge count-recipes" title="Used in recipes">
+                {variant.recipe_count} recipe{variant.recipe_count !== 1 ? 's' : ''}
+              </span>
+            )}
+          </div>
+
+          {/* Edit/Action buttons */}
+          {!mergeMode && (
+            <div className="variant-actions">
+              {isEditing ? (
+                <>
+                  <button onClick={saveVariantEdit} className="btn-save" title="Save">✓</button>
+                  <button onClick={cancelEditing} className="btn-cancel" title="Cancel">✕</button>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={(e) => startEditing(variant, e)}
+                    className="btn-edit"
+                    title="Edit attributes"
+                  >
+                    ✎
+                  </button>
+                  <button
+                    onClick={(e) => openMoveModal(variant, baseId, e)}
+                    className="btn-move"
+                    title="Move in hierarchy"
+                  >
+                    ↕
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Edit Form (expanded inline) */}
+        {isEditing && (
+          <div className="variant-edit-form" style={{ marginLeft: depth * 20 }}>
+            <div className="edit-attrs">
+              {EDITABLE_ATTRS.map(attr => (
+                <div key={attr} className="edit-attr-field">
+                  <label>{ATTRIBUTE_LABELS[attr]}</label>
+                  <input
+                    type="text"
+                    value={editForm[attr] || ''}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, [attr]: e.target.value }))}
+                    placeholder={ATTRIBUTE_LABELS[attr]}
+                    list={`attr-${attr}-options`}
+                  />
+                  {attributeValues[attr]?.length > 0 && (
+                    <datalist id={`attr-${attr}-options`}>
+                      {attributeValues[attr].map(val => (
+                        <option key={val} value={val} />
+                      ))}
+                    </datalist>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Child variants (recursive) */}
+        {isVariantExpanded && hasChildren && (
+          <VariantTree
+            variants={variant.children}
+            baseId={baseId}
+            depth={depth + 1}
+            expandedVariants={expandedVariants}
+            toggleVariantExpanded={toggleVariantExpanded}
+            mergeMode={mergeMode}
+            selectedForMerge={selectedForMerge}
+            toggleMergeSelection={toggleMergeSelection}
+            editingVariant={editingVariant}
+            editForm={editForm}
+            setEditForm={setEditForm}
+            startEditing={startEditing}
+            saveVariantEdit={saveVariantEdit}
+            cancelEditing={cancelEditing}
+            openMoveModal={openMoveModal}
+            getVariantBadges={getVariantBadges}
+            loadingVariants={loadingVariants}
+            commonProductsCache={commonProductsCache}
+            editingCP={editingCP}
+            editCPName={editCPName}
+            setEditCPName={setEditCPName}
+            startEditingCP={startEditingCP}
+            saveCPEdit={saveCPEdit}
+            cancelEditingCP={cancelEditingCP}
+            attributeTooltips={attributeTooltips}
+            loadingTooltip={loadingTooltip}
+            fetchAttributeTooltip={fetchAttributeTooltip}
+            formatTooltipContent={formatTooltipContent}
+            formatPrice={formatPrice}
+            attributeValues={attributeValues}
+            EDITABLE_ATTRS={EDITABLE_ATTRS}
+            ATTRIBUTE_LABELS={ATTRIBUTE_LABELS}
+          />
+        )}
+
+        {/* Common Products */}
+        {isVariantExpanded && hasProducts && (
+          <div className="common-products-container" style={{ marginLeft: (depth + 1) * 20 }}>
+            {isLoadingProducts ? (
+              <div className="loading-products">Loading products...</div>
+            ) : commonProducts.length === 0 ? (
+              <div className="no-products">No common products linked</div>
+            ) : (
+              commonProducts.map(cp => {
+                const isEditingThisCP = editingCP === cp.id;
+                const tooltip = attributeTooltips[cp.id];
+                const hasUnassigned = tooltip && Object.keys(tooltip.unassigned_attributes || {}).length > 0;
+
+                return (
+                  <div key={cp.id} className="common-product-group">
+                    <div className={`common-product-row ${hasUnassigned ? 'has-unassigned' : ''}`}>
+                      <span className="cp-indent">├─</span>
+
+                      {isEditingThisCP ? (
+                        <input
+                          type="text"
+                          value={editCPName}
+                          onChange={(e) => setEditCPName(e.target.value)}
+                          className="cp-edit-input"
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') saveCPEdit(cp.id, variant.id);
+                            if (e.key === 'Escape') cancelEditingCP();
+                          }}
+                        />
+                      ) : (
+                        <span className="cp-name">{cp.common_name}</span>
+                      )}
+
+                      {cp.unit_name && (
+                        <span className="cp-unit">({cp.unit_name})</span>
+                      )}
+                      <span className="cp-linked-count">
+                        {cp.linked_count} SKU{cp.linked_count !== 1 ? 's' : ''}
+                      </span>
+
+                      {/* Attribute info button */}
+                      <button
+                        className={`btn-cp-info ${hasUnassigned ? 'has-warning' : ''}`}
+                        onMouseEnter={() => fetchAttributeTooltip(cp.id)}
+                        title={formatTooltipContent(tooltip)}
+                      >
+                        {loadingTooltip === cp.id ? '...' : hasUnassigned ? '⚠' : 'ℹ'}
+                      </button>
+
+                      {/* Edit/Save/Cancel buttons */}
+                      <div className="cp-actions">
+                        {isEditingThisCP ? (
+                          <>
+                            <button
+                              onClick={() => saveCPEdit(cp.id, variant.id)}
+                              className="btn-save"
+                              title="Save (reassigns if needed)"
+                            >
+                              ✓
+                            </button>
+                            <button
+                              onClick={cancelEditingCP}
+                              className="btn-cancel"
+                              title="Cancel"
+                            >
+                              ✕
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            onClick={(e) => startEditingCP(cp, e)}
+                            className="btn-edit"
+                            title="Edit name"
+                          >
+                            ✎
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Linked Vendor Products */}
+                    {cp.linked_products?.length > 0 && (
+                      <div className="linked-products">
+                        {cp.linked_products.map(product => (
+                          <div key={product.distributor_product_id} className="linked-product-row">
+                            <span className="lp-indent">│  └─</span>
+                            <span className="lp-vendor">{product.distributor_name}</span>
+                            <span className="lp-description">{product.product_name}</span>
+                            {(product.pack || product.size) && (
+                              <span className="lp-pack">
+                                {product.pack && `${product.pack}x`}{product.size}{product.unit_name && ` ${product.unit_name}`}
+                              </span>
+                            )}
+                            <span className="lp-price">{formatPrice(product.latest_price)}</span>
+                            {product.distributor_sku && (
+                              <span className="lp-code">#{product.distributor_sku}</span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        )}
+      </div>
+    );
+  });
+}
+
 function TaxonomyView() {
   const toast = useToast();
 
@@ -63,6 +388,10 @@ function TaxonomyView() {
   // Attribute tooltip cache
   const [attributeTooltips, setAttributeTooltips] = useState({});
   const [loadingTooltip, setLoadingTooltip] = useState(null);
+
+  // Move variant modal
+  const [movingVariant, setMovingVariant] = useState(null);
+  const [moveTargetId, setMoveTargetId] = useState(null);
 
   // Debounced search
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -183,18 +512,49 @@ function TaxonomyView() {
     setExpandedVariants(new Set());
   };
 
-  // Filter variants by attribute filters
+  // Filter variants by attribute filters (recursive for hierarchical structure)
   const filterVariants = (variants) => {
     if (Object.keys(attributeFilters).length === 0) {
       return variants;
     }
 
-    return variants.filter(variant => {
-      return Object.entries(attributeFilters).every(([attr, value]) => {
-        if (!value) return true;
-        return variant[attr] === value;
+    const filterRecursive = (variantList) => {
+      return variantList.filter(variant => {
+        const matchesFilter = Object.entries(attributeFilters).every(([attr, value]) => {
+          if (!value) return true;
+          return variant[attr] === value;
+        });
+
+        // Also filter children recursively
+        if (variant.children?.length > 0) {
+          variant.children = filterRecursive(variant.children);
+        }
+
+        // Keep variant if it matches OR if it has matching children
+        return matchesFilter || (variant.children?.length > 0);
       });
+    };
+
+    return filterRecursive([...variants]);
+  };
+
+  // Count all variants including children
+  const countVariants = (variants) => {
+    return variants.reduce((count, v) => {
+      return count + 1 + (v.children ? countVariants(v.children) : 0);
+    }, 0);
+  };
+
+  // Get flat list of all variants for move target selection
+  const getAllVariantsFlat = (variants, depth = 0) => {
+    const result = [];
+    variants.forEach(v => {
+      result.push({ ...v, depth });
+      if (v.children?.length > 0) {
+        result.push(...getAllVariantsFlat(v.children, depth + 1));
+      }
     });
+    return result;
   };
 
   // Get variant attribute badges
@@ -211,10 +571,10 @@ function TaxonomyView() {
     return badges;
   };
 
-  // Count total variants (after filtering)
+  // Count total variants (after filtering) - uses recursive count for hierarchical tree
   const getTotalVariantCount = () => {
     return baseIngredients.reduce((sum, base) => {
-      return sum + filterVariants(base.variants || []).length;
+      return sum + countVariants(filterVariants(base.variants || []));
     }, 0);
   };
 
@@ -360,6 +720,42 @@ function TaxonomyView() {
     } catch (error) {
       console.error('Error merging variants:', error);
       toast.error('Failed to merge variants');
+    }
+  };
+
+  // === Move Variant Functions ===
+  const openMoveModal = (variant, baseId, e) => {
+    e.stopPropagation();
+    setMovingVariant({ ...variant, baseId });
+    setMoveTargetId(variant.parent_variant_id || 'root');
+  };
+
+  const closeMoveModal = () => {
+    setMovingVariant(null);
+    setMoveTargetId(null);
+  };
+
+  const executeMove = async () => {
+    if (!movingVariant) return;
+
+    const newParentId = moveTargetId === 'root' ? null : parseInt(moveTargetId);
+
+    // Don't move if same position
+    if (newParentId === movingVariant.parent_variant_id) {
+      closeMoveModal();
+      return;
+    }
+
+    try {
+      await axios.patch(`${API_URL}/taxonomy/variants/${movingVariant.id}/move`, {
+        parent_variant_id: newParentId
+      });
+      toast.success('Variant moved');
+      closeMoveModal();
+      fetchTaxonomyData();
+    } catch (error) {
+      console.error('Error moving variant:', error);
+      toast.error(error.response?.data?.detail || 'Failed to move variant');
     }
   };
 
@@ -568,7 +964,7 @@ function TaxonomyView() {
           {baseIngredients.map(base => {
             const filteredVariants = filterVariants(base.variants || []);
             const isExpanded = expandedBases.has(base.id);
-            const variantCount = filteredVariants.length;
+            const variantCount = countVariants(filteredVariants);
 
             // Skip bases with no variants after filtering (if filters active)
             if (hasActiveFilters && variantCount === 0) {
@@ -601,245 +997,46 @@ function TaxonomyView() {
                   </button>
                 </div>
 
-                {/* Variants */}
+                {/* Variants (rendered recursively for hierarchy) */}
                 {isExpanded && (
                   <div className="variants-container">
                     {filteredVariants.length === 0 ? (
                       <div className="no-variants">No variants match filters</div>
                     ) : (
-                      filteredVariants.map(variant => {
-                        const isVariantExpanded = expandedVariants.has(variant.id);
-                        const isEditing = editingVariant === variant.id;
-                        const commonProducts = commonProductsCache[variant.id] || [];
-                        const isLoadingProducts = loadingVariants.has(variant.id);
-                        const isSelectedForMerge = selectedForMerge.includes(variant.id);
-                        const hasProducts = variant.common_product_count > 0;
-
-                        return (
-                          <div key={variant.id} className="variant-group">
-                            {/* Variant Row */}
-                            <div
-                              className={`variant-row ${isVariantExpanded ? 'expanded' : ''} ${isSelectedForMerge ? 'selected-merge' : ''}`}
-                              onClick={() => hasProducts && toggleVariantExpanded(variant.id)}
-                            >
-                              {mergeMode ? (
-                                <input
-                                  type="checkbox"
-                                  checked={isSelectedForMerge}
-                                  onChange={(e) => toggleMergeSelection(variant, base.id, e)}
-                                  className="merge-checkbox"
-                                  onClick={(e) => e.stopPropagation()}
-                                />
-                              ) : (
-                                <span className="variant-indent">
-                                  {hasProducts ? (isVariantExpanded ? '▼' : '▶') : '•'}
-                                </span>
-                              )}
-
-                              {isEditing ? (
-                                <input
-                                  type="text"
-                                  value={editForm.display_name}
-                                  onChange={(e) => setEditForm(prev => ({ ...prev, display_name: e.target.value }))}
-                                  className="edit-input edit-name"
-                                  onClick={(e) => e.stopPropagation()}
-                                />
-                              ) : (
-                                <span className="variant-display-name">
-                                  {variant.display_name}
-                                </span>
-                              )}
-
-                              <div className="variant-badges">
-                                {getVariantBadges(variant).map(({ attr, value }) => (
-                                  <span
-                                    key={attr}
-                                    className={`variant-badge badge-${attr}`}
-                                    title={ATTRIBUTE_LABELS[attr]}
-                                  >
-                                    {value}
-                                  </span>
-                                ))}
-                              </div>
-
-                              {/* Usage counts */}
-                              <div className="variant-counts">
-                                {variant.common_product_count > 0 && (
-                                  <span className="count-badge count-products" title="Common products">
-                                    {variant.common_product_count} CP
-                                  </span>
-                                )}
-                                {variant.linked_product_count > 0 && (
-                                  <span className="count-badge count-skus" title="Linked vendor SKUs">
-                                    {variant.linked_product_count} SKU
-                                  </span>
-                                )}
-                                {variant.recipe_count > 0 && (
-                                  <span className="count-badge count-recipes" title="Used in recipes">
-                                    {variant.recipe_count} recipe{variant.recipe_count !== 1 ? 's' : ''}
-                                  </span>
-                                )}
-                              </div>
-
-                              {/* Edit/Action buttons */}
-                              {!mergeMode && (
-                                <div className="variant-actions">
-                                  {isEditing ? (
-                                    <>
-                                      <button onClick={saveVariantEdit} className="btn-save" title="Save">✓</button>
-                                      <button onClick={cancelEditing} className="btn-cancel" title="Cancel">✕</button>
-                                    </>
-                                  ) : (
-                                    <button
-                                      onClick={(e) => startEditing(variant, e)}
-                                      className="btn-edit"
-                                      title="Edit"
-                                    >
-                                      ✎
-                                    </button>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-
-                            {/* Edit Form (expanded inline) */}
-                            {isEditing && (
-                              <div className="variant-edit-form">
-                                <div className="edit-attrs">
-                                  {EDITABLE_ATTRS.map(attr => (
-                                    <div key={attr} className="edit-attr-field">
-                                      <label>{ATTRIBUTE_LABELS[attr]}</label>
-                                      <input
-                                        type="text"
-                                        value={editForm[attr] || ''}
-                                        onChange={(e) => setEditForm(prev => ({ ...prev, [attr]: e.target.value }))}
-                                        placeholder={ATTRIBUTE_LABELS[attr]}
-                                        list={`attr-${attr}-options`}
-                                      />
-                                      {attributeValues[attr]?.length > 0 && (
-                                        <datalist id={`attr-${attr}-options`}>
-                                          {attributeValues[attr].map(val => (
-                                            <option key={val} value={val} />
-                                          ))}
-                                        </datalist>
-                                      )}
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Common Products (3rd level) */}
-                            {isVariantExpanded && (
-                              <div className="common-products-container">
-                                {isLoadingProducts ? (
-                                  <div className="loading-products">Loading products...</div>
-                                ) : commonProducts.length === 0 ? (
-                                  <div className="no-products">No common products linked</div>
-                                ) : (
-                                  commonProducts.map(cp => {
-                                    const isEditingThisCP = editingCP === cp.id;
-                                    const tooltip = attributeTooltips[cp.id];
-                                    const hasUnassigned = tooltip && Object.keys(tooltip.unassigned_attributes || {}).length > 0;
-
-                                    return (
-                                      <div key={cp.id} className="common-product-group">
-                                        <div className={`common-product-row ${hasUnassigned ? 'has-unassigned' : ''}`}>
-                                          <span className="cp-indent">├─</span>
-
-                                          {isEditingThisCP ? (
-                                            <input
-                                              type="text"
-                                              value={editCPName}
-                                              onChange={(e) => setEditCPName(e.target.value)}
-                                              className="cp-edit-input"
-                                              autoFocus
-                                              onKeyDown={(e) => {
-                                                if (e.key === 'Enter') saveCPEdit(cp.id, variant.id);
-                                                if (e.key === 'Escape') cancelEditingCP();
-                                              }}
-                                            />
-                                          ) : (
-                                            <span className="cp-name">{cp.common_name}</span>
-                                          )}
-
-                                          {cp.unit_name && (
-                                            <span className="cp-unit">({cp.unit_name})</span>
-                                          )}
-                                          <span className="cp-linked-count">
-                                            {cp.linked_count} SKU{cp.linked_count !== 1 ? 's' : ''}
-                                          </span>
-
-                                          {/* Attribute info button */}
-                                          <button
-                                            className={`btn-cp-info ${hasUnassigned ? 'has-warning' : ''}`}
-                                            onMouseEnter={() => fetchAttributeTooltip(cp.id)}
-                                            title={formatTooltipContent(tooltip)}
-                                          >
-                                            {loadingTooltip === cp.id ? '...' : hasUnassigned ? '⚠' : 'ℹ'}
-                                          </button>
-
-                                          {/* Edit/Save/Cancel buttons */}
-                                          <div className="cp-actions">
-                                            {isEditingThisCP ? (
-                                              <>
-                                                <button
-                                                  onClick={() => saveCPEdit(cp.id, variant.id)}
-                                                  className="btn-save"
-                                                  title="Save (reassigns if needed)"
-                                                >
-                                                  ✓
-                                                </button>
-                                                <button
-                                                  onClick={cancelEditingCP}
-                                                  className="btn-cancel"
-                                                  title="Cancel"
-                                                >
-                                                  ✕
-                                                </button>
-                                              </>
-                                            ) : (
-                                              <button
-                                                onClick={(e) => startEditingCP(cp, e)}
-                                                className="btn-edit"
-                                                title="Edit name"
-                                              >
-                                                ✎
-                                              </button>
-                                            )}
-                                          </div>
-                                        </div>
-
-                                        {/* Linked Vendor Products (4th level) */}
-                                        {cp.linked_products?.length > 0 && (
-                                          <div className="linked-products">
-                                            {cp.linked_products.map(product => (
-                                              <div key={product.distributor_product_id} className="linked-product-row">
-                                                <span className="lp-indent">│  └─</span>
-                                                <span className="lp-vendor">{product.distributor_name}</span>
-                                                <span className="lp-description">{product.product_name}</span>
-                                                {(product.pack || product.size) && (
-                                                  <span className="lp-pack">
-                                                    {product.pack && `${product.pack}x`}{product.size}{product.unit_name && ` ${product.unit_name}`}
-                                                  </span>
-                                                )}
-                                                <span className="lp-price">{formatPrice(product.latest_price)}</span>
-                                                {product.distributor_sku && (
-                                                  <span className="lp-code">#{product.distributor_sku}</span>
-                                                )}
-                                              </div>
-                                            ))}
-                                          </div>
-                                        )}
-                                      </div>
-                                    );
-                                  })
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })
+                      <VariantTree
+                        variants={filteredVariants}
+                        baseId={base.id}
+                        depth={0}
+                        expandedVariants={expandedVariants}
+                        toggleVariantExpanded={toggleVariantExpanded}
+                        mergeMode={mergeMode}
+                        selectedForMerge={selectedForMerge}
+                        toggleMergeSelection={toggleMergeSelection}
+                        editingVariant={editingVariant}
+                        editForm={editForm}
+                        setEditForm={setEditForm}
+                        startEditing={startEditing}
+                        saveVariantEdit={saveVariantEdit}
+                        cancelEditing={cancelEditing}
+                        openMoveModal={openMoveModal}
+                        getVariantBadges={getVariantBadges}
+                        loadingVariants={loadingVariants}
+                        commonProductsCache={commonProductsCache}
+                        editingCP={editingCP}
+                        editCPName={editCPName}
+                        setEditCPName={setEditCPName}
+                        startEditingCP={startEditingCP}
+                        saveCPEdit={saveCPEdit}
+                        cancelEditingCP={cancelEditingCP}
+                        attributeTooltips={attributeTooltips}
+                        loadingTooltip={loadingTooltip}
+                        fetchAttributeTooltip={fetchAttributeTooltip}
+                        formatTooltipContent={formatTooltipContent}
+                        formatPrice={formatPrice}
+                        attributeValues={attributeValues}
+                        EDITABLE_ATTRS={EDITABLE_ATTRS}
+                        ATTRIBUTE_LABELS={ATTRIBUTE_LABELS}
+                      />
                     )}
                   </div>
                 )}
@@ -890,6 +1087,89 @@ function TaxonomyView() {
             <div className="modal-actions">
               <button onClick={closeAddVariant} className="btn-secondary">Cancel</button>
               <button onClick={createVariant} className="btn-primary">Create Variant</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Move Variant Modal */}
+      {movingVariant && (
+        <div className="modal-overlay" onClick={closeMoveModal}>
+          <div className="modal-content move-modal" onClick={(e) => e.stopPropagation()}>
+            <h3>Move "{movingVariant.display_name}"</h3>
+            <p className="move-hint">Select new parent (or root to make it top-level)</p>
+
+            <div className="move-options">
+              <label className={`move-option ${moveTargetId === 'root' ? 'selected' : ''}`}>
+                <input
+                  type="radio"
+                  name="moveTarget"
+                  value="root"
+                  checked={moveTargetId === 'root'}
+                  onChange={() => setMoveTargetId('root')}
+                />
+                <span className="option-label">📦 Root (top-level variant)</span>
+              </label>
+
+              {/* Show all variants from the same base as potential parents */}
+              {(() => {
+                const base = baseIngredients.find(b => b.id === movingVariant.baseId);
+                if (!base?.variants) return null;
+
+                // Flatten the tree to show all variants
+                const allVariants = getAllVariantsFlat(base.variants);
+
+                // Helper to check if a variant is a descendant of the moving variant
+                const isDescendantOf = (variantId, ancestorId) => {
+                  const findInTree = (variants, targetId) => {
+                    for (const v of variants) {
+                      if (v.id === targetId) return v;
+                      if (v.children) {
+                        const found = findInTree(v.children, targetId);
+                        if (found) return found;
+                      }
+                    }
+                    return null;
+                  };
+                  const ancestor = findInTree(base.variants, ancestorId);
+                  if (!ancestor?.children) return false;
+                  const checkDescendants = (children) => {
+                    for (const c of children) {
+                      if (c.id === variantId) return true;
+                      if (c.children && checkDescendants(c.children)) return true;
+                    }
+                    return false;
+                  };
+                  return checkDescendants(ancestor.children);
+                };
+
+                return allVariants
+                  .filter(v => v.id !== movingVariant.id)
+                  .filter(v => !isDescendantOf(v.id, movingVariant.id))
+                  .map(v => (
+                    <label
+                      key={v.id}
+                      className={`move-option ${moveTargetId === v.id.toString() ? 'selected' : ''}`}
+                      style={{ marginLeft: (v.depth || 0) * 16 }}
+                    >
+                      <input
+                        type="radio"
+                        name="moveTarget"
+                        value={v.id}
+                        checked={moveTargetId === v.id.toString()}
+                        onChange={() => setMoveTargetId(v.id.toString())}
+                      />
+                      <span className="option-label">
+                        {v.depth > 0 && '└ '}{v.display_name}
+                      </span>
+                    </label>
+                  ));
+              })()}
+            </div>
+
+            <div className="modal-actions">
+              <button onClick={closeMoveModal} className="btn-secondary">Cancel</button>
+              <button onClick={executeMove} className="btn-primary">Move</button>
             </div>
           </div>
         </div>
