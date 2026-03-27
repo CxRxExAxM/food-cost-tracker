@@ -452,8 +452,9 @@ Test these regularly:
 - `api/app/database.py` - Database connection
 - `api/app/main.py` - FastAPI app setup
 - `frontend/src/lib/axios.js` - API client
-- `alembic.ini` - Migration config
+- `alembic.ini` - Migration config (in project root, not api/)
 - `Dockerfile.render` - Deployment config
+- `scripts/` - Shared utilities (taxonomy_parser.py) - **must be in Dockerfile COPY**
 
 **Core Contexts:**
 - `AuthContext` - User authentication, token management
