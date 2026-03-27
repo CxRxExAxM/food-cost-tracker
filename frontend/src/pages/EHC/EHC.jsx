@@ -965,30 +965,24 @@ function EHC() {
                 </div>
               </div>
 
-              <div className="stat-card">
+              <div className="stat-card stat-card-compact">
                 <div className="stat-value stat-green">{getDashboardSubmissionStats().approved}</div>
                 <div className="stat-label">Approved</div>
-                <div className="stat-subtext">
-                  of {getDashboardSubmissionStats().total} submissions
-                </div>
               </div>
 
-              <div className="stat-card">
+              <div className="stat-card stat-card-compact">
                 <div className="stat-value stat-red">{getDashboardSubmissionStats().pastDue}</div>
                 <div className="stat-label">Past Due</div>
-                <div className="stat-subtext">need immediate attention</div>
               </div>
 
-              <div className="stat-card">
+              <div className="stat-card stat-card-compact">
                 <div className="stat-value stat-yellow">{getDashboardSubmissionStats().due}</div>
                 <div className="stat-label">Due Now</div>
-                <div className="stat-subtext">ready to complete</div>
               </div>
 
-              <div className="stat-card">
+              <div className="stat-card stat-card-compact">
                 <div className="stat-value">{getDashboardSubmissionStats().pending}</div>
                 <div className="stat-label">Pending</div>
-                <div className="stat-subtext">not yet due</div>
               </div>
             </div>
 

@@ -305,6 +305,11 @@
   padding: var(--space-5);
 }
 
+.stat-card.stat-card-compact {
+  padding: var(--space-4);
+  text-align: center;
+}
+
 .stat-card.progress-card {
   display: flex;
   align-items: center;
