@@ -368,86 +368,99 @@ def get_variant_common_products(
     """
     org_id = current_user["organization_id"]
 
-    with get_db() as conn:
-        cursor = conn.cursor()
+    try:
+        with get_db() as conn:
+            cursor = conn.cursor()
 
-        # Verify variant exists
-        cursor.execute("SELECT id FROM ingredient_variants WHERE id = %s", (variant_id,))
-        if not cursor.fetchone():
-            raise HTTPException(status_code=404, detail="Variant not found")
+            # Verify variant exists
+            logger.info(f"[common-products] Fetching for variant_id={variant_id}, org_id={org_id}")
+            cursor.execute("SELECT id FROM ingredient_variants WHERE id = %s", (variant_id,))
+            if not cursor.fetchone():
+                raise HTTPException(status_code=404, detail="Variant not found")
 
-        # Get common products with their linked vendor products
-        cursor.execute("""
-            SELECT
-                cp.id,
-                cp.common_name,
-                cp.description,
-                cp.standard_unit_id,
-                u.name as unit_name,
-                cp.created_at,
-                cp.updated_at
-            FROM common_products cp
-            LEFT JOIN units u ON u.id = cp.standard_unit_id
-            WHERE cp.variant_id = %s AND cp.is_active = 1
-            ORDER BY cp.common_name
-        """, (variant_id,))
-        common_products = dicts_from_rows(cursor.fetchall())
+            # Get common products with their linked vendor products
+            logger.info(f"[common-products] Fetching common_products for variant_id={variant_id}")
+            cursor.execute("""
+                SELECT
+                    cp.id,
+                    cp.common_name,
+                    cp.description,
+                    cp.standard_unit_id,
+                    u.name as unit_name,
+                    cp.created_at,
+                    cp.updated_at
+                FROM common_products cp
+                LEFT JOIN units u ON u.id = cp.standard_unit_id
+                WHERE cp.variant_id = %s AND cp.is_active = 1
+                ORDER BY cp.common_name
+            """, (variant_id,))
+            common_products = dicts_from_rows(cursor.fetchall())
+            logger.info(f"[common-products] Found {len(common_products)} common products")
 
-        if not common_products:
-            return []
+            if not common_products:
+                return []
 
-        cp_ids = [cp["id"] for cp in common_products]
+            cp_ids = [cp["id"] for cp in common_products]
+            logger.info(f"[common-products] Looking up linked products for cp_ids={cp_ids}")
 
-        # Get linked vendor products for these common products
-        # Schema: products -> distributor_products (has org_id) -> distributors + price_history
-        cursor.execute("""
-            SELECT
-                p.id,
-                p.common_product_id,
-                p.name as product_name,
-                p.description,
-                p.pack,
-                p.size,
-                p.unit_id,
-                u.name as unit_name,
-                dp.id as distributor_product_id,
-                dp.distributor_sku,
-                d.id as distributor_id,
-                d.name as distributor_name,
-                ph.unit_price as latest_price
-            FROM products p
-            JOIN distributor_products dp ON dp.product_id = p.id
-            JOIN distributors d ON d.id = dp.distributor_id
-            LEFT JOIN units u ON u.id = p.unit_id
-            LEFT JOIN LATERAL (
-                SELECT unit_price
-                FROM price_history
-                WHERE distributor_product_id = dp.id
-                ORDER BY effective_date DESC
-                LIMIT 1
-            ) ph ON true
-            WHERE p.common_product_id = ANY(%s)
-              AND dp.organization_id = %s
-              AND p.is_active = 1
-              AND COALESCE(dp.is_available, 1) = 1
-            ORDER BY d.name, p.name
-        """, (cp_ids, org_id))
-        products = dicts_from_rows(cursor.fetchall())
+            # Get linked vendor products for these common products
+            # Schema: products -> distributor_products (has org_id) -> distributors + price_history
+            cursor.execute("""
+                SELECT
+                    p.id,
+                    p.common_product_id,
+                    p.name as product_name,
+                    p.description,
+                    p.pack,
+                    p.size,
+                    p.unit_id,
+                    u.name as unit_name,
+                    dp.id as distributor_product_id,
+                    dp.distributor_sku,
+                    d.id as distributor_id,
+                    d.name as distributor_name,
+                    ph.unit_price as latest_price
+                FROM products p
+                JOIN distributor_products dp ON dp.product_id = p.id
+                JOIN distributors d ON d.id = dp.distributor_id
+                LEFT JOIN units u ON u.id = p.unit_id
+                LEFT JOIN LATERAL (
+                    SELECT unit_price
+                    FROM price_history
+                    WHERE distributor_product_id = dp.id
+                    ORDER BY effective_date DESC
+                    LIMIT 1
+                ) ph ON true
+                WHERE p.common_product_id = ANY(%s)
+                  AND dp.organization_id = %s
+                  AND p.is_active = 1
+                  AND COALESCE(dp.is_available, 1) = 1
+                ORDER BY d.name, p.name
+            """, (cp_ids, org_id))
+            products = dicts_from_rows(cursor.fetchall())
+            logger.info(f"[common-products] Found {len(products)} linked products")
 
-        # Group products by common_product_id
-        products_by_cp = {}
-        for p in products:
-            cp_id = p["common_product_id"]
-            if cp_id not in products_by_cp:
-                products_by_cp[cp_id] = []
-            products_by_cp[cp_id].append(p)
+            # Group products by common_product_id
+            products_by_cp = {}
+            for p in products:
+                cp_id = p["common_product_id"]
+                if cp_id not in products_by_cp:
+                    products_by_cp[cp_id] = []
+                products_by_cp[cp_id].append(p)
 
-        # Attach linked products to common products
-        for cp in common_products:
-            cp["linked_products"] = products_by_cp.get(cp["id"], [])
-            cp["linked_count"] = len(cp["linked_products"])
+            # Attach linked products to common products
+            for cp in common_products:
+                cp["linked_products"] = products_by_cp.get(cp["id"], [])
+                cp["linked_count"] = len(cp["linked_products"])
 
-        return common_products
+            logger.info(f"[common-products] Successfully returning {len(common_products)} common products")
+            return common_products
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"[common-products] Error fetching common products for variant_id={variant_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Error fetching common products: {str(e)}")
 
 
 @router.get("/variants/{variant_id}/similar")
