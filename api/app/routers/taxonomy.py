@@ -7,7 +7,12 @@ Provides CRUD operations for:
 - Variant merge functionality to consolidate duplicates
 """
 from fastapi import APIRouter, HTTPException, Query, Depends
+from pydantic import BaseModel
 from typing import Optional, List
+import re
+import sys
+import os
+
 from ..database import get_db, dicts_from_rows, dict_from_row
 from ..schemas import (
     BaseIngredient, BaseIngredientCreate, BaseIngredientUpdate,
@@ -19,9 +24,54 @@ from ..audit import log_audit
 from ..config import DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT_LARGE
 from ..logger import get_logger
 
+# Add scripts directory to path for parser import
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', 'scripts'))
+try:
+    from taxonomy_parser import extract_base_and_attributes, build_display_name
+except ImportError:
+    # Fallback: define minimal parser inline if import fails
+    def extract_base_and_attributes(common_name: str, category: str = None) -> dict:
+        """Minimal fallback parser."""
+        result = {
+            "base_name": None, "variety": None, "form": None, "prep": None,
+            "cut_size": None, "cut": None, "bone": None, "skin": None,
+            "grade": None, "state": None,
+        }
+        if "," in common_name:
+            parts = common_name.split(",", 1)
+            result["base_name"] = parts[0].strip().title()
+        else:
+            result["base_name"] = common_name.strip().title()
+        return result
+
+    def build_display_name(base_name: str, attrs: dict) -> str:
+        parts = [base_name]
+        for key in ["variety", "form", "cut", "bone", "skin", "prep", "cut_size", "grade", "state"]:
+            if attrs.get(key):
+                parts.append(attrs[key])
+        return ", ".join(parts)
+
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/taxonomy", tags=["taxonomy"])
+
+
+# =============================================================================
+# Request/Response Models for Common Product Updates
+# =============================================================================
+
+class CommonProductUpdateRequest(BaseModel):
+    common_name: str
+
+
+class CommonProductReparseResponse(BaseModel):
+    id: int
+    common_name: str
+    variant_id: Optional[int]
+    variant_display_name: Optional[str]
+    detected_attributes: dict
+    moved: bool
+    message: str
 
 
 # =============================================================================
@@ -595,6 +645,198 @@ def update_variant(
         conn.commit()
 
         return dict_from_row(row)
+
+
+# =============================================================================
+# Common Product Re-parsing
+# =============================================================================
+
+@router.patch("/common-products/{cp_id}/reparse", response_model=CommonProductReparseResponse)
+def update_and_reparse_common_product(
+    cp_id: int,
+    data: CommonProductUpdateRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Update a common product's name and re-parse to assign to correct variant.
+
+    This will:
+    1. Parse the new name to extract attributes
+    2. Find or create a matching variant
+    3. Update the common product's name and variant_id
+    """
+    try:
+        with get_db() as conn:
+            cursor = conn.cursor()
+
+            # Get current common product
+            cursor.execute("""
+                SELECT cp.*, bi.id as current_base_id, bi.name as current_base_name
+                FROM common_products cp
+                LEFT JOIN ingredient_variants iv ON iv.id = cp.variant_id
+                LEFT JOIN base_ingredients bi ON bi.id = iv.base_ingredient_id
+                WHERE cp.id = %s
+            """, (cp_id,))
+            cp = cursor.fetchone()
+            if not cp:
+                raise HTTPException(status_code=404, detail="Common product not found")
+
+            old_variant_id = cp["variant_id"]
+
+            # Parse the new name
+            attrs = extract_base_and_attributes(data.common_name)
+            base_name = attrs.pop("base_name")
+
+            logger.info(f"[reparse] Parsing '{data.common_name}' -> base={base_name}, attrs={attrs}")
+
+            # Find or create the base ingredient
+            cursor.execute(
+                "SELECT id FROM base_ingredients WHERE LOWER(name) = LOWER(%s) AND is_active = 1",
+                (base_name,)
+            )
+            base_row = cursor.fetchone()
+
+            if base_row:
+                base_id = base_row["id"]
+            else:
+                # Create new base ingredient
+                cursor.execute("""
+                    INSERT INTO base_ingredients (name, is_active)
+                    VALUES (%s, 1)
+                    RETURNING id
+                """, (base_name,))
+                base_id = cursor.fetchone()["id"]
+                logger.info(f"[reparse] Created new base ingredient: {base_name} (id={base_id})")
+
+            # Build variant display name and find/create matching variant
+            display_name = build_display_name(base_name, attrs)
+
+            # Look for existing variant with matching attributes
+            attr_conditions = []
+            attr_params = [base_id]
+            for attr_name in ["variety", "form", "prep", "cut_size", "cut", "bone", "skin", "grade", "state"]:
+                val = attrs.get(attr_name)
+                if val:
+                    attr_conditions.append(f"{attr_name} = %s")
+                    attr_params.append(val)
+                else:
+                    attr_conditions.append(f"{attr_name} IS NULL")
+
+            variant_query = f"""
+                SELECT id, display_name FROM ingredient_variants
+                WHERE base_ingredient_id = %s AND is_active = 1
+                AND {' AND '.join(attr_conditions)}
+            """
+            cursor.execute(variant_query, attr_params)
+            variant_row = cursor.fetchone()
+
+            if variant_row:
+                variant_id = variant_row["id"]
+                variant_display = variant_row["display_name"]
+                logger.info(f"[reparse] Found existing variant: {variant_display} (id={variant_id})")
+            else:
+                # Create new variant
+                cursor.execute("""
+                    INSERT INTO ingredient_variants (
+                        base_ingredient_id, display_name,
+                        variety, form, prep, cut_size, cut, bone, skin, grade, state, is_active
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 1)
+                    RETURNING id
+                """, (
+                    base_id, display_name,
+                    attrs.get("variety"), attrs.get("form"), attrs.get("prep"), attrs.get("cut_size"),
+                    attrs.get("cut"), attrs.get("bone"), attrs.get("skin"), attrs.get("grade"), attrs.get("state")
+                ))
+                variant_id = cursor.fetchone()["id"]
+                variant_display = display_name
+                logger.info(f"[reparse] Created new variant: {display_name} (id={variant_id})")
+
+            # Update the common product
+            cursor.execute("""
+                UPDATE common_products
+                SET common_name = %s, variant_id = %s, base_ingredient_id = %s, updated_at = NOW()
+                WHERE id = %s
+            """, (data.common_name, variant_id, base_id, cp_id))
+            conn.commit()
+
+            moved = old_variant_id != variant_id
+
+            log_audit(cursor, "common_product_reparsed", "common_product", cp_id,
+                      current_user["id"], current_user["organization_id"],
+                      {"old_variant_id": old_variant_id, "new_variant_id": variant_id, "new_name": data.common_name})
+            conn.commit()
+
+            return CommonProductReparseResponse(
+                id=cp_id,
+                common_name=data.common_name,
+                variant_id=variant_id,
+                variant_display_name=variant_display,
+                detected_attributes=attrs,
+                moved=moved,
+                message=f"Moved to '{variant_display}'" if moved else "Name updated, variant unchanged"
+            )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"[reparse] Error reparsing common product {cp_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Error reparsing: {str(e)}")
+
+
+@router.get("/common-products/{cp_id}/detected-attributes")
+def get_detected_attributes(
+    cp_id: int,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Get the detected attributes for a common product (for tooltip display).
+    Shows what the parser extracts from the current name.
+    """
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT cp.common_name, cp.variant_id, iv.display_name as variant_display_name,
+                   iv.variety, iv.form, iv.prep, iv.cut_size, iv.cut, iv.bone, iv.skin, iv.grade, iv.state
+            FROM common_products cp
+            LEFT JOIN ingredient_variants iv ON iv.id = cp.variant_id
+            WHERE cp.id = %s
+        """, (cp_id,))
+        row = cursor.fetchone()
+
+        if not row:
+            raise HTTPException(status_code=404, detail="Common product not found")
+
+        # Parse the current name to show detected attributes
+        detected = extract_base_and_attributes(row["common_name"])
+
+        # Get current variant attributes
+        variant_attrs = {
+            "variety": row["variety"],
+            "form": row["form"],
+            "prep": row["prep"],
+            "cut_size": row["cut_size"],
+            "cut": row["cut"],
+            "bone": row["bone"],
+            "skin": row["skin"],
+            "grade": row["grade"],
+            "state": row["state"],
+        }
+
+        # Find mismatches (detected but not in variant)
+        unassigned = {}
+        for key, val in detected.items():
+            if key != "base_name" and val and not variant_attrs.get(key):
+                unassigned[key] = val
+
+        return {
+            "common_name": row["common_name"],
+            "variant_display_name": row["variant_display_name"],
+            "detected_base": detected.get("base_name"),
+            "detected_attributes": {k: v for k, v in detected.items() if k != "base_name" and v},
+            "variant_attributes": {k: v for k, v in variant_attrs.items() if v},
+            "unassigned_attributes": unassigned
+        }
 
 
 # =============================================================================

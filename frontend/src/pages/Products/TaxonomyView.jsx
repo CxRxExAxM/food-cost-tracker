@@ -56,6 +56,14 @@ function TaxonomyView() {
   const [selectedForMerge, setSelectedForMerge] = useState([]);
   const [mergeBaseId, setMergeBaseId] = useState(null);
 
+  // Common product editing
+  const [editingCP, setEditingCP] = useState(null);
+  const [editCPName, setEditCPName] = useState('');
+
+  // Attribute tooltip cache
+  const [attributeTooltips, setAttributeTooltips] = useState({});
+  const [loadingTooltip, setLoadingTooltip] = useState(null);
+
   // Debounced search
   const [debouncedSearch, setDebouncedSearch] = useState('');
 
@@ -355,10 +363,101 @@ function TaxonomyView() {
     }
   };
 
+  // === Common Product Editing Functions ===
+  const startEditingCP = (cp, e) => {
+    e.stopPropagation();
+    setEditingCP(cp.id);
+    setEditCPName(cp.common_name);
+  };
+
+  const cancelEditingCP = () => {
+    setEditingCP(null);
+    setEditCPName('');
+  };
+
+  const saveCPEdit = async (cpId, variantId) => {
+    if (!editCPName.trim()) {
+      toast.error('Name is required');
+      return;
+    }
+
+    try {
+      const response = await axios.patch(`${API_URL}/taxonomy/common-products/${cpId}/reparse`, {
+        common_name: editCPName
+      });
+
+      if (response.data.moved) {
+        toast.success(`Moved to "${response.data.variant_display_name}"`);
+        // Clear cache for both old and new variant to force reload
+        setCommonProductsCache(prev => {
+          const next = { ...prev };
+          delete next[variantId];
+          delete next[response.data.variant_id];
+          return next;
+        });
+        // Re-fetch taxonomy to update counts
+        fetchTaxonomyData();
+      } else {
+        toast.success('Name updated');
+        // Update the cache inline
+        setCommonProductsCache(prev => ({
+          ...prev,
+          [variantId]: prev[variantId]?.map(cp =>
+            cp.id === cpId ? { ...cp, common_name: editCPName } : cp
+          )
+        }));
+      }
+
+      setEditingCP(null);
+      setEditCPName('');
+    } catch (error) {
+      console.error('Error updating common product:', error);
+      toast.error('Failed to update');
+    }
+  };
+
+  // Fetch detected attributes for tooltip
+  const fetchAttributeTooltip = async (cpId) => {
+    if (attributeTooltips[cpId]) return; // Already cached
+
+    setLoadingTooltip(cpId);
+    try {
+      const response = await axios.get(`${API_URL}/taxonomy/common-products/${cpId}/detected-attributes`);
+      setAttributeTooltips(prev => ({
+        ...prev,
+        [cpId]: response.data
+      }));
+    } catch (error) {
+      console.error('Error fetching attributes:', error);
+    } finally {
+      setLoadingTooltip(null);
+    }
+  };
+
   // Format price for display
   const formatPrice = (price) => {
     if (price == null) return '-';
     return `$${parseFloat(price).toFixed(2)}`;
+  };
+
+  // Format attribute tooltip
+  const formatTooltipContent = (tooltip) => {
+    if (!tooltip) return 'Loading...';
+
+    const parts = [];
+    if (Object.keys(tooltip.detected_attributes || {}).length > 0) {
+      parts.push('Detected: ' + Object.entries(tooltip.detected_attributes)
+        .map(([k, v]) => `${ATTRIBUTE_LABELS[k] || k}=${v}`).join(', '));
+    }
+    if (Object.keys(tooltip.variant_attributes || {}).length > 0) {
+      parts.push('Variant has: ' + Object.entries(tooltip.variant_attributes)
+        .map(([k, v]) => `${ATTRIBUTE_LABELS[k] || k}=${v}`).join(', '));
+    }
+    if (Object.keys(tooltip.unassigned_attributes || {}).length > 0) {
+      parts.push('⚠ Unassigned: ' + Object.entries(tooltip.unassigned_attributes)
+        .map(([k, v]) => `${ATTRIBUTE_LABELS[k] || k}=${v}`).join(', '));
+    }
+    return parts.join('\n') || 'No attributes detected';
   };
 
   return (
@@ -638,42 +737,103 @@ function TaxonomyView() {
                                 ) : commonProducts.length === 0 ? (
                                   <div className="no-products">No common products linked</div>
                                 ) : (
-                                  commonProducts.map(cp => (
-                                    <div key={cp.id} className="common-product-group">
-                                      <div className="common-product-row">
-                                        <span className="cp-indent">├─</span>
-                                        <span className="cp-name">{cp.common_name}</span>
-                                        {cp.unit_name && (
-                                          <span className="cp-unit">({cp.unit_name})</span>
-                                        )}
-                                        <span className="cp-linked-count">
-                                          {cp.linked_count} SKU{cp.linked_count !== 1 ? 's' : ''}
-                                        </span>
-                                      </div>
+                                  commonProducts.map(cp => {
+                                    const isEditingThisCP = editingCP === cp.id;
+                                    const tooltip = attributeTooltips[cp.id];
+                                    const hasUnassigned = tooltip && Object.keys(tooltip.unassigned_attributes || {}).length > 0;
 
-                                      {/* Linked Vendor Products (4th level) */}
-                                      {cp.linked_products?.length > 0 && (
-                                        <div className="linked-products">
-                                          {cp.linked_products.map(product => (
-                                            <div key={product.distributor_product_id} className="linked-product-row">
-                                              <span className="lp-indent">│  └─</span>
-                                              <span className="lp-vendor">{product.distributor_name}</span>
-                                              <span className="lp-description">{product.product_name}</span>
-                                              {(product.pack || product.size) && (
-                                                <span className="lp-pack">
-                                                  {product.pack && `${product.pack}x`}{product.size}{product.unit_name && ` ${product.unit_name}`}
-                                                </span>
-                                              )}
-                                              <span className="lp-price">{formatPrice(product.latest_price)}</span>
-                                              {product.distributor_sku && (
-                                                <span className="lp-code">#{product.distributor_sku}</span>
-                                              )}
-                                            </div>
-                                          ))}
+                                    return (
+                                      <div key={cp.id} className="common-product-group">
+                                        <div className={`common-product-row ${hasUnassigned ? 'has-unassigned' : ''}`}>
+                                          <span className="cp-indent">├─</span>
+
+                                          {isEditingThisCP ? (
+                                            <input
+                                              type="text"
+                                              value={editCPName}
+                                              onChange={(e) => setEditCPName(e.target.value)}
+                                              className="cp-edit-input"
+                                              autoFocus
+                                              onKeyDown={(e) => {
+                                                if (e.key === 'Enter') saveCPEdit(cp.id, variant.id);
+                                                if (e.key === 'Escape') cancelEditingCP();
+                                              }}
+                                            />
+                                          ) : (
+                                            <span className="cp-name">{cp.common_name}</span>
+                                          )}
+
+                                          {cp.unit_name && (
+                                            <span className="cp-unit">({cp.unit_name})</span>
+                                          )}
+                                          <span className="cp-linked-count">
+                                            {cp.linked_count} SKU{cp.linked_count !== 1 ? 's' : ''}
+                                          </span>
+
+                                          {/* Attribute info button */}
+                                          <button
+                                            className={`btn-cp-info ${hasUnassigned ? 'has-warning' : ''}`}
+                                            onMouseEnter={() => fetchAttributeTooltip(cp.id)}
+                                            title={formatTooltipContent(tooltip)}
+                                          >
+                                            {loadingTooltip === cp.id ? '...' : hasUnassigned ? '⚠' : 'ℹ'}
+                                          </button>
+
+                                          {/* Edit/Save/Cancel buttons */}
+                                          <div className="cp-actions">
+                                            {isEditingThisCP ? (
+                                              <>
+                                                <button
+                                                  onClick={() => saveCPEdit(cp.id, variant.id)}
+                                                  className="btn-save"
+                                                  title="Save (reassigns if needed)"
+                                                >
+                                                  ✓
+                                                </button>
+                                                <button
+                                                  onClick={cancelEditingCP}
+                                                  className="btn-cancel"
+                                                  title="Cancel"
+                                                >
+                                                  ✕
+                                                </button>
+                                              </>
+                                            ) : (
+                                              <button
+                                                onClick={(e) => startEditingCP(cp, e)}
+                                                className="btn-edit"
+                                                title="Edit name"
+                                              >
+                                                ✎
+                                              </button>
+                                            )}
+                                          </div>
                                         </div>
-                                      )}
-                                    </div>
-                                  ))
+
+                                        {/* Linked Vendor Products (4th level) */}
+                                        {cp.linked_products?.length > 0 && (
+                                          <div className="linked-products">
+                                            {cp.linked_products.map(product => (
+                                              <div key={product.distributor_product_id} className="linked-product-row">
+                                                <span className="lp-indent">│  └─</span>
+                                                <span className="lp-vendor">{product.distributor_name}</span>
+                                                <span className="lp-description">{product.product_name}</span>
+                                                {(product.pack || product.size) && (
+                                                  <span className="lp-pack">
+                                                    {product.pack && `${product.pack}x`}{product.size}{product.unit_name && ` ${product.unit_name}`}
+                                                  </span>
+                                                )}
+                                                <span className="lp-price">{formatPrice(product.latest_price)}</span>
+                                                {product.distributor_sku && (
+                                                  <span className="lp-code">#{product.distributor_sku}</span>
+                                                )}
+                                              </div>
+                                            ))}
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })
                                 )}
                               </div>
                             )}
