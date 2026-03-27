@@ -26,13 +26,22 @@ function AppLauncher() {
       color: 'blue'
     },
     {
+      id: 'ehc',
+      name: 'EHC Compliance',
+      description: 'Environmental Health audit tracking and record management',
+      icon: '📋',
+      path: '/ehc',
+      enabled: true,
+      color: 'purple'
+    },
+    {
       id: 'haccp',
       name: 'HACCP',
       description: 'Food safety management and compliance tracking',
       icon: '🛡️',
       path: null,
       enabled: false,
-      color: 'purple',
+      color: 'teal',
       badge: 'Coming Soon'
     }
   ];

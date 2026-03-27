@@ -20,6 +20,7 @@ import BanquetMenus from './pages/BanquetMenus/BanquetMenus';
 import Vessels from './pages/Settings/Vessels';
 import BaseConversions from './pages/Settings/BaseConversions';
 import Potentials from './pages/Potentials/Potentials';
+import EHC from './pages/EHC/EHC';
 import ImpersonationBanner from './components/ImpersonationBanner';
 import './App.css';
 
@@ -132,6 +133,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <Potentials />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/ehc"
+        element={
+          <ProtectedRoute>
+            <EHC />
           </ProtectedRoute>
         }
       />

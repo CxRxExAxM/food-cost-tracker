@@ -13,6 +13,7 @@ function Navigation({ showModuleNav = true }) {
 
   // Determine current module based on path
   const isPotentialsModule = location.pathname.startsWith('/potentials');
+  const isEHCModule = location.pathname.startsWith('/ehc');
   const isCostingModule = location.pathname.startsWith('/costing') ||
     location.pathname.startsWith('/products') ||
     location.pathname.startsWith('/recipes') ||
@@ -55,6 +56,7 @@ function Navigation({ showModuleNav = true }) {
   // Determine module name for branding
   const getModuleName = () => {
     if (isPotentialsModule) return 'Potentials';
+    if (isEHCModule) return 'EHC Compliance';
     if (isCostingModule) return 'Food Costing';
     return null;
   };
@@ -109,6 +111,15 @@ function Navigation({ showModuleNav = true }) {
               {isPotentialsModule && (
                 <>
                   <Link to="/potentials" className={`nav-link ${isActivePath('/potentials') ? 'active' : ''}`}>
+                    Dashboard
+                  </Link>
+                </>
+              )}
+
+              {/* EHC module - audit compliance tracking */}
+              {isEHCModule && (
+                <>
+                  <Link to="/ehc" className={`nav-link ${isActivePath('/ehc') ? 'active' : ''}`}>
                     Dashboard
                   </Link>
                 </>
