@@ -64,6 +64,10 @@ class CommonProductUpdateRequest(BaseModel):
     common_name: str
 
 
+class ProductReassignRequest(BaseModel):
+    common_product_id: int
+
+
 class CommonProductReparseResponse(BaseModel):
     id: int
     common_name: str
@@ -961,6 +965,99 @@ def get_detected_attributes(
             "variant_attributes": {k: v for k, v in variant_attrs.items() if v},
             "unassigned_attributes": unassigned
         }
+
+
+# =============================================================================
+# Product Reassignment
+# =============================================================================
+
+@router.patch("/products/{product_id}/reassign")
+def reassign_product(
+    product_id: int,
+    data: ProductReassignRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Reassign a product (SKU) to a different common product.
+    """
+    org_id = current_user["organization_id"]
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Verify the product exists and belongs to this org
+        cursor.execute("""
+            SELECT p.id, p.common_product_id, p.name
+            FROM products p
+            JOIN distributor_products dp ON dp.product_id = p.id
+            WHERE p.id = %s AND dp.organization_id = %s
+            LIMIT 1
+        """, (product_id, org_id))
+        product = cursor.fetchone()
+
+        if not product:
+            raise HTTPException(status_code=404, detail="Product not found")
+
+        old_cp_id = product["common_product_id"]
+
+        # Verify the target common product exists
+        cursor.execute("""
+            SELECT id, common_name FROM common_products
+            WHERE id = %s AND is_active = 1
+        """, (data.common_product_id,))
+        new_cp = cursor.fetchone()
+
+        if not new_cp:
+            raise HTTPException(status_code=404, detail="Target common product not found")
+
+        # Update the product
+        cursor.execute("""
+            UPDATE products
+            SET common_product_id = %s, updated_at = NOW()
+            WHERE id = %s
+        """, (data.common_product_id, product_id))
+        conn.commit()
+
+        log_audit(cursor, "product_reassigned", "product", product_id,
+                  current_user["id"], org_id,
+                  {"old_common_product_id": old_cp_id, "new_common_product_id": data.common_product_id})
+        conn.commit()
+
+        logger.info(f"Reassigned product {product_id} from CP {old_cp_id} to CP {data.common_product_id}")
+
+        return {
+            "id": product_id,
+            "old_common_product_id": old_cp_id,
+            "new_common_product_id": data.common_product_id,
+            "new_common_product_name": new_cp["common_name"],
+            "message": f"Moved to '{new_cp['common_name']}'"
+        }
+
+
+@router.get("/common-products/search")
+def search_common_products(
+    q: str = Query(..., min_length=2),
+    limit: int = Query(20, ge=1, le=50),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Search common products by name (for reassignment dropdown).
+    """
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT cp.id, cp.common_name, iv.display_name as variant_name, bi.name as base_name
+            FROM common_products cp
+            LEFT JOIN ingredient_variants iv ON iv.id = cp.variant_id
+            LEFT JOIN base_ingredients bi ON bi.id = iv.base_ingredient_id
+            WHERE cp.is_active = 1
+              AND LOWER(cp.common_name) LIKE LOWER(%s)
+            ORDER BY cp.common_name
+            LIMIT %s
+        """, (f"%{q}%", limit))
+
+        return dicts_from_rows(cursor.fetchall())
 
 
 # =============================================================================
