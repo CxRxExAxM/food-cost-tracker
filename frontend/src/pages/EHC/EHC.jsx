@@ -537,7 +537,6 @@ function EHC() {
     setEditValues({
       name: record.name,
       notes: record.notes || '',
-      responsibility_code: record.responsibility_code || '',
       record_type: record.record_type,
       location_type: record.location_type,
       description: record.description || '',
@@ -610,7 +609,7 @@ function EHC() {
   }
 
   // Create a new submission
-  async function createSubmission(recordId, periodLabel, outletName = null, responsibilityCode = null) {
+  async function createSubmission(recordId, periodLabel, outletName = null) {
     try {
       await fetchWithAuth(`${API_BASE}/cycles/${activeCycle.id}/submissions`, {
         method: 'POST',
@@ -618,7 +617,6 @@ function EHC() {
           record_id: recordId,
           period_label: periodLabel,
           outlet_name: outletName,
-          responsibility_code: responsibilityCode,
         })
       });
       toast.success('Submission created');
@@ -1224,7 +1222,7 @@ function EHC() {
                                           <thead>
                                             <tr>
                                               <th>Outlet</th>
-                                              <th>Owner</th>
+                                              <th>Notes</th>
                                               <th>Physical</th>
                                               <th>File</th>
                                               <th>Status</th>
@@ -1238,10 +1236,10 @@ function EHC() {
                                                 <td>
                                                   <input
                                                     type="text"
-                                                    className="inline-owner-input"
-                                                    value={sub.responsibility_code || ''}
+                                                    className="inline-notes-input"
+                                                    value={sub.notes || ''}
                                                     placeholder="—"
-                                                    onChange={e => updateSubmissionField(sub.id, 'responsibility_code', e.target.value, true)}
+                                                    onChange={e => updateSubmissionField(sub.id, 'notes', e.target.value, true)}
                                                   />
                                                 </td>
                                                 <td>
@@ -1362,7 +1360,7 @@ function EHC() {
                               <thead>
                                 <tr>
                                   <th>Period</th>
-                                  <th>Owner</th>
+                                  <th>Notes</th>
                                   <th>Physical</th>
                                   <th>File</th>
                                   <th>Status</th>
@@ -1376,10 +1374,10 @@ function EHC() {
                                     <td>
                                       <input
                                         type="text"
-                                        className="inline-owner-input"
-                                        value={sub.responsibility_code || ''}
+                                        className="inline-notes-input"
+                                        value={sub.notes || ''}
                                         placeholder="—"
-                                        onChange={e => updateSubmissionField(sub.id, 'responsibility_code', e.target.value, true)}
+                                        onChange={e => updateSubmissionField(sub.id, 'notes', e.target.value, true)}
                                       />
                                     </td>
                                     <td>
@@ -1581,15 +1579,6 @@ function EHC() {
                 </select>
               </div>
 
-              <div className="form-group">
-                <label>Default Owner</label>
-                <input
-                  type="text"
-                  value={editValues.responsibility_code || ''}
-                  onChange={e => setEditValues({ ...editValues, responsibility_code: e.target.value })}
-                  placeholder="e.g., MM, CF, AM"
-                />
-              </div>
             </div>
 
             <div className="form-group">
