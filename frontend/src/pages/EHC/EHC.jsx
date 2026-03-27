@@ -541,14 +541,24 @@ function EHC() {
     return submissions.filter(s => s.record_id === recordId);
   }
 
-  // Calculate submission stats for a record
+  // Calculate submission stats for a record (using computed due date status)
   function getRecordStats(recordId) {
     const recordSubs = getRecordSubmissions(recordId);
     const total = recordSubs.length;
-    const approved = recordSubs.filter(s => s.status === 'approved').length;
-    const submitted = recordSubs.filter(s => s.status === 'submitted').length;
-    const pending = recordSubs.filter(s => s.status === 'pending' || s.status === 'in_progress').length;
-    return { total, approved, submitted, pending };
+
+    let approved = 0, due = 0, pastDue = 0, pending = 0;
+
+    recordSubs.forEach(sub => {
+      const displayStatus = getSubmissionDisplayStatus(sub);
+      switch (displayStatus.status) {
+        case 'approved': approved++; break;
+        case 'due': due++; break;
+        case 'past_due': pastDue++; break;
+        default: pending++; break;
+      }
+    });
+
+    return { total, approved, due, pastDue, pending };
   }
 
   // Group submissions by period for hierarchical view
@@ -1321,8 +1331,10 @@ function EHC() {
                             </span>
                           </div>
                           <div className="record-stats-text">
-                            <span className="stat-approved">{stats.approved} approved</span>
-                            <span className="stat-pending">{stats.pending} pending</span>
+                            {stats.approved > 0 && <span className="stat-approved">{stats.approved} approved</span>}
+                            {stats.pastDue > 0 && <span className="stat-past-due">{stats.pastDue} past due</span>}
+                            {stats.due > 0 && <span className="stat-due">{stats.due} due</span>}
+                            {stats.pending > 0 && <span className="stat-pending">{stats.pending} pending</span>}
                           </div>
                           <span className={`expand-icon ${isExpanded ? 'expanded' : ''}`}>▼</span>
                         </div>

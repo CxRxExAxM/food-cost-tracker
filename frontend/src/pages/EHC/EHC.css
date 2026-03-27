@@ -1030,6 +1030,15 @@
   color: var(--color-green);
 }
 
+.stat-past-due {
+  color: var(--color-red);
+  font-weight: var(--font-weight-semibold);
+}
+
+.stat-due {
+  color: var(--color-yellow);
+}
+
 .stat-pending {
   color: var(--text-tertiary);
 }
