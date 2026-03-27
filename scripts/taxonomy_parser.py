@@ -196,8 +196,10 @@ def extract_base_and_attributes(common_name: str, category: str = None) -> dict:
         result["cut_size"] = cut_size_match.group(1).replace('"', '"').replace("'", "'")
         attrs = attrs.replace(cut_size_match.group(0), " ")
 
-    # Tokenize remaining attributes
-    tokens = attrs.upper().split()
+    # Tokenize remaining attributes - handle both comma and space separation
+    # First replace commas with spaces, then split and clean up
+    attrs_cleaned = attrs.replace(",", " ")
+    tokens = [t.strip().upper() for t in attrs_cleaned.split() if t.strip()]
 
     # Multi-word abbreviation matching
     attrs_upper = " " + attrs.upper() + " "
