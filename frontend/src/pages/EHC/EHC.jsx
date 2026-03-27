@@ -171,6 +171,82 @@ function ResponsibilityBadge({ code }) {
   );
 }
 
+// Compute submission display status based on due dates
+// Period ends → Due on 1st of next month → Past Due 2 weeks later
+function getSubmissionDisplayStatus(submission) {
+  // If already approved, that's the status
+  if (submission.status === 'approved') {
+    return { status: 'approved', label: 'Approved', class: 'badge-green' };
+  }
+
+  // Parse period to determine due date
+  const periodLabel = submission.period_label || '';
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  // Try to parse "Month Year" format (e.g., "January 2026")
+  const monthMatch = periodLabel.match(/^(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{4})$/i);
+
+  if (monthMatch) {
+    const monthNames = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
+    const monthIndex = monthNames.indexOf(monthMatch[1].toLowerCase());
+    const year = parseInt(monthMatch[2]);
+
+    // Due date: 1st of next month
+    const dueDate = new Date(year, monthIndex + 1, 1);
+    // Past due: 2 weeks after due date
+    const pastDueDate = new Date(dueDate);
+    pastDueDate.setDate(pastDueDate.getDate() + 14);
+
+    if (today >= pastDueDate) {
+      return { status: 'past_due', label: 'Past Due', class: 'badge-red' };
+    } else if (today >= dueDate) {
+      return { status: 'due', label: 'Due', class: 'badge-yellow' };
+    } else {
+      return { status: 'pending', label: 'Pending', class: 'badge-neutral' };
+    }
+  }
+
+  // Try to parse quarterly "Q1 2026" format
+  const quarterMatch = periodLabel.match(/^Q([1-4])\s+(\d{4})$/i);
+  if (quarterMatch) {
+    const quarter = parseInt(quarterMatch[1]);
+    const year = parseInt(quarterMatch[2]);
+    // Q1 ends Mar 31, Q2 ends Jun 30, Q3 ends Sep 30, Q4 ends Dec 31
+    const quarterEndMonth = quarter * 3; // 3, 6, 9, 12
+    const dueDate = new Date(year, quarterEndMonth, 1); // 1st of month after quarter
+    const pastDueDate = new Date(dueDate);
+    pastDueDate.setDate(pastDueDate.getDate() + 14);
+
+    if (today >= pastDueDate) {
+      return { status: 'past_due', label: 'Past Due', class: 'badge-red' };
+    } else if (today >= dueDate) {
+      return { status: 'due', label: 'Due', class: 'badge-yellow' };
+    } else {
+      return { status: 'pending', label: 'Pending', class: 'badge-neutral' };
+    }
+  }
+
+  // Default: show actual status if can't parse
+  const statusMap = {
+    pending: { status: 'pending', label: 'Pending', class: 'badge-neutral' },
+    in_progress: { status: 'in_progress', label: 'In Progress', class: 'badge-yellow' },
+    submitted: { status: 'submitted', label: 'Submitted', class: 'badge-blue' },
+    not_applicable: { status: 'not_applicable', label: 'N/A', class: 'badge-neutral' },
+  };
+  return statusMap[submission.status] || { status: submission.status, label: submission.status, class: 'badge-neutral' };
+}
+
+// Submission status badge with computed due date logic
+function SubmissionStatusBadge({ submission }) {
+  const displayStatus = getSubmissionDisplayStatus(submission);
+  return (
+    <span className={`status-badge ${displayStatus.class}`} title={`DB status: ${submission.status}`}>
+      {displayStatus.label}
+    </span>
+  );
+}
+
 // Record type badge
 function RecordTypeBadge({ type }) {
   const typeLabels = {
@@ -1383,20 +1459,23 @@ function EHC() {
                                                     </label>
                                                   )}
                                                 </td>
-                                                <td>
-                                                  <select
-                                                    value={sub.status}
-                                                    onChange={e => updateSubmission(sub.id, { status: e.target.value })}
-                                                    className="status-select-sm"
-                                                  >
-                                                    <option value="pending">Pending</option>
-                                                    <option value="in_progress">In Progress</option>
-                                                    <option value="submitted">Submitted</option>
-                                                    <option value="approved">Approved</option>
-                                                    <option value="not_applicable">N/A</option>
-                                                  </select>
+                                                <td className="status-cell">
+                                                  <SubmissionStatusBadge submission={sub} />
                                                 </td>
-                                                <td>
+                                                <td className="actions-cell">
+                                                  {sub.status !== 'approved' ? (
+                                                    <button
+                                                      className="btn-approve-sm"
+                                                      onClick={() => updateSubmission(sub.id, { status: 'approved' })}
+                                                      title="Approve"
+                                                    >✓</button>
+                                                  ) : (
+                                                    <button
+                                                      className="btn-unapprove-sm"
+                                                      onClick={() => updateSubmission(sub.id, { status: 'pending' })}
+                                                      title="Unapprove"
+                                                    >↩</button>
+                                                  )}
                                                   <button
                                                     className="btn-delete-sm"
                                                     onClick={() => deleteSubmission(sub.id)}
@@ -1520,20 +1599,23 @@ function EHC() {
                                         </label>
                                       )}
                                     </td>
-                                    <td>
-                                      <select
-                                        value={sub.status}
-                                        onChange={e => updateSubmission(sub.id, { status: e.target.value })}
-                                        className="status-select-sm"
-                                      >
-                                        <option value="pending">Pending</option>
-                                        <option value="in_progress">In Progress</option>
-                                        <option value="submitted">Submitted</option>
-                                        <option value="approved">Approved</option>
-                                        <option value="not_applicable">N/A</option>
-                                      </select>
+                                    <td className="status-cell">
+                                      <SubmissionStatusBadge submission={sub} />
                                     </td>
-                                    <td>
+                                    <td className="actions-cell">
+                                      {sub.status !== 'approved' ? (
+                                        <button
+                                          className="btn-approve-sm"
+                                          onClick={() => updateSubmission(sub.id, { status: 'approved' })}
+                                          title="Approve"
+                                        >✓</button>
+                                      ) : (
+                                        <button
+                                          className="btn-unapprove-sm"
+                                          onClick={() => updateSubmission(sub.id, { status: 'pending' })}
+                                          title="Unapprove"
+                                        >↩</button>
+                                      )}
                                       <button
                                         className="btn-delete-sm"
                                         onClick={() => deleteSubmission(sub.id)}
