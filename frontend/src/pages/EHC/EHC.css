@@ -331,6 +331,18 @@
   color: var(--nc-critical);
 }
 
+.stat-value.stat-green {
+  color: var(--color-green);
+}
+
+.stat-value.stat-red {
+  color: var(--color-red);
+}
+
+.stat-value.stat-yellow {
+  color: var(--color-yellow);
+}
+
 .stat-label {
   font-size: var(--text-sm);
   font-weight: var(--font-weight-medium);

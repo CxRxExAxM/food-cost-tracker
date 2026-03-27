@@ -311,10 +311,11 @@ function EHC() {
     loadCycles();
   }, []);
 
-  // Load dashboard when active cycle changes
+  // Load dashboard and submissions when active cycle changes
   useEffect(() => {
     if (activeCycle) {
       loadDashboard(activeCycle.id);
+      loadSubmissions(activeCycle.id); // Load submissions for due date stats
     }
   }, [activeCycle]);
 
@@ -544,11 +545,15 @@ function EHC() {
   // Calculate submission stats for a record (using computed due date status)
   function getRecordStats(recordId) {
     const recordSubs = getRecordSubmissions(recordId);
-    const total = recordSubs.length;
+    return computeSubmissionStats(recordSubs);
+  }
 
+  // Compute submission stats from a list of submissions
+  function computeSubmissionStats(subs) {
+    const total = subs.length;
     let approved = 0, due = 0, pastDue = 0, pending = 0;
 
-    recordSubs.forEach(sub => {
+    subs.forEach(sub => {
       const displayStatus = getSubmissionDisplayStatus(sub);
       switch (displayStatus.status) {
         case 'approved': approved++; break;
@@ -559,6 +564,11 @@ function EHC() {
     });
 
     return { total, approved, due, pastDue, pending };
+  }
+
+  // Get overall submission stats for dashboard
+  function getDashboardSubmissionStats() {
+    return computeSubmissionStats(submissions);
   }
 
   // Group submissions by period for hierarchical view
@@ -956,25 +966,29 @@ function EHC() {
               </div>
 
               <div className="stat-card">
-                <div className="stat-value">{dashboard.submission_stats?.approved || 0}</div>
-                <div className="stat-label">Records Approved</div>
+                <div className="stat-value stat-green">{getDashboardSubmissionStats().approved}</div>
+                <div className="stat-label">Approved</div>
                 <div className="stat-subtext">
-                  of {dashboard.submission_stats?.total || 0} submissions
+                  of {getDashboardSubmissionStats().total} submissions
                 </div>
               </div>
 
               <div className="stat-card">
-                <div className="stat-value nc-critical">{dashboard.nc_breakdown?.find(n => n.nc_level === 1)?.completed || 0}</div>
-                <div className="stat-label">NC1 Critical Complete</div>
-                <div className="stat-subtext">
-                  of {dashboard.nc_breakdown?.find(n => n.nc_level === 1)?.total || 0} critical points
-                </div>
+                <div className="stat-value stat-red">{getDashboardSubmissionStats().pastDue}</div>
+                <div className="stat-label">Past Due</div>
+                <div className="stat-subtext">need immediate attention</div>
               </div>
 
               <div className="stat-card">
-                <div className="stat-value">{dashboard.overall_progress?.flagged || 0}</div>
-                <div className="stat-label">Flagged Items</div>
-                <div className="stat-subtext">require attention</div>
+                <div className="stat-value stat-yellow">{getDashboardSubmissionStats().due}</div>
+                <div className="stat-label">Due Now</div>
+                <div className="stat-subtext">ready to complete</div>
+              </div>
+
+              <div className="stat-card">
+                <div className="stat-value">{getDashboardSubmissionStats().pending}</div>
+                <div className="stat-label">Pending</div>
+                <div className="stat-subtext">not yet due</div>
               </div>
             </div>
 
