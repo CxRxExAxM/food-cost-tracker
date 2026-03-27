@@ -690,6 +690,59 @@ def get_record(record_id: int, current_user: dict = Depends(get_current_user)):
         return record
 
 
+class RecordUpdate(BaseModel):
+    """Update a record."""
+    name: Optional[str] = None
+    notes: Optional[str] = None
+    responsibility_code: Optional[str] = None
+    record_type: Optional[str] = None
+
+
+@router.patch("/records/{record_id}")
+def update_record(
+    record_id: int,
+    updates: RecordUpdate,
+    current_user: dict = Depends(get_current_user)
+):
+    """Update a record's metadata."""
+    org_id = current_user["organization_id"]
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Verify ownership
+        cursor.execute("""
+            SELECT id FROM ehc_record
+            WHERE id = %s AND organization_id = %s
+        """, (record_id, org_id))
+
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Record not found")
+
+        # Build update
+        update_dict = updates.dict(exclude_unset=True)
+        if not update_dict:
+            return {"status": "ok", "message": "No fields to update"}
+
+        update_fields = []
+        params = []
+        for field, value in update_dict.items():
+            update_fields.append(f"{field} = %s")
+            params.append(value)
+
+        update_fields.append("updated_at = NOW()")
+        params.append(record_id)
+
+        cursor.execute(f"""
+            UPDATE ehc_record
+            SET {', '.join(update_fields)}
+            WHERE id = %s
+        """, params)
+
+        conn.commit()
+        return {"status": "ok", "record_id": record_id, "updated_fields": list(update_dict.keys())}
+
+
 # ============================================
 # Submissions Endpoints
 # ============================================
@@ -820,6 +873,34 @@ def update_submission(
 
         conn.commit()
         return {"status": "ok", "submission_id": submission_id, "updated_fields": list(update_dict.keys())}
+
+
+@router.delete("/submissions/{submission_id}")
+def delete_submission(
+    submission_id: int,
+    current_user: dict = Depends(get_current_user)
+):
+    """Delete a submission (for cleaning up duplicates)."""
+    org_id = current_user["organization_id"]
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Verify ownership
+        cursor.execute("""
+            SELECT rs.id
+            FROM ehc_record_submission rs
+            JOIN ehc_audit_cycle c ON c.id = rs.audit_cycle_id
+            WHERE rs.id = %s AND c.organization_id = %s
+        """, (submission_id, org_id))
+
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Submission not found")
+
+        cursor.execute("DELETE FROM ehc_record_submission WHERE id = %s", (submission_id,))
+        conn.commit()
+
+        return {"status": "ok", "deleted_id": submission_id}
 
 
 @router.post("/submissions/{submission_id}/upload")

@@ -218,12 +218,16 @@ function EHC() {
   const [submissions, setSubmissions] = useState([]);
   const [recordFilters, setRecordFilters] = useState({
     locationType: null,
-    responsibility: null,
     recordType: null,
   });
   const [expandedRecord, setExpandedRecord] = useState(null);
   const [selectedSubmissions, setSelectedSubmissions] = useState(new Set());
   const [uploadingSubmission, setUploadingSubmission] = useState(null);
+
+  // Inline editing state
+  const [editingRecord, setEditingRecord] = useState(null); // record id being edited
+  const [editingSubmission, setEditingSubmission] = useState(null); // submission id being edited
+  const [editValues, setEditValues] = useState({});
 
   // Load cycles on mount
   useEffect(() => {
@@ -329,11 +333,25 @@ function EHC() {
     try {
       let url = `${API_BASE}/records?`;
       if (recordFilters.locationType) url += `location_type=${recordFilters.locationType}&`;
-      if (recordFilters.responsibility) url += `responsibility=${recordFilters.responsibility}&`;
       if (recordFilters.recordType) url += `record_type=${recordFilters.recordType}&`;
 
       const data = await fetchWithAuth(url);
-      setRecords(data.data || []);
+
+      // Sort records numerically by record_number
+      const sorted = (data.data || []).sort((a, b) => {
+        // Extract numeric part for sorting (handles "1", "1a", "SCP 40", etc.)
+        const parseNum = (str) => {
+          const match = str.match(/(\d+)/);
+          return match ? parseInt(match[1], 10) : 999;
+        };
+        const aNum = parseNum(a.record_number);
+        const bNum = parseNum(b.record_number);
+        if (aNum !== bNum) return aNum - bNum;
+        // Secondary sort by full string for "1" vs "1a"
+        return a.record_number.localeCompare(b.record_number);
+      });
+
+      setRecords(sorted);
     } catch (error) {
       showToast('Failed to load records', 'error');
       console.error(error);
@@ -428,6 +446,53 @@ function EHC() {
     const submitted = recordSubs.filter(s => s.status === 'submitted').length;
     const pending = recordSubs.filter(s => s.status === 'pending' || s.status === 'in_progress').length;
     return { total, approved, submitted, pending };
+  }
+
+  // Start editing a record
+  function startEditingRecord(record) {
+    setEditingRecord(record.id);
+    setEditValues({
+      name: record.name,
+      notes: record.notes || '',
+      responsibility_code: record.responsibility_code || '',
+    });
+  }
+
+  // Save record edits
+  async function saveRecordEdit(recordId) {
+    try {
+      await fetchWithAuth(`${API_BASE}/records/${recordId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(editValues)
+      });
+      showToast('Record updated', 'success');
+      setEditingRecord(null);
+      setEditValues({});
+      loadRecords();
+    } catch (error) {
+      showToast('Failed to update record', 'error');
+    }
+  }
+
+  // Cancel editing
+  function cancelEdit() {
+    setEditingRecord(null);
+    setEditingSubmission(null);
+    setEditValues({});
+  }
+
+  // Delete a submission (for cleaning up duplicates)
+  async function deleteSubmission(submissionId) {
+    if (!confirm('Delete this submission? This cannot be undone.')) return;
+    try {
+      await fetchWithAuth(`${API_BASE}/submissions/${submissionId}`, {
+        method: 'DELETE'
+      });
+      showToast('Submission deleted', 'success');
+      loadSubmissions(activeCycle.id);
+    } catch (error) {
+      showToast('Failed to delete submission', 'error');
+    }
   }
 
   // Render loading state
@@ -793,20 +858,6 @@ function EHC() {
               </select>
 
               <select
-                value={recordFilters.responsibility || ''}
-                onChange={e => setRecordFilters({ ...recordFilters, responsibility: e.target.value || null })}
-              >
-                <option value="">All Responsibilities</option>
-                <option value="MM">MM - Audit Prep Manager</option>
-                <option value="CF">CF - Chef</option>
-                <option value="CM">CM - Commissary</option>
-                <option value="AM">AM - Area Manager</option>
-                <option value="ENG">ENG - Engineering</option>
-                <option value="FF">FF - Facilities</option>
-                <option value="EHC">EHC - External Auditor</option>
-              </select>
-
-              <select
                 value={recordFilters.recordType || ''}
                 onChange={e => setRecordFilters({ ...recordFilters, recordType: e.target.value || null })}
               >
@@ -818,10 +869,10 @@ function EHC() {
                 <option value="as_needed">As Needed</option>
               </select>
 
-              {(recordFilters.locationType || recordFilters.responsibility || recordFilters.recordType) && (
+              {(recordFilters.locationType || recordFilters.recordType) && (
                 <button
                   className="btn-ghost"
-                  onClick={() => setRecordFilters({ locationType: null, responsibility: null, recordType: null })}
+                  onClick={() => setRecordFilters({ locationType: null, recordType: null })}
                 >
                   Clear Filters
                 </button>
@@ -855,20 +906,28 @@ function EHC() {
 
                 return (
                   <div key={record.id} className={`record-card ${isExpanded ? 'expanded' : ''}`}>
-                    <div
-                      className="record-header"
-                      onClick={() => setExpandedRecord(isExpanded ? null : record.id)}
-                    >
-                      <div className="record-info">
+                    <div className="record-header">
+                      <div
+                        className="record-info"
+                        onClick={() => setExpandedRecord(isExpanded ? null : record.id)}
+                      >
                         <span className="record-number">{record.record_number}</span>
                         <div className="record-details">
-                          <span className="record-name">{record.name}</span>
+                          {editingRecord === record.id ? (
+                            <input
+                              type="text"
+                              className="inline-edit-input"
+                              value={editValues.name || ''}
+                              onChange={e => setEditValues({ ...editValues, name: e.target.value })}
+                              onClick={e => e.stopPropagation()}
+                              autoFocus
+                            />
+                          ) : (
+                            <span className="record-name">{record.name}</span>
+                          )}
                           <div className="record-meta">
                             <LocationBadge type={record.location_type} />
                             <RecordTypeBadge type={record.record_type} />
-                            {record.responsibility_code && (
-                              <ResponsibilityBadge code={record.responsibility_code} />
-                            )}
                             {record.outlet_count > 0 && (
                               <span className="outlet-count">{record.outlet_count} outlets</span>
                             )}
@@ -876,34 +935,55 @@ function EHC() {
                         </div>
                       </div>
 
-                      <div className="record-stats">
-                        <div className="record-progress-ring">
-                          <svg width="48" height="48" viewBox="0 0 48 48">
-                            <circle
-                              cx="24" cy="24" r="20"
-                              fill="transparent"
-                              stroke="var(--border-subtle)"
-                              strokeWidth="4"
-                            />
-                            <circle
-                              cx="24" cy="24" r="20"
-                              fill="transparent"
-                              stroke={stats.approved === stats.total ? 'var(--color-green)' : 'var(--color-yellow)'}
-                              strokeWidth="4"
-                              strokeLinecap="round"
-                              strokeDasharray={`${(stats.approved / stats.total) * 125.6} 125.6`}
-                              transform="rotate(-90 24 24)"
-                            />
-                          </svg>
-                          <span className="record-progress-text">
-                            {stats.total > 0 ? Math.round((stats.approved / stats.total) * 100) : 0}%
-                          </span>
+                      <div className="record-actions-group">
+                        {editingRecord === record.id ? (
+                          <div className="edit-actions" onClick={e => e.stopPropagation()}>
+                            <button className="btn-primary btn-sm" onClick={() => saveRecordEdit(record.id)}>
+                              Save
+                            </button>
+                            <button className="btn-ghost btn-sm" onClick={cancelEdit}>
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            className="btn-ghost btn-sm edit-btn"
+                            onClick={e => { e.stopPropagation(); startEditingRecord(record); }}
+                            title="Edit record"
+                          >
+                            ✎
+                          </button>
+                        )}
+
+                        <div className="record-stats" onClick={() => setExpandedRecord(isExpanded ? null : record.id)}>
+                          <div className="record-progress-ring">
+                            <svg width="48" height="48" viewBox="0 0 48 48">
+                              <circle
+                                cx="24" cy="24" r="20"
+                                fill="transparent"
+                                stroke="var(--border-subtle)"
+                                strokeWidth="4"
+                              />
+                              <circle
+                                cx="24" cy="24" r="20"
+                                fill="transparent"
+                                stroke={stats.approved === stats.total && stats.total > 0 ? 'var(--color-green)' : 'var(--color-yellow)'}
+                                strokeWidth="4"
+                                strokeLinecap="round"
+                                strokeDasharray={`${stats.total > 0 ? (stats.approved / stats.total) * 125.6 : 0} 125.6`}
+                                transform="rotate(-90 24 24)"
+                              />
+                            </svg>
+                            <span className="record-progress-text">
+                              {stats.total > 0 ? Math.round((stats.approved / stats.total) * 100) : 0}%
+                            </span>
+                          </div>
+                          <div className="record-stats-text">
+                            <span className="stat-approved">{stats.approved} approved</span>
+                            <span className="stat-pending">{stats.pending} pending</span>
+                          </div>
+                          <span className={`expand-icon ${isExpanded ? 'expanded' : ''}`}>▼</span>
                         </div>
-                        <div className="record-stats-text">
-                          <span className="stat-approved">{stats.approved} approved</span>
-                          <span className="stat-pending">{stats.pending} pending</span>
-                        </div>
-                        <span className={`expand-icon ${isExpanded ? 'expanded' : ''}`}>▼</span>
                       </div>
                     </div>
 
@@ -1000,7 +1080,7 @@ function EHC() {
                                     </label>
                                   )}
                                 </td>
-                                <td>
+                                <td className="actions-cell">
                                   <select
                                     value={sub.status}
                                     onChange={e => updateSubmission(sub.id, { status: e.target.value })}
@@ -1012,6 +1092,13 @@ function EHC() {
                                     <option value="approved">Approved</option>
                                     <option value="not_applicable">N/A</option>
                                   </select>
+                                  <button
+                                    className="btn-delete-sm"
+                                    onClick={() => deleteSubmission(sub.id)}
+                                    title="Delete this submission"
+                                  >
+                                    ×
+                                  </button>
                                 </td>
                               </tr>
                             ))}

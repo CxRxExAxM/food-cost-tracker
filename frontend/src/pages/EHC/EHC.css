@@ -1060,6 +1060,81 @@
   font-size: var(--text-sm);
 }
 
+/* Inline Editing */
+.inline-edit-input {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 1px solid var(--color-focus);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-base);
+  font-weight: var(--font-weight-medium);
+  width: 100%;
+  max-width: 400px;
+}
+
+.inline-edit-input:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+}
+
+.record-actions-group {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-shrink: 0;
+}
+
+.edit-btn {
+  opacity: 0;
+  transition: opacity var(--transition-base) var(--ease-in-out);
+  font-size: var(--text-base);
+}
+
+.record-header:hover .edit-btn {
+  opacity: 1;
+}
+
+.edit-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+/* Actions Cell */
+.actions-cell {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* Delete Button */
+.btn-delete-sm {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-tertiary);
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-base);
+  font-weight: var(--font-weight-bold);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-base) var(--ease-in-out);
+  opacity: 0;
+}
+
+.submission-row:hover .btn-delete-sm {
+  opacity: 1;
+}
+
+.btn-delete-sm:hover {
+  background: var(--color-red-dim);
+  border-color: var(--color-red);
+  color: var(--color-red);
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
   .record-header {
