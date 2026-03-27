@@ -1282,6 +1282,211 @@
   color: var(--text-primary);
 }
 
+/* ============================================
+   Two-Level Period Accordion
+   ============================================ */
+
+.period-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.period-accordion {
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.period-accordion:last-child {
+  border-bottom: none;
+}
+
+/* Period Header Row */
+.period-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  cursor: pointer;
+  transition: background var(--transition-base) var(--ease-in-out);
+}
+
+.period-header:hover {
+  background: var(--bg-tertiary);
+}
+
+.period-header.all-approved {
+  opacity: 0.7;
+}
+
+.period-expand-icon {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  transition: transform var(--transition-base) var(--ease-in-out);
+  width: 12px;
+}
+
+.period-expand-icon.expanded {
+  transform: rotate(90deg);
+}
+
+.period-label {
+  flex: 1;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--text-primary);
+}
+
+.period-progress {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  background: var(--bg-tertiary);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+}
+
+.period-progress.complete {
+  background: var(--color-green-dim);
+  color: var(--color-green-bright);
+}
+
+.btn-approve-period {
+  background: var(--color-green-dim);
+  color: var(--color-green-bright);
+  border: 1px solid var(--color-green);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: all var(--transition-base) var(--ease-in-out);
+}
+
+.btn-approve-period:hover {
+  background: var(--color-green);
+  color: var(--text-inverse);
+}
+
+.period-complete-badge {
+  font-size: var(--text-xs);
+  color: var(--color-green);
+  font-weight: var(--font-weight-medium);
+}
+
+/* Period Outlets Table */
+.period-outlets {
+  background: var(--bg-primary);
+  padding: var(--space-2) var(--space-4) var(--space-3);
+  padding-left: calc(var(--space-4) + 12px + var(--space-3));
+}
+
+.outlets-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-xs);
+}
+
+.outlets-table thead {
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.outlets-table th {
+  font-size: 10px;
+  font-weight: var(--font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-tertiary);
+  text-align: left;
+  padding: var(--space-1) var(--space-2);
+}
+
+.outlets-table td {
+  padding: var(--space-2);
+  border-bottom: 1px solid var(--border-subtle);
+  vertical-align: middle;
+}
+
+.outlet-row.status-approved {
+  opacity: 0.6;
+}
+
+.outlet-row.status-approved td {
+  background: rgba(34, 197, 94, 0.05);
+}
+
+.outlet-name-cell {
+  font-weight: var(--font-weight-medium);
+  color: var(--text-primary);
+}
+
+/* Compact Status Select */
+.status-select-sm {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  padding: 2px var(--space-1);
+  font-size: 10px;
+  cursor: pointer;
+  max-width: 90px;
+}
+
+.status-select-sm:focus {
+  outline: none;
+  border-color: var(--color-focus);
+}
+
+/* Compact File Upload */
+.file-upload-label-sm {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background: var(--bg-tertiary);
+  border: 1px dashed var(--border-default);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.file-upload-label-sm:hover {
+  background: var(--bg-elevated);
+  border-color: var(--border-strong);
+}
+
+.file-upload-label-sm input {
+  display: none;
+}
+
+/* Flat Submissions Table (for office_book) */
+.submissions-table-flat {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.submissions-table-flat thead {
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.submissions-table-flat th {
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--text-tertiary);
+  text-align: left;
+  padding: var(--space-2) var(--space-3);
+}
+
+.submissions-table-flat td {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border-subtle);
+  vertical-align: middle;
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
   .record-header {

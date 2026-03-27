@@ -221,6 +221,7 @@ function EHC() {
     recordType: null,
   });
   const [expandedRecord, setExpandedRecord] = useState(null);
+  const [expandedPeriods, setExpandedPeriods] = useState(new Set()); // track expanded periods within records
   const [selectedSubmissions, setSelectedSubmissions] = useState(new Set());
   const [uploadingSubmission, setUploadingSubmission] = useState(null);
 
@@ -446,6 +447,80 @@ function EHC() {
     const submitted = recordSubs.filter(s => s.status === 'submitted').length;
     const pending = recordSubs.filter(s => s.status === 'pending' || s.status === 'in_progress').length;
     return { total, approved, submitted, pending };
+  }
+
+  // Group submissions by period for hierarchical view
+  function groupSubmissionsByPeriod(recordSubs) {
+    const groups = {};
+    recordSubs.forEach(sub => {
+      const period = sub.period_label;
+      if (!groups[period]) {
+        groups[period] = {
+          period_label: period,
+          period_start: sub.period_start,
+          submissions: [],
+        };
+      }
+      groups[period].submissions.push(sub);
+    });
+
+    // Sort periods chronologically (by period_start if available, else by label)
+    return Object.values(groups).sort((a, b) => {
+      if (a.period_start && b.period_start) {
+        return new Date(a.period_start) - new Date(b.period_start);
+      }
+      return a.period_label.localeCompare(b.period_label);
+    });
+  }
+
+  // Get stats for a period group
+  function getPeriodStats(periodGroup) {
+    const subs = periodGroup.submissions;
+    const total = subs.length;
+    const approved = subs.filter(s => s.status === 'approved').length;
+    const allApproved = total > 0 && approved === total;
+    return { total, approved, allApproved };
+  }
+
+  // Toggle period expansion
+  function togglePeriod(recordId, periodLabel) {
+    const key = `${recordId}-${periodLabel}`;
+    setExpandedPeriods(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  }
+
+  // Check if period is expanded
+  function isPeriodExpanded(recordId, periodLabel) {
+    return expandedPeriods.has(`${recordId}-${periodLabel}`);
+  }
+
+  // Approve all submissions in a period
+  async function approvePeriod(periodGroup) {
+    const pendingSubs = periodGroup.submissions.filter(s => s.status !== 'approved');
+    if (pendingSubs.length === 0) {
+      showToast('All submissions already approved', 'info');
+      return;
+    }
+    try {
+      await Promise.all(pendingSubs.map(sub =>
+        fetchWithAuth(`${API_BASE}/submissions/${sub.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ status: 'approved' })
+        })
+      ));
+      showToast(`${pendingSubs.length} submissions approved`, 'success');
+      loadSubmissions(activeCycle.id);
+      loadDashboard(activeCycle.id);
+    } catch (error) {
+      showToast('Failed to approve submissions', 'error');
+    }
   }
 
   // Start editing a record (opens modal with all fields)
@@ -1064,151 +1139,230 @@ function EHC() {
                       </div>
                     </div>
 
-                    {/* Expanded Submissions */}
+                    {/* Expanded Submissions - Two-Level Accordion */}
                     {isExpanded && (
                       <div className="record-submissions">
-                        <div className="submissions-header">
-                          <span className="submissions-title">
-                            Submissions ({recordSubs.length})
-                          </span>
-                          <label className="select-all-label">
-                            <input
-                              type="checkbox"
-                              checked={recordSubs.every(s => selectedSubmissions.has(s.id))}
-                              onChange={e => {
-                                const newSelected = new Set(selectedSubmissions);
-                                recordSubs.forEach(s => {
-                                  if (e.target.checked) {
-                                    newSelected.add(s.id);
-                                  } else {
-                                    newSelected.delete(s.id);
+                        {/* For outlet_book records: group by period */}
+                        {record.location_type === 'outlet_book' ? (
+                          <>
+                            <div className="period-list">
+                              {groupSubmissionsByPeriod(recordSubs).map(periodGroup => {
+                                const periodStats = getPeriodStats(periodGroup);
+                                const periodExpanded = isPeriodExpanded(record.id, periodGroup.period_label);
+
+                                return (
+                                  <div key={periodGroup.period_label} className="period-accordion">
+                                    {/* Period Header Row */}
+                                    <div
+                                      className={`period-header ${periodStats.allApproved ? 'all-approved' : ''}`}
+                                      onClick={() => togglePeriod(record.id, periodGroup.period_label)}
+                                    >
+                                      <span className={`period-expand-icon ${periodExpanded ? 'expanded' : ''}`}>
+                                        ▶
+                                      </span>
+                                      <span className="period-label">{periodGroup.period_label}</span>
+                                      <span className={`period-progress ${periodStats.allApproved ? 'complete' : ''}`}>
+                                        {periodStats.approved}/{periodStats.total}
+                                      </span>
+                                      {!periodStats.allApproved && (
+                                        <button
+                                          className="btn-approve-period"
+                                          onClick={e => { e.stopPropagation(); approvePeriod(periodGroup); }}
+                                          title="Approve all outlets for this period"
+                                        >
+                                          Approve All
+                                        </button>
+                                      )}
+                                      {periodStats.allApproved && (
+                                        <span className="period-complete-badge">Complete</span>
+                                      )}
+                                    </div>
+
+                                    {/* Expanded Outlet Table */}
+                                    {periodExpanded && (
+                                      <div className="period-outlets">
+                                        <table className="outlets-table">
+                                          <thead>
+                                            <tr>
+                                              <th>Outlet</th>
+                                              <th>Owner</th>
+                                              <th>Physical</th>
+                                              <th>File</th>
+                                              <th>Status</th>
+                                              <th></th>
+                                            </tr>
+                                          </thead>
+                                          <tbody>
+                                            {periodGroup.submissions.map(sub => (
+                                              <tr key={sub.id} className={`outlet-row status-${sub.status}`}>
+                                                <td className="outlet-name-cell">{sub.outlet_name || '—'}</td>
+                                                <td>
+                                                  <input
+                                                    type="text"
+                                                    className="inline-owner-input"
+                                                    value={sub.responsibility_code || ''}
+                                                    placeholder="—"
+                                                    onChange={e => updateSubmissionField(sub.id, 'responsibility_code', e.target.value)}
+                                                  />
+                                                </td>
+                                                <td>
+                                                  <input
+                                                    type="checkbox"
+                                                    checked={sub.is_physical}
+                                                    onChange={e => updateSubmission(sub.id, { is_physical: e.target.checked })}
+                                                  />
+                                                </td>
+                                                <td className="file-cell">
+                                                  {sub.file_path ? (
+                                                    <span className="file-attached" title={sub.file_path}>📎</span>
+                                                  ) : (
+                                                    <label className="file-upload-label-sm">
+                                                      <input
+                                                        type="file"
+                                                        accept=".pdf,.jpg,.jpeg,.png,.docx,.xlsx"
+                                                        onChange={e => {
+                                                          if (e.target.files[0]) uploadSubmissionFile(sub.id, e.target.files[0]);
+                                                        }}
+                                                      />
+                                                      +
+                                                    </label>
+                                                  )}
+                                                </td>
+                                                <td>
+                                                  <select
+                                                    value={sub.status}
+                                                    onChange={e => updateSubmission(sub.id, { status: e.target.value })}
+                                                    className="status-select-sm"
+                                                  >
+                                                    <option value="pending">Pending</option>
+                                                    <option value="in_progress">In Progress</option>
+                                                    <option value="submitted">Submitted</option>
+                                                    <option value="approved">Approved</option>
+                                                    <option value="not_applicable">N/A</option>
+                                                  </select>
+                                                </td>
+                                                <td>
+                                                  <button
+                                                    className="btn-delete-sm"
+                                                    onClick={() => deleteSubmission(sub.id)}
+                                                    title="Delete"
+                                                  >×</button>
+                                                </td>
+                                              </tr>
+                                            ))}
+                                          </tbody>
+                                        </table>
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+
+                            {/* Add Submission Button */}
+                            <div className="add-submission-row">
+                              <button
+                                className="btn-secondary btn-sm"
+                                onClick={() => {
+                                  const period = prompt('Enter period (e.g., "January 2026"):');
+                                  if (period) {
+                                    const outlet = prompt('Enter outlet name:');
+                                    if (outlet) createSubmission(record.id, period, outlet);
                                   }
-                                });
-                                setSelectedSubmissions(newSelected);
-                              }}
-                            />
-                            Select All
-                          </label>
-                        </div>
-
-                        <table className="submissions-table">
-                          <thead>
-                            <tr>
-                              <th></th>
-                              <th>Period</th>
-                              {record.location_type === 'outlet_book' && <th>Outlet</th>}
-                              <th>Owner</th>
-                              <th>Status</th>
-                              <th>Physical</th>
-                              <th>File</th>
-                              <th>Actions</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {recordSubs.map(sub => (
-                              <tr key={sub.id} className={`submission-row status-${sub.status}`}>
-                                <td>
-                                  <input
-                                    type="checkbox"
-                                    checked={selectedSubmissions.has(sub.id)}
-                                    onChange={e => {
-                                      const newSelected = new Set(selectedSubmissions);
-                                      if (e.target.checked) {
-                                        newSelected.add(sub.id);
-                                      } else {
-                                        newSelected.delete(sub.id);
-                                      }
-                                      setSelectedSubmissions(newSelected);
-                                    }}
-                                  />
-                                </td>
-                                <td className="period-cell">{sub.period_label}</td>
-                                {record.location_type === 'outlet_book' && (
-                                  <td className="outlet-cell">{sub.outlet_name || '-'}</td>
-                                )}
-                                <td className="owner-cell">
-                                  <input
-                                    type="text"
-                                    className="inline-owner-input"
-                                    value={sub.responsibility_code || ''}
-                                    placeholder="—"
-                                    onChange={e => updateSubmissionField(sub.id, 'responsibility_code', e.target.value)}
-                                  />
-                                </td>
-                                <td><StatusBadge status={sub.status} /></td>
-                                <td>
-                                  <label className="physical-checkbox">
-                                    <input
-                                      type="checkbox"
-                                      checked={sub.is_physical}
-                                      onChange={e => updateSubmission(sub.id, { is_physical: e.target.checked })}
-                                    />
-                                    <span className="checkmark"></span>
-                                  </label>
-                                </td>
-                                <td className="file-cell">
-                                  {sub.file_path ? (
-                                    <span className="file-attached" title={sub.file_path}>
-                                      📎
-                                    </span>
-                                  ) : (
-                                    <label className="file-upload-label">
+                                }}
+                              >
+                                + Add Submission
+                              </button>
+                            </div>
+                          </>
+                        ) : (
+                          /* Office book records: flat list (no outlets) */
+                          <>
+                            <table className="submissions-table-flat">
+                              <thead>
+                                <tr>
+                                  <th>Period</th>
+                                  <th>Owner</th>
+                                  <th>Physical</th>
+                                  <th>File</th>
+                                  <th>Status</th>
+                                  <th></th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {recordSubs.map(sub => (
+                                  <tr key={sub.id} className={`submission-row status-${sub.status}`}>
+                                    <td className="period-cell">{sub.period_label}</td>
+                                    <td>
                                       <input
-                                        type="file"
-                                        accept=".pdf,.jpg,.jpeg,.png,.docx,.xlsx"
-                                        onChange={e => {
-                                          if (e.target.files[0]) {
-                                            uploadSubmissionFile(sub.id, e.target.files[0]);
-                                          }
-                                        }}
-                                        disabled={uploadingSubmission === sub.id}
+                                        type="text"
+                                        className="inline-owner-input"
+                                        value={sub.responsibility_code || ''}
+                                        placeholder="—"
+                                        onChange={e => updateSubmissionField(sub.id, 'responsibility_code', e.target.value)}
                                       />
-                                      {uploadingSubmission === sub.id ? '...' : '+ Upload'}
-                                    </label>
-                                  )}
-                                </td>
-                                <td className="actions-cell">
-                                  <select
-                                    value={sub.status}
-                                    onChange={e => updateSubmission(sub.id, { status: e.target.value })}
-                                    className="status-select"
-                                  >
-                                    <option value="pending">Pending</option>
-                                    <option value="in_progress">In Progress</option>
-                                    <option value="submitted">Submitted</option>
-                                    <option value="approved">Approved</option>
-                                    <option value="not_applicable">N/A</option>
-                                  </select>
-                                  <button
-                                    className="btn-delete-sm"
-                                    onClick={() => deleteSubmission(sub.id)}
-                                    title="Delete this submission"
-                                  >
-                                    ×
-                                  </button>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                                    </td>
+                                    <td>
+                                      <input
+                                        type="checkbox"
+                                        checked={sub.is_physical}
+                                        onChange={e => updateSubmission(sub.id, { is_physical: e.target.checked })}
+                                      />
+                                    </td>
+                                    <td className="file-cell">
+                                      {sub.file_path ? (
+                                        <span className="file-attached" title={sub.file_path}>📎</span>
+                                      ) : (
+                                        <label className="file-upload-label-sm">
+                                          <input
+                                            type="file"
+                                            accept=".pdf,.jpg,.jpeg,.png,.docx,.xlsx"
+                                            onChange={e => {
+                                              if (e.target.files[0]) uploadSubmissionFile(sub.id, e.target.files[0]);
+                                            }}
+                                          />
+                                          +
+                                        </label>
+                                      )}
+                                    </td>
+                                    <td>
+                                      <select
+                                        value={sub.status}
+                                        onChange={e => updateSubmission(sub.id, { status: e.target.value })}
+                                        className="status-select-sm"
+                                      >
+                                        <option value="pending">Pending</option>
+                                        <option value="in_progress">In Progress</option>
+                                        <option value="submitted">Submitted</option>
+                                        <option value="approved">Approved</option>
+                                        <option value="not_applicable">N/A</option>
+                                      </select>
+                                    </td>
+                                    <td>
+                                      <button
+                                        className="btn-delete-sm"
+                                        onClick={() => deleteSubmission(sub.id)}
+                                        title="Delete"
+                                      >×</button>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
 
-                        {/* Add Submission Button */}
-                        <div className="add-submission-row">
-                          <button
-                            className="btn-secondary btn-sm"
-                            onClick={() => {
-                              const period = prompt('Enter period label (e.g., "January 2026", "Q1 2026", "Annual"):');
-                              if (period) {
-                                const outlet = record.location_type === 'outlet_book'
-                                  ? prompt('Enter outlet name (or leave blank):')
-                                  : null;
-                                createSubmission(record.id, period, outlet || null);
-                              }
-                            }}
-                          >
-                            + Add Submission
-                          </button>
-                        </div>
+                            <div className="add-submission-row">
+                              <button
+                                className="btn-secondary btn-sm"
+                                onClick={() => {
+                                  const period = prompt('Enter period (e.g., "Annual 2026", "Q1 2026"):');
+                                  if (period) createSubmission(record.id, period, null);
+                                }}
+                              >
+                                + Add Submission
+                              </button>
+                            </div>
+                          </>
+                        )}
 
                         {recordSubs.length === 0 && (
                           <div className="no-submissions">
