@@ -384,7 +384,8 @@ def get_variant_common_products(
                 SELECT
                     cp.id,
                     cp.common_name,
-                    cp.description,
+                    cp.notes,
+                    cp.category,
                     cp.preferred_unit_id,
                     u.name as unit_name,
                     cp.created_at,
