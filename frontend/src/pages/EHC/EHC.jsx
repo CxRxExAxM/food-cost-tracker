@@ -160,6 +160,7 @@ function EHC() {
   const [expandedPoint, setExpandedPoint] = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newCycleYear, setNewCycleYear] = useState(new Date().getFullYear());
+  const [creatingCycle, setCreatingCycle] = useState(false);
 
   // Load cycles on mount
   useEffect(() => {
@@ -224,15 +225,18 @@ function EHC() {
 
   async function createCycle() {
     try {
+      setCreatingCycle(true);
       await fetchWithAuth(`${API_BASE}/cycles`, {
         method: 'POST',
         body: JSON.stringify({ year: newCycleYear })
       });
-      showToast(`Audit cycle ${newCycleYear} created`, 'success');
+      showToast(`Audit cycle ${newCycleYear} created successfully!`, 'success');
       setShowCreateModal(false);
       loadCycles();
     } catch (error) {
       showToast(error.message || 'Failed to create cycle', 'error');
+    } finally {
+      setCreatingCycle(false);
     }
   }
 
@@ -307,8 +311,8 @@ function EHC() {
                 <button className="btn-secondary" onClick={() => setShowCreateModal(false)}>
                   Cancel
                 </button>
-                <button className="btn-primary" onClick={createCycle}>
-                  Create Cycle
+                <button className="btn-primary" onClick={createCycle} disabled={creatingCycle}>
+                  {creatingCycle ? 'Creating... (this takes a moment)' : 'Create Cycle'}
                 </button>
               </div>
             </div>
