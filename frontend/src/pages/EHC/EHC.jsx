@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Navigation from '../../components/Navigation';
 import { useToast } from '../../contexts/ToastContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -370,16 +370,24 @@ function EHC() {
   }
 
   async function updateSubmission(submissionId, updates) {
+    // Optimistic update - update UI immediately
+    setSubmissions(prev => prev.map(sub =>
+      sub.id === submissionId ? { ...sub, ...updates } : sub
+    ));
+
     try {
       await fetchWithAuth(`${API_BASE}/submissions/${submissionId}`, {
         method: 'PATCH',
         body: JSON.stringify(updates)
       });
-      toast.success('Submission updated');
-      loadSubmissions(activeCycle.id);
-      loadDashboard(activeCycle.id);
+      // Only reload dashboard occasionally for status changes (affects stats)
+      if (updates.status) {
+        loadDashboard(activeCycle.id);
+      }
     } catch (error) {
       toast.error('Failed to update submission');
+      // Revert on failure - reload from server
+      loadSubmissions(activeCycle.id);
     }
   }
 
@@ -634,16 +642,47 @@ function EHC() {
     }
   }
 
-  // Update submission inline
-  async function updateSubmissionField(submissionId, field, value) {
+  // Debounce ref for text input saves
+  const saveTimeoutRef = useRef({});
+
+  // Update local state immediately (optimistic)
+  function updateSubmissionLocal(submissionId, field, value) {
+    setSubmissions(prev => prev.map(sub =>
+      sub.id === submissionId ? { ...sub, [field]: value } : sub
+    ));
+  }
+
+  // Save to server (called directly or debounced)
+  async function saveSubmissionField(submissionId, field, value) {
     try {
       await fetchWithAuth(`${API_BASE}/submissions/${submissionId}`, {
         method: 'PATCH',
         body: JSON.stringify({ [field]: value })
       });
-      loadSubmissions(activeCycle.id);
     } catch (error) {
-      toast.error('Failed to update');
+      toast.error('Failed to save');
+      loadSubmissions(activeCycle.id); // Revert on failure
+    }
+  }
+
+  // Update submission field - immediate local update, debounced save for text
+  function updateSubmissionField(submissionId, field, value, debounce = false) {
+    // Optimistic update - instant UI response
+    updateSubmissionLocal(submissionId, field, value);
+
+    if (debounce) {
+      // Debounce API call for text inputs
+      const key = `${submissionId}-${field}`;
+      if (saveTimeoutRef.current[key]) {
+        clearTimeout(saveTimeoutRef.current[key]);
+      }
+      saveTimeoutRef.current[key] = setTimeout(() => {
+        saveSubmissionField(submissionId, field, value);
+        delete saveTimeoutRef.current[key];
+      }, 500);
+    } else {
+      // Immediate save for checkboxes/selects
+      saveSubmissionField(submissionId, field, value);
     }
   }
 
@@ -1202,7 +1241,7 @@ function EHC() {
                                                     className="inline-owner-input"
                                                     value={sub.responsibility_code || ''}
                                                     placeholder="—"
-                                                    onChange={e => updateSubmissionField(sub.id, 'responsibility_code', e.target.value)}
+                                                    onChange={e => updateSubmissionField(sub.id, 'responsibility_code', e.target.value, true)}
                                                   />
                                                 </td>
                                                 <td>
@@ -1340,7 +1379,7 @@ function EHC() {
                                         className="inline-owner-input"
                                         value={sub.responsibility_code || ''}
                                         placeholder="—"
-                                        onChange={e => updateSubmissionField(sub.id, 'responsibility_code', e.target.value)}
+                                        onChange={e => updateSubmissionField(sub.id, 'responsibility_code', e.target.value, true)}
                                       />
                                     </td>
                                     <td>
