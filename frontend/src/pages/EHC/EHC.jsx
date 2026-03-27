@@ -140,6 +140,57 @@ function SectionProgress({ section }) {
   );
 }
 
+// Location badge component
+function LocationBadge({ type }) {
+  const isOutlet = type === 'outlet_book';
+  return (
+    <span className={`location-badge ${isOutlet ? 'location-outlet' : 'location-office'}`}>
+      {isOutlet ? 'Outlet Book' : 'Office Book'}
+    </span>
+  );
+}
+
+// Responsibility badge component
+function ResponsibilityBadge({ code }) {
+  const codeConfig = {
+    MM: { label: 'MM', title: 'Mike / Audit Prep Manager' },
+    CF: { label: 'CF', title: 'Chef (Executive Chef)' },
+    CM: { label: 'CM', title: 'Commissary / Purchasing' },
+    AM: { label: 'AM', title: 'Area Manager / Assistant Manager' },
+    ENG: { label: 'ENG', title: 'Engineering' },
+    FF: { label: 'FF', title: 'Facilities' },
+    EHC: { label: 'EHC', title: 'External EHC Auditor' },
+  };
+
+  const config = codeConfig[code] || { label: code, title: code };
+
+  return (
+    <span className="responsibility-badge" title={config.title}>
+      {config.label}
+    </span>
+  );
+}
+
+// Record type badge
+function RecordTypeBadge({ type }) {
+  const typeLabels = {
+    daily: 'Daily',
+    monthly: 'Monthly',
+    bi_monthly: 'Bi-Monthly',
+    quarterly: 'Quarterly',
+    annual: 'Annual',
+    one_time: 'One-Time',
+    audit_window: 'Audit Window',
+    as_needed: 'As Needed',
+  };
+
+  return (
+    <span className="record-type-badge">
+      {typeLabels[type] || type}
+    </span>
+  );
+}
+
 // Main EHC Component
 function EHC() {
   const { showToast } = useToast();
@@ -162,6 +213,18 @@ function EHC() {
   const [newCycleYear, setNewCycleYear] = useState(new Date().getFullYear());
   const [creatingCycle, setCreatingCycle] = useState(false);
 
+  // Records view state
+  const [records, setRecords] = useState([]);
+  const [submissions, setSubmissions] = useState([]);
+  const [recordFilters, setRecordFilters] = useState({
+    locationType: null,
+    responsibility: null,
+    recordType: null,
+  });
+  const [expandedRecord, setExpandedRecord] = useState(null);
+  const [selectedSubmissions, setSelectedSubmissions] = useState(new Set());
+  const [uploadingSubmission, setUploadingSubmission] = useState(null);
+
   // Load cycles on mount
   useEffect(() => {
     loadCycles();
@@ -180,6 +243,14 @@ function EHC() {
       loadPoints(activeCycle.id);
     }
   }, [activeCycle, view, filters]);
+
+  // Load records and submissions when view switches to records
+  useEffect(() => {
+    if (activeCycle && view === 'records') {
+      loadRecords();
+      loadSubmissions(activeCycle.id);
+    }
+  }, [activeCycle, view, recordFilters]);
 
   async function loadCycles() {
     try {
@@ -252,6 +323,111 @@ function EHC() {
     } catch (error) {
       showToast('Failed to update status', 'error');
     }
+  }
+
+  async function loadRecords() {
+    try {
+      let url = `${API_BASE}/records?`;
+      if (recordFilters.locationType) url += `location_type=${recordFilters.locationType}&`;
+      if (recordFilters.responsibility) url += `responsibility=${recordFilters.responsibility}&`;
+      if (recordFilters.recordType) url += `record_type=${recordFilters.recordType}&`;
+
+      const data = await fetchWithAuth(url);
+      setRecords(data.data || []);
+    } catch (error) {
+      showToast('Failed to load records', 'error');
+      console.error(error);
+    }
+  }
+
+  async function loadSubmissions(cycleId) {
+    try {
+      const data = await fetchWithAuth(`${API_BASE}/cycles/${cycleId}/submissions`);
+      setSubmissions(data.data || []);
+    } catch (error) {
+      showToast('Failed to load submissions', 'error');
+      console.error(error);
+    }
+  }
+
+  async function updateSubmission(submissionId, updates) {
+    try {
+      await fetchWithAuth(`${API_BASE}/submissions/${submissionId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(updates)
+      });
+      showToast('Submission updated', 'success');
+      loadSubmissions(activeCycle.id);
+      loadDashboard(activeCycle.id);
+    } catch (error) {
+      showToast('Failed to update submission', 'error');
+    }
+  }
+
+  async function uploadSubmissionFile(submissionId, file) {
+    try {
+      setUploadingSubmission(submissionId);
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE}/submissions/${submissionId}/upload`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: formData
+      });
+
+      if (!response.ok) {
+        throw new Error('Upload failed');
+      }
+
+      showToast('File uploaded successfully', 'success');
+      loadSubmissions(activeCycle.id);
+    } catch (error) {
+      showToast('Failed to upload file', 'error');
+    } finally {
+      setUploadingSubmission(null);
+    }
+  }
+
+  async function bulkUpdateSubmissions(status) {
+    if (selectedSubmissions.size === 0) {
+      showToast('No submissions selected', 'error');
+      return;
+    }
+
+    try {
+      const promises = Array.from(selectedSubmissions).map(id =>
+        fetchWithAuth(`${API_BASE}/submissions/${id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ status })
+        })
+      );
+      await Promise.all(promises);
+      showToast(`${selectedSubmissions.size} submissions updated`, 'success');
+      setSelectedSubmissions(new Set());
+      loadSubmissions(activeCycle.id);
+      loadDashboard(activeCycle.id);
+    } catch (error) {
+      showToast('Failed to update submissions', 'error');
+    }
+  }
+
+  // Get submissions for a specific record
+  function getRecordSubmissions(recordId) {
+    return submissions.filter(s => s.record_id === recordId);
+  }
+
+  // Calculate submission stats for a record
+  function getRecordStats(recordId) {
+    const recordSubs = getRecordSubmissions(recordId);
+    const total = recordSubs.length;
+    const approved = recordSubs.filter(s => s.status === 'approved').length;
+    const submitted = recordSubs.filter(s => s.status === 'submitted').length;
+    const pending = recordSubs.filter(s => s.status === 'pending' || s.status === 'in_progress').length;
+    return { total, approved, submitted, pending };
   }
 
   // Render loading state
@@ -374,6 +550,12 @@ function EHC() {
                 onClick={() => setView('points')}
               >
                 Audit Points
+              </button>
+              <button
+                className={`view-tab ${view === 'records' ? 'active' : ''}`}
+                onClick={() => setView('records')}
+              >
+                Records
               </button>
             </div>
 
@@ -590,6 +772,266 @@ function EHC() {
               {points.length === 0 && (
                 <div className="no-results">
                   No audit points match your filters.
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Records View */}
+        {view === 'records' && (
+          <div className="records-view">
+            {/* Filters */}
+            <div className="filters-bar">
+              <select
+                value={recordFilters.locationType || ''}
+                onChange={e => setRecordFilters({ ...recordFilters, locationType: e.target.value || null })}
+              >
+                <option value="">All Locations</option>
+                <option value="outlet_book">Outlet Book</option>
+                <option value="office_book">Office Book</option>
+              </select>
+
+              <select
+                value={recordFilters.responsibility || ''}
+                onChange={e => setRecordFilters({ ...recordFilters, responsibility: e.target.value || null })}
+              >
+                <option value="">All Responsibilities</option>
+                <option value="MM">MM - Audit Prep Manager</option>
+                <option value="CF">CF - Chef</option>
+                <option value="CM">CM - Commissary</option>
+                <option value="AM">AM - Area Manager</option>
+                <option value="ENG">ENG - Engineering</option>
+                <option value="FF">FF - Facilities</option>
+                <option value="EHC">EHC - External Auditor</option>
+              </select>
+
+              <select
+                value={recordFilters.recordType || ''}
+                onChange={e => setRecordFilters({ ...recordFilters, recordType: e.target.value || null })}
+              >
+                <option value="">All Frequencies</option>
+                <option value="daily">Daily</option>
+                <option value="monthly">Monthly</option>
+                <option value="quarterly">Quarterly</option>
+                <option value="annual">Annual</option>
+                <option value="as_needed">As Needed</option>
+              </select>
+
+              {(recordFilters.locationType || recordFilters.responsibility || recordFilters.recordType) && (
+                <button
+                  className="btn-ghost"
+                  onClick={() => setRecordFilters({ locationType: null, responsibility: null, recordType: null })}
+                >
+                  Clear Filters
+                </button>
+              )}
+
+              <span className="filter-count">{records.length} records</span>
+
+              {/* Bulk Actions */}
+              {selectedSubmissions.size > 0 && (
+                <div className="bulk-actions">
+                  <span className="bulk-count">{selectedSubmissions.size} selected</span>
+                  <button className="btn-secondary btn-sm" onClick={() => bulkUpdateSubmissions('submitted')}>
+                    Mark Submitted
+                  </button>
+                  <button className="btn-primary btn-sm" onClick={() => bulkUpdateSubmissions('approved')}>
+                    Approve All
+                  </button>
+                  <button className="btn-ghost btn-sm" onClick={() => setSelectedSubmissions(new Set())}>
+                    Clear
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Records List */}
+            <div className="records-list">
+              {records.map(record => {
+                const stats = getRecordStats(record.id);
+                const recordSubs = getRecordSubmissions(record.id);
+                const isExpanded = expandedRecord === record.id;
+
+                return (
+                  <div key={record.id} className={`record-card ${isExpanded ? 'expanded' : ''}`}>
+                    <div
+                      className="record-header"
+                      onClick={() => setExpandedRecord(isExpanded ? null : record.id)}
+                    >
+                      <div className="record-info">
+                        <span className="record-number">{record.record_number}</span>
+                        <div className="record-details">
+                          <span className="record-name">{record.name}</span>
+                          <div className="record-meta">
+                            <LocationBadge type={record.location_type} />
+                            <RecordTypeBadge type={record.record_type} />
+                            {record.responsibility_code && (
+                              <ResponsibilityBadge code={record.responsibility_code} />
+                            )}
+                            {record.outlet_count > 0 && (
+                              <span className="outlet-count">{record.outlet_count} outlets</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="record-stats">
+                        <div className="record-progress-ring">
+                          <svg width="48" height="48" viewBox="0 0 48 48">
+                            <circle
+                              cx="24" cy="24" r="20"
+                              fill="transparent"
+                              stroke="var(--border-subtle)"
+                              strokeWidth="4"
+                            />
+                            <circle
+                              cx="24" cy="24" r="20"
+                              fill="transparent"
+                              stroke={stats.approved === stats.total ? 'var(--color-green)' : 'var(--color-yellow)'}
+                              strokeWidth="4"
+                              strokeLinecap="round"
+                              strokeDasharray={`${(stats.approved / stats.total) * 125.6} 125.6`}
+                              transform="rotate(-90 24 24)"
+                            />
+                          </svg>
+                          <span className="record-progress-text">
+                            {stats.total > 0 ? Math.round((stats.approved / stats.total) * 100) : 0}%
+                          </span>
+                        </div>
+                        <div className="record-stats-text">
+                          <span className="stat-approved">{stats.approved} approved</span>
+                          <span className="stat-pending">{stats.pending} pending</span>
+                        </div>
+                        <span className={`expand-icon ${isExpanded ? 'expanded' : ''}`}>▼</span>
+                      </div>
+                    </div>
+
+                    {/* Expanded Submissions */}
+                    {isExpanded && (
+                      <div className="record-submissions">
+                        <div className="submissions-header">
+                          <span className="submissions-title">
+                            Submissions ({recordSubs.length})
+                          </span>
+                          <label className="select-all-label">
+                            <input
+                              type="checkbox"
+                              checked={recordSubs.every(s => selectedSubmissions.has(s.id))}
+                              onChange={e => {
+                                const newSelected = new Set(selectedSubmissions);
+                                recordSubs.forEach(s => {
+                                  if (e.target.checked) {
+                                    newSelected.add(s.id);
+                                  } else {
+                                    newSelected.delete(s.id);
+                                  }
+                                });
+                                setSelectedSubmissions(newSelected);
+                              }}
+                            />
+                            Select All
+                          </label>
+                        </div>
+
+                        <table className="submissions-table">
+                          <thead>
+                            <tr>
+                              <th></th>
+                              <th>Period</th>
+                              {record.location_type === 'outlet_book' && <th>Outlet</th>}
+                              <th>Status</th>
+                              <th>Physical</th>
+                              <th>File</th>
+                              <th>Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {recordSubs.map(sub => (
+                              <tr key={sub.id} className={`submission-row status-${sub.status}`}>
+                                <td>
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedSubmissions.has(sub.id)}
+                                    onChange={e => {
+                                      const newSelected = new Set(selectedSubmissions);
+                                      if (e.target.checked) {
+                                        newSelected.add(sub.id);
+                                      } else {
+                                        newSelected.delete(sub.id);
+                                      }
+                                      setSelectedSubmissions(newSelected);
+                                    }}
+                                  />
+                                </td>
+                                <td className="period-cell">{sub.period_label}</td>
+                                {record.location_type === 'outlet_book' && (
+                                  <td className="outlet-cell">{sub.outlet_name || '-'}</td>
+                                )}
+                                <td><StatusBadge status={sub.status} /></td>
+                                <td>
+                                  <label className="physical-checkbox">
+                                    <input
+                                      type="checkbox"
+                                      checked={sub.is_physical}
+                                      onChange={e => updateSubmission(sub.id, { is_physical: e.target.checked })}
+                                    />
+                                    <span className="checkmark"></span>
+                                  </label>
+                                </td>
+                                <td className="file-cell">
+                                  {sub.file_path ? (
+                                    <span className="file-attached" title={sub.file_path}>
+                                      📎
+                                    </span>
+                                  ) : (
+                                    <label className="file-upload-label">
+                                      <input
+                                        type="file"
+                                        accept=".pdf,.jpg,.jpeg,.png,.docx,.xlsx"
+                                        onChange={e => {
+                                          if (e.target.files[0]) {
+                                            uploadSubmissionFile(sub.id, e.target.files[0]);
+                                          }
+                                        }}
+                                        disabled={uploadingSubmission === sub.id}
+                                      />
+                                      {uploadingSubmission === sub.id ? '...' : '+ Upload'}
+                                    </label>
+                                  )}
+                                </td>
+                                <td>
+                                  <select
+                                    value={sub.status}
+                                    onChange={e => updateSubmission(sub.id, { status: e.target.value })}
+                                    className="status-select"
+                                  >
+                                    <option value="pending">Pending</option>
+                                    <option value="in_progress">In Progress</option>
+                                    <option value="submitted">Submitted</option>
+                                    <option value="approved">Approved</option>
+                                    <option value="not_applicable">N/A</option>
+                                  </select>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+
+                        {recordSubs.length === 0 && (
+                          <div className="no-submissions">
+                            No submissions generated for this record yet.
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+
+              {records.length === 0 && (
+                <div className="no-results">
+                  No records match your filters.
                 </div>
               )}
             </div>
