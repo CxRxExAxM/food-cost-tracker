@@ -385,12 +385,12 @@ def get_variant_common_products(
                     cp.id,
                     cp.common_name,
                     cp.description,
-                    cp.standard_unit_id,
+                    cp.preferred_unit_id,
                     u.name as unit_name,
                     cp.created_at,
                     cp.updated_at
                 FROM common_products cp
-                LEFT JOIN units u ON u.id = cp.standard_unit_id
+                LEFT JOIN units u ON u.id = cp.preferred_unit_id
                 WHERE cp.variant_id = %s AND cp.is_active = 1
                 ORDER BY cp.common_name
             """, (variant_id,))
