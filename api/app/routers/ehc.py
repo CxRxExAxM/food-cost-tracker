@@ -52,6 +52,25 @@ class SubmissionUpdate(BaseModel):
     status: Optional[str] = None
     is_physical: Optional[bool] = None
     notes: Optional[str] = None
+    responsibility_code: Optional[str] = None
+    period_label: Optional[str] = None
+    outlet_name: Optional[str] = None
+
+
+class SubmissionCreate(BaseModel):
+    """Create a new submission."""
+    record_id: int
+    period_label: str
+    outlet_name: Optional[str] = None
+    status: Optional[str] = "pending"
+    responsibility_code: Optional[str] = None
+
+
+class OutletAssignment(BaseModel):
+    """Add/update outlet assignment for a record."""
+    outlet_name: str
+    sub_type: Optional[str] = None
+    notes: Optional[str] = None
 
 
 # ============================================
@@ -695,7 +714,10 @@ class RecordUpdate(BaseModel):
     name: Optional[str] = None
     notes: Optional[str] = None
     responsibility_code: Optional[str] = None
-    record_type: Optional[str] = None
+    record_type: Optional[str] = None  # daily, monthly, quarterly, annual, as_needed
+    location_type: Optional[str] = None  # outlet_book, office_book
+    description: Optional[str] = None
+    is_physical_only: Optional[bool] = None
 
 
 @router.patch("/records/{record_id}")
@@ -743,6 +765,105 @@ def update_record(
         return {"status": "ok", "record_id": record_id, "updated_fields": list(update_dict.keys())}
 
 
+@router.get("/records/{record_id}/outlets")
+def get_record_outlets(record_id: int, current_user: dict = Depends(get_current_user)):
+    """Get outlet assignments for a record."""
+    org_id = current_user["organization_id"]
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Verify ownership
+        cursor.execute("""
+            SELECT id FROM ehc_record
+            WHERE id = %s AND organization_id = %s
+        """, (record_id, org_id))
+
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Record not found")
+
+        cursor.execute("""
+            SELECT id, outlet_name, sub_type, notes
+            FROM ehc_record_outlet
+            WHERE record_id = %s
+            ORDER BY outlet_name
+        """, (record_id,))
+
+        return {"data": dicts_from_rows(cursor.fetchall())}
+
+
+@router.post("/records/{record_id}/outlets")
+def add_record_outlet(
+    record_id: int,
+    outlet: OutletAssignment,
+    current_user: dict = Depends(get_current_user)
+):
+    """Add an outlet assignment to a record."""
+    org_id = current_user["organization_id"]
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Verify ownership
+        cursor.execute("""
+            SELECT id FROM ehc_record
+            WHERE id = %s AND organization_id = %s
+        """, (record_id, org_id))
+
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Record not found")
+
+        # Check if already exists
+        cursor.execute("""
+            SELECT id FROM ehc_record_outlet
+            WHERE record_id = %s AND outlet_name = %s
+        """, (record_id, outlet.outlet_name))
+
+        if cursor.fetchone():
+            raise HTTPException(status_code=400, detail="Outlet already assigned to this record")
+
+        cursor.execute("""
+            INSERT INTO ehc_record_outlet (record_id, outlet_name, sub_type, notes)
+            VALUES (%s, %s, %s, %s)
+            RETURNING id
+        """, (record_id, outlet.outlet_name, outlet.sub_type, outlet.notes))
+
+        result = cursor.fetchone()
+        conn.commit()
+
+        return {"status": "ok", "outlet_id": result['id'], "outlet_name": outlet.outlet_name}
+
+
+@router.delete("/records/{record_id}/outlets/{outlet_name}")
+def remove_record_outlet(
+    record_id: int,
+    outlet_name: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Remove an outlet assignment from a record."""
+    org_id = current_user["organization_id"]
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Verify ownership
+        cursor.execute("""
+            SELECT id FROM ehc_record
+            WHERE id = %s AND organization_id = %s
+        """, (record_id, org_id))
+
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Record not found")
+
+        cursor.execute("""
+            DELETE FROM ehc_record_outlet
+            WHERE record_id = %s AND outlet_name = %s
+        """, (record_id, outlet_name))
+
+        conn.commit()
+        return {"status": "ok", "removed_outlet": outlet_name}
+
+
 # ============================================
 # Submissions Endpoints
 # ============================================
@@ -776,6 +897,7 @@ def get_submissions(
                 rs.id, rs.record_id, rs.outlet_name, rs.period_label,
                 rs.period_start, rs.period_end, rs.status, rs.is_physical,
                 rs.file_path, rs.notes, rs.submitted_at, rs.approved_at,
+                rs.responsibility_code,
                 r.record_number, r.name as record_name, r.location_type
             FROM ehc_record_submission rs
             JOIN ehc_record r ON r.id = rs.record_id
@@ -812,6 +934,60 @@ def get_submissions(
                 sub['period_end'] = str(sub['period_end'])
 
         return {"data": submissions, "count": len(submissions)}
+
+
+@router.post("/cycles/{cycle_id}/submissions")
+def create_submission(
+    cycle_id: int,
+    submission: SubmissionCreate,
+    current_user: dict = Depends(get_current_user)
+):
+    """Create a new submission for a record."""
+    org_id = current_user["organization_id"]
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Verify cycle ownership
+        cursor.execute("""
+            SELECT id FROM ehc_audit_cycle
+            WHERE id = %s AND organization_id = %s
+        """, (cycle_id, org_id))
+
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Cycle not found")
+
+        # Verify record ownership
+        cursor.execute("""
+            SELECT id FROM ehc_record
+            WHERE id = %s AND organization_id = %s
+        """, (submission.record_id, org_id))
+
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Record not found")
+
+        # Create submission
+        cursor.execute("""
+            INSERT INTO ehc_record_submission (
+                audit_cycle_id, record_id, outlet_name, period_label,
+                status, responsibility_code
+            )
+            VALUES (%s, %s, %s, %s, %s, %s)
+            RETURNING id
+        """, (
+            cycle_id, submission.record_id, submission.outlet_name,
+            submission.period_label, submission.status or 'pending',
+            submission.responsibility_code
+        ))
+
+        result = cursor.fetchone()
+        conn.commit()
+
+        return {
+            "status": "ok",
+            "submission_id": result['id'],
+            "message": f"Submission created for {submission.period_label}"
+        }
 
 
 @router.patch("/submissions/{submission_id}")

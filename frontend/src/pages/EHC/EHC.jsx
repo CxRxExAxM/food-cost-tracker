@@ -448,22 +448,38 @@ function EHC() {
     return { total, approved, submitted, pending };
   }
 
-  // Start editing a record
+  // Start editing a record (opens modal with all fields)
   function startEditingRecord(record) {
     setEditingRecord(record.id);
     setEditValues({
       name: record.name,
       notes: record.notes || '',
       responsibility_code: record.responsibility_code || '',
+      record_type: record.record_type,
+      location_type: record.location_type,
+      description: record.description || '',
     });
+    // Load outlets for this record
+    loadRecordOutlets(record.id);
+  }
+
+  // Load outlets for a record
+  async function loadRecordOutlets(recordId) {
+    try {
+      const data = await fetchWithAuth(`${API_BASE}/records/${recordId}/outlets`);
+      setEditValues(prev => ({ ...prev, outlets: data.data || [] }));
+    } catch (error) {
+      console.error('Failed to load outlets', error);
+    }
   }
 
   // Save record edits
   async function saveRecordEdit(recordId) {
     try {
+      const { outlets, ...recordData } = editValues;
       await fetchWithAuth(`${API_BASE}/records/${recordId}`, {
         method: 'PATCH',
-        body: JSON.stringify(editValues)
+        body: JSON.stringify(recordData)
       });
       showToast('Record updated', 'success');
       setEditingRecord(null);
@@ -474,11 +490,59 @@ function EHC() {
     }
   }
 
+  // Add outlet to record
+  async function addRecordOutlet(recordId, outletName) {
+    try {
+      await fetchWithAuth(`${API_BASE}/records/${recordId}/outlets`, {
+        method: 'POST',
+        body: JSON.stringify({ outlet_name: outletName })
+      });
+      showToast('Outlet added', 'success');
+      loadRecordOutlets(recordId);
+      loadRecords();
+    } catch (error) {
+      showToast(error.message || 'Failed to add outlet', 'error');
+    }
+  }
+
+  // Remove outlet from record
+  async function removeRecordOutlet(recordId, outletName) {
+    try {
+      await fetchWithAuth(`${API_BASE}/records/${recordId}/outlets/${encodeURIComponent(outletName)}`, {
+        method: 'DELETE'
+      });
+      showToast('Outlet removed', 'success');
+      loadRecordOutlets(recordId);
+      loadRecords();
+    } catch (error) {
+      showToast('Failed to remove outlet', 'error');
+    }
+  }
+
   // Cancel editing
   function cancelEdit() {
     setEditingRecord(null);
     setEditingSubmission(null);
     setEditValues({});
+  }
+
+  // Create a new submission
+  async function createSubmission(recordId, periodLabel, outletName = null, responsibilityCode = null) {
+    try {
+      await fetchWithAuth(`${API_BASE}/cycles/${activeCycle.id}/submissions`, {
+        method: 'POST',
+        body: JSON.stringify({
+          record_id: recordId,
+          period_label: periodLabel,
+          outlet_name: outletName,
+          responsibility_code: responsibilityCode,
+        })
+      });
+      showToast('Submission created', 'success');
+      loadSubmissions(activeCycle.id);
+    } catch (error) {
+      showToast(error.message || 'Failed to create submission', 'error');
+    }
   }
 
   // Delete a submission (for cleaning up duplicates)
@@ -492,6 +556,19 @@ function EHC() {
       loadSubmissions(activeCycle.id);
     } catch (error) {
       showToast('Failed to delete submission', 'error');
+    }
+  }
+
+  // Update submission inline
+  async function updateSubmissionField(submissionId, field, value) {
+    try {
+      await fetchWithAuth(`${API_BASE}/submissions/${submissionId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ [field]: value })
+      });
+      loadSubmissions(activeCycle.id);
+    } catch (error) {
+      showToast('Failed to update', 'error');
     }
   }
 
@@ -1020,6 +1097,7 @@ function EHC() {
                               <th></th>
                               <th>Period</th>
                               {record.location_type === 'outlet_book' && <th>Outlet</th>}
+                              <th>Owner</th>
                               <th>Status</th>
                               <th>Physical</th>
                               <th>File</th>
@@ -1048,6 +1126,15 @@ function EHC() {
                                 {record.location_type === 'outlet_book' && (
                                   <td className="outlet-cell">{sub.outlet_name || '-'}</td>
                                 )}
+                                <td className="owner-cell">
+                                  <input
+                                    type="text"
+                                    className="inline-owner-input"
+                                    value={sub.responsibility_code || ''}
+                                    placeholder="—"
+                                    onChange={e => updateSubmissionField(sub.id, 'responsibility_code', e.target.value)}
+                                  />
+                                </td>
                                 <td><StatusBadge status={sub.status} /></td>
                                 <td>
                                   <label className="physical-checkbox">
@@ -1105,9 +1192,27 @@ function EHC() {
                           </tbody>
                         </table>
 
+                        {/* Add Submission Button */}
+                        <div className="add-submission-row">
+                          <button
+                            className="btn-secondary btn-sm"
+                            onClick={() => {
+                              const period = prompt('Enter period label (e.g., "January 2026", "Q1 2026", "Annual"):');
+                              if (period) {
+                                const outlet = record.location_type === 'outlet_book'
+                                  ? prompt('Enter outlet name (or leave blank):')
+                                  : null;
+                                createSubmission(record.id, period, outlet || null);
+                              }
+                            }}
+                          >
+                            + Add Submission
+                          </button>
+                        </div>
+
                         {recordSubs.length === 0 && (
                           <div className="no-submissions">
-                            No submissions generated for this record yet.
+                            No submissions for this record. Click "Add Submission" to create one.
                           </div>
                         )}
                       </div>
@@ -1151,6 +1256,113 @@ function EHC() {
               </button>
               <button className="btn-primary" onClick={createCycle}>
                 Create Cycle
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Record Modal */}
+      {editingRecord && (
+        <div className="modal-overlay" onClick={cancelEdit}>
+          <div className="modal-content modal-wide" onClick={e => e.stopPropagation()}>
+            <h3>Edit Record</h3>
+
+            <div className="form-row">
+              <div className="form-group flex-2">
+                <label>Record Name</label>
+                <input
+                  type="text"
+                  value={editValues.name || ''}
+                  onChange={e => setEditValues({ ...editValues, name: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div className="form-row">
+              <div className="form-group">
+                <label>Location</label>
+                <select
+                  value={editValues.location_type || ''}
+                  onChange={e => setEditValues({ ...editValues, location_type: e.target.value })}
+                >
+                  <option value="outlet_book">Outlet Book</option>
+                  <option value="office_book">Office Book</option>
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label>Frequency</label>
+                <select
+                  value={editValues.record_type || ''}
+                  onChange={e => setEditValues({ ...editValues, record_type: e.target.value })}
+                >
+                  <option value="daily">Daily</option>
+                  <option value="monthly">Monthly</option>
+                  <option value="bi_monthly">Bi-Monthly</option>
+                  <option value="quarterly">Quarterly</option>
+                  <option value="annual">Annual</option>
+                  <option value="one_time">One-Time</option>
+                  <option value="as_needed">As Needed</option>
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label>Default Owner</label>
+                <input
+                  type="text"
+                  value={editValues.responsibility_code || ''}
+                  onChange={e => setEditValues({ ...editValues, responsibility_code: e.target.value })}
+                  placeholder="e.g., MM, CF, AM"
+                />
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label>Description / Notes</label>
+              <textarea
+                value={editValues.notes || ''}
+                onChange={e => setEditValues({ ...editValues, notes: e.target.value })}
+                rows={3}
+                placeholder="Add any notes about this record..."
+              />
+            </div>
+
+            {/* Outlet Assignments (for outlet_book records) */}
+            {editValues.location_type === 'outlet_book' && (
+              <div className="form-group">
+                <label>Assigned Outlets</label>
+                <div className="outlet-chips">
+                  {(editValues.outlets || []).map(outlet => (
+                    <span key={outlet.outlet_name} className="outlet-chip">
+                      {outlet.outlet_name}
+                      <button
+                        className="chip-remove"
+                        onClick={() => removeRecordOutlet(editingRecord, outlet.outlet_name)}
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                  <button
+                    className="btn-add-outlet"
+                    onClick={() => {
+                      const name = prompt('Enter outlet name:');
+                      if (name) addRecordOutlet(editingRecord, name);
+                    }}
+                  >
+                    + Add Outlet
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div className="modal-actions">
+              <button className="btn-secondary" onClick={cancelEdit}>
+                Cancel
+              </button>
+              <button className="btn-primary" onClick={() => saveRecordEdit(editingRecord)}>
+                Save Changes
               </button>
             </div>
           </div>
