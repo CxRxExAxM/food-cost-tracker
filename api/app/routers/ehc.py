@@ -78,18 +78,56 @@ class OutletAssignment(BaseModel):
 # Helper Functions
 # ============================================
 
-def calculate_section_progress(cursor, section_id: int) -> dict:
-    """Calculate completion stats for a section."""
+def calculate_section_progress(cursor, section_id: int, cycle_id: int = None) -> dict:
+    """Calculate completion stats for a section.
+
+    Status is computed from linked records:
+    - Points with records: verified if all submissions approved
+    - Points without records: use manual status
+    """
+    # Get cycle_id if not provided
+    if cycle_id is None:
+        cursor.execute("""
+            SELECT s.audit_cycle_id FROM ehc_section s WHERE s.id = %s
+        """, (section_id,))
+        row = cursor.fetchone()
+        cycle_id = row['audit_cycle_id'] if row else None
+
     cursor.execute("""
+        WITH point_status AS (
+            SELECT
+                ap.id,
+                ap.max_score,
+                COALESCE(ap.actual_score, 0) as actual_score,
+                ap.status as manual_status,
+                COALESCE(rec.record_count, 0) as record_count,
+                COALESCE(rec.total_subs, 0) as total_subs,
+                COALESCE(rec.approved_subs, 0) as approved_subs
+            FROM ehc_audit_point ap
+            JOIN ehc_subsection ss ON ss.id = ap.subsection_id
+            LEFT JOIN LATERAL (
+                SELECT
+                    COUNT(DISTINCT prl.record_id) as record_count,
+                    COUNT(rs.id) as total_subs,
+                    SUM(CASE WHEN rs.status = 'approved' THEN 1 ELSE 0 END) as approved_subs
+                FROM ehc_point_record_link prl
+                LEFT JOIN ehc_record_submission rs ON rs.record_id = prl.record_id
+                    AND rs.audit_cycle_id = %s
+                WHERE prl.audit_point_id = ap.id
+            ) rec ON true
+            WHERE ss.section_id = %s
+        )
         SELECT
             COUNT(*) as total_points,
-            SUM(CASE WHEN ap.status IN ('evidence_collected', 'verified') THEN 1 ELSE 0 END) as completed_points,
-            SUM(ap.max_score) as max_score,
-            SUM(COALESCE(ap.actual_score, 0)) as actual_score
-        FROM ehc_audit_point ap
-        JOIN ehc_subsection ss ON ss.id = ap.subsection_id
-        WHERE ss.section_id = %s
-    """, (section_id,))
+            SUM(CASE
+                WHEN record_count > 0 AND total_subs > 0 AND approved_subs = total_subs THEN 1
+                WHEN record_count = 0 AND manual_status IN ('evidence_collected', 'verified') THEN 1
+                ELSE 0
+            END) as completed_points,
+            SUM(max_score) as max_score,
+            SUM(actual_score) as actual_score
+        FROM point_status
+    """, (cycle_id, section_id))
 
     row = cursor.fetchone()
     total = row['total_points'] or 0
@@ -105,21 +143,59 @@ def calculate_section_progress(cursor, section_id: int) -> dict:
 
 
 def calculate_cycle_progress(cursor, cycle_id: int) -> dict:
-    """Calculate overall completion stats for a cycle."""
+    """Calculate overall completion stats for a cycle.
+
+    Status is computed from linked records:
+    - Points with records: verified if all submissions approved
+    - Points without records: use manual status
+    """
     cursor.execute("""
+        WITH point_status AS (
+            SELECT
+                ap.id,
+                ap.max_score,
+                COALESCE(ap.actual_score, 0) as actual_score,
+                ap.status as manual_status,
+                COALESCE(rec.record_count, 0) as record_count,
+                COALESCE(rec.total_subs, 0) as total_subs,
+                COALESCE(rec.approved_subs, 0) as approved_subs
+            FROM ehc_audit_point ap
+            JOIN ehc_subsection ss ON ss.id = ap.subsection_id
+            JOIN ehc_section s ON s.id = ss.section_id
+            LEFT JOIN LATERAL (
+                SELECT
+                    COUNT(DISTINCT prl.record_id) as record_count,
+                    COUNT(rs.id) as total_subs,
+                    SUM(CASE WHEN rs.status = 'approved' THEN 1 ELSE 0 END) as approved_subs
+                FROM ehc_point_record_link prl
+                LEFT JOIN ehc_record_submission rs ON rs.record_id = prl.record_id
+                    AND rs.audit_cycle_id = %s
+                WHERE prl.audit_point_id = ap.id
+            ) rec ON true
+            WHERE s.audit_cycle_id = %s
+        )
         SELECT
             COUNT(*) as total_points,
-            SUM(CASE WHEN ap.status IN ('evidence_collected', 'verified') THEN 1 ELSE 0 END) as completed_points,
-            SUM(CASE WHEN ap.status = 'not_started' THEN 1 ELSE 0 END) as not_started,
-            SUM(CASE WHEN ap.status = 'in_progress' THEN 1 ELSE 0 END) as in_progress,
-            SUM(CASE WHEN ap.status = 'flagged' THEN 1 ELSE 0 END) as flagged,
-            SUM(ap.max_score) as max_score,
-            SUM(COALESCE(ap.actual_score, 0)) as actual_score
-        FROM ehc_audit_point ap
-        JOIN ehc_subsection ss ON ss.id = ap.subsection_id
-        JOIN ehc_section s ON s.id = ss.section_id
-        WHERE s.audit_cycle_id = %s
-    """, (cycle_id,))
+            SUM(CASE
+                WHEN record_count > 0 AND total_subs > 0 AND approved_subs = total_subs THEN 1
+                WHEN record_count = 0 AND manual_status IN ('evidence_collected', 'verified') THEN 1
+                ELSE 0
+            END) as completed_points,
+            SUM(CASE
+                WHEN record_count > 0 AND (total_subs = 0 OR approved_subs = 0) THEN 1
+                WHEN record_count = 0 AND manual_status = 'not_started' THEN 1
+                ELSE 0
+            END) as not_started,
+            SUM(CASE
+                WHEN record_count > 0 AND total_subs > 0 AND approved_subs > 0 AND approved_subs < total_subs THEN 1
+                WHEN record_count = 0 AND manual_status = 'in_progress' THEN 1
+                ELSE 0
+            END) as in_progress,
+            SUM(CASE WHEN manual_status = 'flagged' THEN 1 ELSE 0 END) as flagged,
+            SUM(max_score) as max_score,
+            SUM(actual_score) as actual_score
+        FROM point_status
+    """, (cycle_id, cycle_id))
 
     row = cursor.fetchone()
     total = row['total_points'] or 0
@@ -349,22 +425,48 @@ def get_cycle_dashboard(cycle_id: int, current_user: dict = Depends(get_current_
         sections = []
         for row in cursor.fetchall():
             section = dict_from_row(row)
-            section['progress'] = calculate_section_progress(cursor, section['id'])
+            section['progress'] = calculate_section_progress(cursor, section['id'], cycle_id)
             sections.append(section)
 
-        # NC Level breakdown
+        # NC Level breakdown - compute status from linked records
+        # Points with records: verified if all submissions approved
+        # Points without records: use manual status
         cursor.execute("""
+            WITH point_status AS (
+                SELECT
+                    ap.id,
+                    ap.nc_level,
+                    ap.status as manual_status,
+                    COALESCE(rec.record_count, 0) as record_count,
+                    COALESCE(rec.total_subs, 0) as total_subs,
+                    COALESCE(rec.approved_subs, 0) as approved_subs
+                FROM ehc_audit_point ap
+                JOIN ehc_subsection ss ON ss.id = ap.subsection_id
+                JOIN ehc_section s ON s.id = ss.section_id
+                LEFT JOIN LATERAL (
+                    SELECT
+                        COUNT(DISTINCT prl.record_id) as record_count,
+                        COUNT(rs.id) as total_subs,
+                        SUM(CASE WHEN rs.status = 'approved' THEN 1 ELSE 0 END) as approved_subs
+                    FROM ehc_point_record_link prl
+                    LEFT JOIN ehc_record_submission rs ON rs.record_id = prl.record_id
+                        AND rs.audit_cycle_id = %s
+                    WHERE prl.audit_point_id = ap.id
+                ) rec ON true
+                WHERE s.audit_cycle_id = %s
+            )
             SELECT
-                ap.nc_level,
+                nc_level,
                 COUNT(*) as total,
-                SUM(CASE WHEN ap.status IN ('evidence_collected', 'verified') THEN 1 ELSE 0 END) as completed
-            FROM ehc_audit_point ap
-            JOIN ehc_subsection ss ON ss.id = ap.subsection_id
-            JOIN ehc_section s ON s.id = ss.section_id
-            WHERE s.audit_cycle_id = %s
-            GROUP BY ap.nc_level
-            ORDER BY ap.nc_level
-        """, (cycle_id,))
+                SUM(CASE
+                    WHEN record_count > 0 AND total_subs > 0 AND approved_subs = total_subs THEN 1
+                    WHEN record_count = 0 AND manual_status IN ('evidence_collected', 'verified') THEN 1
+                    ELSE 0
+                END) as completed
+            FROM point_status
+            GROUP BY nc_level
+            ORDER BY nc_level
+        """, (cycle_id, cycle_id))
 
         nc_breakdown = []
         for row in cursor.fetchall():
@@ -426,7 +528,7 @@ def get_sections(cycle_id: int, current_user: dict = Depends(get_current_user)):
         sections = []
         for section_row in cursor.fetchall():
             section = dict_from_row(section_row)
-            section['progress'] = calculate_section_progress(cursor, section['id'])
+            section['progress'] = calculate_section_progress(cursor, section['id'], cycle_id)
 
             # Get subsections for this section
             cursor.execute("""
