@@ -983,28 +983,40 @@ function EHC() {
         {/* Dashboard View */}
         {view === 'dashboard' && dashboard && (
           <div className="dashboard-view">
-            {/* Top Stats Row - Two Progress Rings */}
+            {/* Top Stats Row - Three Progress Rings */}
             <div className="stats-row stats-row-progress">
               <div className="stat-card progress-card progress-card-split">
-                <ProgressRing percentage={dashboard.overall_progress?.prework?.completion_pct || 0} size={100} strokeWidth={6} />
+                <ProgressRing percentage={dashboard.overall_progress?.prework?.completion_pct || 0} size={90} strokeWidth={6} />
                 <div className="progress-details">
                   <div className="stat-label">Pre-Work Ready</div>
                   <div className="stat-breakdown">
                     <span>{dashboard.overall_progress?.prework?.completed || 0}</span>
                     <span className="stat-sep">/</span>
-                    <span>{dashboard.overall_progress?.prework?.total || 0} records verified</span>
+                    <span>{dashboard.overall_progress?.prework?.total || 0} records</span>
                   </div>
                 </div>
               </div>
 
               <div className="stat-card progress-card progress-card-split">
-                <ProgressRing percentage={dashboard.overall_progress?.observations?.completion_pct || 0} size={100} strokeWidth={6} />
+                <ProgressRing percentage={dashboard.overall_progress?.internal_walk?.completion_pct || 0} size={90} strokeWidth={6} />
                 <div className="progress-details">
-                  <div className="stat-label">Walk Observations</div>
+                  <div className="stat-label">Internal Walk</div>
                   <div className="stat-breakdown">
-                    <span>{dashboard.overall_progress?.observations?.completed || 0}</span>
+                    <span>{dashboard.overall_progress?.internal_walk?.completed || 0}</span>
                     <span className="stat-sep">/</span>
-                    <span>{dashboard.overall_progress?.observations?.total || 0} points ready</span>
+                    <span>{dashboard.overall_progress?.internal_walk?.total || 0} checked</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="stat-card progress-card progress-card-split">
+                <ProgressRing percentage={dashboard.overall_progress?.audit_walk?.completion_pct || 0} size={90} strokeWidth={6} />
+                <div className="progress-details">
+                  <div className="stat-label">Audit Walk</div>
+                  <div className="stat-breakdown">
+                    <span>{dashboard.overall_progress?.audit_walk?.completed || 0}</span>
+                    <span className="stat-sep">/</span>
+                    <span>{dashboard.overall_progress?.audit_walk?.total || 0} verified</span>
                   </div>
                 </div>
               </div>
@@ -1123,6 +1135,7 @@ function EHC() {
                     <th>Ref</th>
                     <th>Question</th>
                     <th>NC</th>
+                    <th>Internal ✓</th>
                     <th>Status</th>
                     <th>Area</th>
                     <th>Records</th>
@@ -1140,6 +1153,38 @@ function EHC() {
                         <td className="point-ref">{point.ref_code}</td>
                         <td className="point-question">{point.question_text}</td>
                         <td><NCBadge level={point.nc_level} /></td>
+                        <td className="point-internal" onClick={e => e.stopPropagation()}>
+                          {/* Internal verification checkbox - only for observational points */}
+                          {point.linked_record_count === 0 ? (
+                            <input
+                              type="checkbox"
+                              checked={point.internal_verified || false}
+                              onChange={e => {
+                                // Optimistic update
+                                const newValue = e.target.checked;
+                                setPoints(prev => prev.map(p =>
+                                  p.id === point.id ? { ...p, internal_verified: newValue } : p
+                                ));
+                                // API update
+                                fetchWithAuth(`${API_BASE}/points/${point.id}`, {
+                                  method: 'PATCH',
+                                  body: JSON.stringify({ internal_verified: newValue })
+                                }).then(() => {
+                                  loadDashboard(activeCycle.id);
+                                }).catch(() => {
+                                  // Revert on error
+                                  setPoints(prev => prev.map(p =>
+                                    p.id === point.id ? { ...p, internal_verified: !newValue } : p
+                                  ));
+                                  toast.error('Failed to update');
+                                });
+                              }}
+                              title="Internal walk verification"
+                            />
+                          ) : (
+                            <span className="internal-na" title="Record-based point">—</span>
+                          )}
+                        </td>
                         <td><StatusBadge status={point.status} /></td>
                         <td className="point-area">{point.responsible_area || '-'}</td>
                         <td className="point-records">
@@ -1184,7 +1229,7 @@ function EHC() {
                       </tr>
                       {expandedPoint === point.id && (
                         <tr className="point-expanded-row">
-                          <td colSpan="7">
+                          <td colSpan="8">
                             <div className="point-details">
                               <div className="point-detail-grid">
                                 <div className="point-detail-section">

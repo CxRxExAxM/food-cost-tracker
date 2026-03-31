@@ -46,6 +46,7 @@ class PointUpdate(BaseModel):
     actual_score: Optional[float] = None
     flag_color: Optional[str] = None
     notes: Optional[str] = None
+    internal_verified: Optional[bool] = None
 
 
 class SubmissionUpdate(BaseModel):
@@ -155,6 +156,11 @@ def calculate_cycle_progress(cursor, cycle_id: int) -> dict:
     Status is computed from linked records:
     - Points with records: verified if all submissions approved
     - Points without records: use manual status
+
+    Three dashboard categories:
+    - Pre-Work Ready: Record-based points with all submissions approved
+    - Internal Walk: Observational points with internal_verified = true
+    - Audit Walk: Observational points pending (not yet internally verified)
     """
     cursor.execute("""
         WITH point_status AS (
@@ -163,6 +169,7 @@ def calculate_cycle_progress(cursor, cycle_id: int) -> dict:
                 ap.max_score,
                 COALESCE(ap.actual_score, 0) as actual_score,
                 ap.status as manual_status,
+                COALESCE(ap.internal_verified, false) as internal_verified,
                 COALESCE(rec.record_count, 0) as record_count,
                 COALESCE(rec.total_subs, 0) as total_subs,
                 COALESCE(rec.approved_subs, 0) as approved_subs
@@ -204,9 +211,10 @@ def calculate_cycle_progress(cursor, cycle_id: int) -> dict:
             -- Pre-work points (have linked records)
             SUM(CASE WHEN record_count > 0 THEN 1 ELSE 0 END) as prework_total,
             SUM(CASE WHEN record_count > 0 AND total_subs > 0 AND approved_subs = total_subs THEN 1 ELSE 0 END) as prework_completed,
-            -- Observational points (no linked records)
+            -- Observational points (no linked records) - split by internal verification
             SUM(CASE WHEN record_count = 0 THEN 1 ELSE 0 END) as obs_total,
-            SUM(CASE WHEN record_count = 0 AND manual_status IN ('evidence_collected', 'verified') THEN 1 ELSE 0 END) as obs_completed
+            SUM(CASE WHEN record_count = 0 AND internal_verified THEN 1 ELSE 0 END) as internal_walk_completed,
+            SUM(CASE WHEN record_count = 0 AND manual_status IN ('evidence_collected', 'verified') THEN 1 ELSE 0 END) as audit_walk_completed
         FROM point_status
     """, (cycle_id, cycle_id))
 
@@ -216,7 +224,8 @@ def calculate_cycle_progress(cursor, cycle_id: int) -> dict:
     prework_total = row['prework_total'] or 0
     prework_completed = row['prework_completed'] or 0
     obs_total = row['obs_total'] or 0
-    obs_completed = row['obs_completed'] or 0
+    internal_walk_completed = row['internal_walk_completed'] or 0
+    audit_walk_completed = row['audit_walk_completed'] or 0
 
     return {
         "total_points": total,
@@ -227,16 +236,21 @@ def calculate_cycle_progress(cursor, cycle_id: int) -> dict:
         "completion_pct": round((completed / total * 100) if total > 0 else 0, 1),
         "max_score": float(row['max_score'] or 0),
         "actual_score": float(row['actual_score'] or 0),
-        # Separate pre-work vs observational stats
+        # Three dashboard categories
         "prework": {
             "total": prework_total,
             "completed": prework_completed,
             "completion_pct": round((prework_completed / prework_total * 100) if prework_total > 0 else 0, 1),
         },
-        "observations": {
+        "internal_walk": {
             "total": obs_total,
-            "completed": obs_completed,
-            "completion_pct": round((obs_completed / obs_total * 100) if obs_total > 0 else 0, 1),
+            "completed": internal_walk_completed,
+            "completion_pct": round((internal_walk_completed / obs_total * 100) if obs_total > 0 else 0, 1),
+        },
+        "audit_walk": {
+            "total": obs_total,
+            "completed": audit_walk_completed,
+            "completion_pct": round((audit_walk_completed / obs_total * 100) if obs_total > 0 else 0, 1),
         },
     }
 
@@ -621,6 +635,7 @@ def get_points(
             SELECT
                 ap.id, ap.ref_code, ap.question_text, ap.nc_level, ap.max_score,
                 ap.actual_score, ap.status as manual_status, ap.flag_color, ap.responsible_area, ap.notes,
+                COALESCE(ap.internal_verified, false) as internal_verified,
                 ss.ref_code as subsection_code, ss.name as subsection_name,
                 s.ref_number as section_number, s.name as section_name,
                 COALESCE(rec_stats.record_count, 0) as linked_record_count,
