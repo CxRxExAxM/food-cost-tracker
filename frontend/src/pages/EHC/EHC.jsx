@@ -285,6 +285,8 @@ function EHC() {
     status: null,
   });
   const [expandedPoint, setExpandedPoint] = useState(null);
+  const [linkRecordPointId, setLinkRecordPointId] = useState(null); // Point ID for which we're adding a record link
+  const [linkRecordSearch, setLinkRecordSearch] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newCycleYear, setNewCycleYear] = useState(new Date().getFullYear());
   const [creatingCycle, setCreatingCycle] = useState(false);
@@ -323,6 +325,7 @@ function EHC() {
   useEffect(() => {
     if (activeCycle && view === 'points') {
       loadPoints(activeCycle.id);
+      loadRecords(); // Also load records for linking UI
     }
   }, [activeCycle, view, filters]);
 
@@ -422,6 +425,35 @@ function EHC() {
       toast.success('Audit date updated');
     } catch (error) {
       toast.error('Failed to update audit date');
+    }
+  }
+
+  // Link a record to an audit point
+  async function linkRecordToPoint(pointId, recordId) {
+    try {
+      await fetchWithAuth(`${API_BASE}/points/${pointId}/link-record`, {
+        method: 'POST',
+        body: JSON.stringify({ record_id: recordId })
+      });
+      toast.success('Record linked successfully');
+      loadPoints(activeCycle.id);
+      loadDashboard(activeCycle.id);
+    } catch (error) {
+      toast.error(error.message || 'Failed to link record');
+    }
+  }
+
+  // Unlink a record from an audit point
+  async function unlinkRecordFromPoint(pointId, recordId) {
+    try {
+      await fetchWithAuth(`${API_BASE}/points/${pointId}/link-record/${recordId}`, {
+        method: 'DELETE'
+      });
+      toast.success('Record unlinked');
+      loadPoints(activeCycle.id);
+      loadDashboard(activeCycle.id);
+    } catch (error) {
+      toast.error('Failed to unlink record');
     }
   }
 
@@ -951,16 +983,28 @@ function EHC() {
         {/* Dashboard View */}
         {view === 'dashboard' && dashboard && (
           <div className="dashboard-view">
-            {/* Top Stats Row */}
-            <div className="stats-row">
-              <div className="stat-card progress-card">
-                <ProgressRing percentage={dashboard.overall_progress?.completion_pct || 0} />
+            {/* Top Stats Row - Two Progress Rings */}
+            <div className="stats-row stats-row-progress">
+              <div className="stat-card progress-card progress-card-split">
+                <ProgressRing percentage={dashboard.overall_progress?.prework?.completion_pct || 0} size={100} strokeWidth={6} />
                 <div className="progress-details">
-                  <div className="stat-label">Overall Readiness</div>
+                  <div className="stat-label">Pre-Work Ready</div>
                   <div className="stat-breakdown">
-                    <span>{dashboard.overall_progress?.completed_points || 0} verified</span>
+                    <span>{dashboard.overall_progress?.prework?.completed || 0}</span>
                     <span className="stat-sep">/</span>
-                    <span>{dashboard.overall_progress?.total_points || 0} total points</span>
+                    <span>{dashboard.overall_progress?.prework?.total || 0} records verified</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="stat-card progress-card progress-card-split">
+                <ProgressRing percentage={dashboard.overall_progress?.observations?.completion_pct || 0} size={100} strokeWidth={6} />
+                <div className="progress-details">
+                  <div className="stat-label">Walk Observations</div>
+                  <div className="stat-breakdown">
+                    <span>{dashboard.overall_progress?.observations?.completed || 0}</span>
+                    <span className="stat-sep">/</span>
+                    <span>{dashboard.overall_progress?.observations?.total || 0} points ready</span>
                   </div>
                 </div>
               </div>
@@ -1182,7 +1226,66 @@ function EHC() {
                               )}
                               {point.linked_record_count === 0 && (
                                 <div className="point-observational">
-                                  <strong>Observational Point:</strong> Verified during audit walk-through (no linked records)
+                                  <div className="obs-header">
+                                    <strong>Observational Point</strong>
+                                    <button
+                                      className="btn-link"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setLinkRecordPointId(linkRecordPointId === point.id ? null : point.id);
+                                        setLinkRecordSearch('');
+                                      }}
+                                    >
+                                      {linkRecordPointId === point.id ? 'Cancel' : '+ Link Record'}
+                                    </button>
+                                  </div>
+                                  {linkRecordPointId !== point.id && (
+                                    <p className="obs-description">Verified during audit walk-through. Click "Link Record" to associate a required record.</p>
+                                  )}
+                                  {linkRecordPointId === point.id && (
+                                    <div className="link-record-search" onClick={e => e.stopPropagation()}>
+                                      <input
+                                        type="text"
+                                        placeholder="Search records by number or name..."
+                                        value={linkRecordSearch}
+                                        onChange={e => setLinkRecordSearch(e.target.value)}
+                                        autoFocus
+                                      />
+                                      <div className="link-record-results">
+                                        {records
+                                          .filter(r =>
+                                            linkRecordSearch &&
+                                            (r.record_number.toLowerCase().includes(linkRecordSearch.toLowerCase()) ||
+                                             r.name.toLowerCase().includes(linkRecordSearch.toLowerCase()))
+                                          )
+                                          .slice(0, 8)
+                                          .map(r => (
+                                            <div
+                                              key={r.id}
+                                              className="link-record-option"
+                                              onClick={() => {
+                                                linkRecordToPoint(point.id, r.id);
+                                                setLinkRecordPointId(null);
+                                                setLinkRecordSearch('');
+                                              }}
+                                            >
+                                              <span className="record-number">{r.record_number}</span>
+                                              <span className="record-name">{r.name}</span>
+                                            </div>
+                                          ))
+                                        }
+                                        {linkRecordSearch && records.filter(r =>
+                                          r.record_number.toLowerCase().includes(linkRecordSearch.toLowerCase()) ||
+                                          r.name.toLowerCase().includes(linkRecordSearch.toLowerCase())
+                                        ).length === 0 && (
+                                          <div className="link-record-empty">No matching records found</div>
+                                        )}
+                                        {!linkRecordSearch && (
+                                          <div className="link-record-hint">Type to search records...</div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
                               )}
                             </div>

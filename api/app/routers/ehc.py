@@ -74,6 +74,13 @@ class OutletAssignment(BaseModel):
     notes: Optional[str] = None
 
 
+class PointRecordLink(BaseModel):
+    """Link a record to an audit point."""
+    record_id: int
+    is_primary: Optional[bool] = True
+    notes: Optional[str] = None
+
+
 # ============================================
 # Helper Functions
 # ============================================
@@ -193,13 +200,23 @@ def calculate_cycle_progress(cursor, cycle_id: int) -> dict:
             END) as in_progress,
             SUM(CASE WHEN manual_status = 'flagged' THEN 1 ELSE 0 END) as flagged,
             SUM(max_score) as max_score,
-            SUM(actual_score) as actual_score
+            SUM(actual_score) as actual_score,
+            -- Pre-work points (have linked records)
+            SUM(CASE WHEN record_count > 0 THEN 1 ELSE 0 END) as prework_total,
+            SUM(CASE WHEN record_count > 0 AND total_subs > 0 AND approved_subs = total_subs THEN 1 ELSE 0 END) as prework_completed,
+            -- Observational points (no linked records)
+            SUM(CASE WHEN record_count = 0 THEN 1 ELSE 0 END) as obs_total,
+            SUM(CASE WHEN record_count = 0 AND manual_status IN ('evidence_collected', 'verified') THEN 1 ELSE 0 END) as obs_completed
         FROM point_status
     """, (cycle_id, cycle_id))
 
     row = cursor.fetchone()
     total = row['total_points'] or 0
     completed = row['completed_points'] or 0
+    prework_total = row['prework_total'] or 0
+    prework_completed = row['prework_completed'] or 0
+    obs_total = row['obs_total'] or 0
+    obs_completed = row['obs_completed'] or 0
 
     return {
         "total_points": total,
@@ -210,6 +227,17 @@ def calculate_cycle_progress(cursor, cycle_id: int) -> dict:
         "completion_pct": round((completed / total * 100) if total > 0 else 0, 1),
         "max_score": float(row['max_score'] or 0),
         "actual_score": float(row['actual_score'] or 0),
+        # Separate pre-work vs observational stats
+        "prework": {
+            "total": prework_total,
+            "completed": prework_completed,
+            "completion_pct": round((prework_completed / prework_total * 100) if prework_total > 0 else 0, 1),
+        },
+        "observations": {
+            "total": obs_total,
+            "completed": obs_completed,
+            "completion_pct": round((obs_completed / obs_total * 100) if obs_total > 0 else 0, 1),
+        },
     }
 
 
@@ -767,6 +795,108 @@ def update_point(
 
         conn.commit()
         return {"status": "ok", "point_id": point_id, "updated_fields": list(update_dict.keys())}
+
+
+@router.post("/points/{point_id}/link-record")
+def link_record_to_point(
+    point_id: int,
+    link: PointRecordLink,
+    current_user: dict = Depends(get_current_user)
+):
+    """Link a record to an audit point. Creates a point-record relationship."""
+    org_id = current_user["organization_id"]
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Verify point ownership
+        cursor.execute("""
+            SELECT ap.id
+            FROM ehc_audit_point ap
+            JOIN ehc_subsection ss ON ss.id = ap.subsection_id
+            JOIN ehc_section s ON s.id = ss.section_id
+            JOIN ehc_audit_cycle c ON c.id = s.audit_cycle_id
+            WHERE ap.id = %s AND c.organization_id = %s
+        """, (point_id, org_id))
+
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Audit point not found")
+
+        # Verify record ownership
+        cursor.execute("""
+            SELECT id, record_number, name
+            FROM ehc_record
+            WHERE id = %s AND organization_id = %s
+        """, (link.record_id, org_id))
+
+        record = dict_from_row(cursor.fetchone())
+        if not record:
+            raise HTTPException(status_code=404, detail="Record not found")
+
+        # Check if link already exists
+        cursor.execute("""
+            SELECT id FROM ehc_point_record_link
+            WHERE audit_point_id = %s AND record_id = %s
+        """, (point_id, link.record_id))
+
+        if cursor.fetchone():
+            raise HTTPException(status_code=400, detail="Record already linked to this point")
+
+        # Create the link
+        cursor.execute("""
+            INSERT INTO ehc_point_record_link (audit_point_id, record_id, is_primary, notes)
+            VALUES (%s, %s, %s, %s)
+            RETURNING id
+        """, (point_id, link.record_id, link.is_primary, link.notes))
+
+        link_id = cursor.fetchone()['id']
+        conn.commit()
+
+        return {
+            "status": "ok",
+            "link_id": link_id,
+            "message": f"Record {record['record_number']}: {record['name']} linked to point"
+        }
+
+
+@router.delete("/points/{point_id}/link-record/{record_id}")
+def unlink_record_from_point(
+    point_id: int,
+    record_id: int,
+    current_user: dict = Depends(get_current_user)
+):
+    """Remove a record link from an audit point."""
+    org_id = current_user["organization_id"]
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Verify point ownership
+        cursor.execute("""
+            SELECT ap.id
+            FROM ehc_audit_point ap
+            JOIN ehc_subsection ss ON ss.id = ap.subsection_id
+            JOIN ehc_section s ON s.id = ss.section_id
+            JOIN ehc_audit_cycle c ON c.id = s.audit_cycle_id
+            WHERE ap.id = %s AND c.organization_id = %s
+        """, (point_id, org_id))
+
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Audit point not found")
+
+        # Delete the link
+        cursor.execute("""
+            DELETE FROM ehc_point_record_link
+            WHERE audit_point_id = %s AND record_id = %s
+            RETURNING id
+        """, (point_id, record_id))
+
+        deleted = cursor.fetchone()
+        if not deleted:
+            raise HTTPException(status_code=404, detail="Link not found")
+
+        conn.commit()
+        return {"status": "ok", "message": "Record unlinked from point"}
 
 
 # ============================================

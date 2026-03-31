@@ -317,11 +317,30 @@
   grid-column: span 2;
 }
 
+/* Split progress card for Pre-Work vs Observations */
+.stat-card.progress-card.progress-card-split {
+  grid-column: span 1;
+}
+
+.stats-row.stats-row-progress {
+  grid-template-columns: repeat(2, 1fr) repeat(4, minmax(120px, 1fr));
+}
+
+@media (max-width: 1200px) {
+  .stats-row.stats-row-progress {
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  }
+}
+
 @media (max-width: 768px) {
   .stat-card.progress-card {
     grid-column: span 1;
     flex-direction: column;
     text-align: center;
+  }
+
+  .stats-row.stats-row-progress {
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   }
 }
 
@@ -735,11 +754,102 @@
 /* Observational point indicator */
 .point-observational {
   margin-top: var(--space-3);
-  padding: var(--space-2);
+  padding: var(--space-3);
   background: var(--bg-tertiary);
   border-radius: var(--radius-md);
   font-size: var(--text-sm);
   color: var(--text-secondary);
+}
+
+.point-observational .obs-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.point-observational .obs-description {
+  margin: var(--space-2) 0 0 0;
+}
+
+.point-observational .btn-link {
+  background: none;
+  border: none;
+  color: var(--color-blue);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  text-decoration: underline;
+}
+
+.point-observational .btn-link:hover {
+  color: var(--color-blue-bright);
+}
+
+/* Link Record Search UI */
+.link-record-search {
+  margin-top: var(--space-3);
+}
+
+.link-record-search input {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+}
+
+.link-record-search input:focus {
+  outline: none;
+  border-color: var(--color-blue);
+}
+
+.link-record-results {
+  margin-top: var(--space-2);
+  max-height: 200px;
+  overflow-y: auto;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+}
+
+.link-record-option {
+  display: flex;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  cursor: pointer;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.link-record-option:last-child {
+  border-bottom: none;
+}
+
+.link-record-option:hover {
+  background: var(--bg-elevated);
+}
+
+.link-record-option .record-number {
+  font-family: var(--font-mono);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+  min-width: 60px;
+}
+
+.link-record-option .record-name {
+  color: var(--text-secondary);
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.link-record-empty,
+.link-record-hint {
+  padding: var(--space-3);
+  text-align: center;
+  color: var(--text-tertiary);
+  font-style: italic;
 }
 
 .status-select {
