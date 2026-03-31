@@ -87,11 +87,16 @@ class PointRecordLink(BaseModel):
 # ============================================
 
 def calculate_section_progress(cursor, section_id: int, cycle_id: int = None) -> dict:
-    """Calculate completion stats for a section.
+    """Calculate completion stats for a section with three-level breakdown.
 
     Status is computed from linked records:
     - Points with records: verified if all submissions approved
     - Points without records: use manual status
+
+    Three-level breakdown:
+    - Pre-Work: Record-based points with all submissions approved
+    - Internal Walk: Observational points with internal_verified = true
+    - Audit Walk: Observational points with status = verified
     """
     # Get cycle_id if not provided
     if cycle_id is None:
@@ -108,6 +113,7 @@ def calculate_section_progress(cursor, section_id: int, cycle_id: int = None) ->
                 ap.max_score,
                 COALESCE(ap.actual_score, 0) as actual_score,
                 ap.status as manual_status,
+                COALESCE(ap.internal_verified, false) as internal_verified,
                 COALESCE(rec.record_count, 0) as record_count,
                 COALESCE(rec.total_subs, 0) as total_subs,
                 COALESCE(rec.approved_subs, 0) as approved_subs
@@ -133,13 +139,20 @@ def calculate_section_progress(cursor, section_id: int, cycle_id: int = None) ->
                 ELSE 0
             END) as completed_points,
             SUM(max_score) as max_score,
-            SUM(actual_score) as actual_score
+            SUM(actual_score) as actual_score,
+            -- Three-level breakdown
+            SUM(CASE WHEN record_count > 0 AND total_subs > 0 AND approved_subs = total_subs THEN 1 ELSE 0 END) as prework_ready,
+            SUM(CASE WHEN record_count = 0 AND internal_verified THEN 1 ELSE 0 END) as internal_walk_ready,
+            SUM(CASE WHEN record_count = 0 AND manual_status IN ('evidence_collected', 'verified') THEN 1 ELSE 0 END) as audit_walk_ready
         FROM point_status
     """, (cycle_id, section_id))
 
     row = cursor.fetchone()
     total = row['total_points'] or 0
     completed = row['completed_points'] or 0
+    prework = row['prework_ready'] or 0
+    internal = row['internal_walk_ready'] or 0
+    audit = row['audit_walk_ready'] or 0
 
     return {
         "total_points": total,
@@ -147,6 +160,10 @@ def calculate_section_progress(cursor, section_id: int, cycle_id: int = None) ->
         "completion_pct": round((completed / total * 100) if total > 0 else 0, 1),
         "max_score": float(row['max_score'] or 0),
         "actual_score": float(row['actual_score'] or 0),
+        # Three-level breakdown (as percentages of total)
+        "prework_pct": round((prework / total * 100) if total > 0 else 0, 1),
+        "internal_pct": round((internal / total * 100) if total > 0 else 0, 1),
+        "audit_pct": round((audit / total * 100) if total > 0 else 0, 1),
     }
 
 
@@ -470,7 +487,7 @@ def get_cycle_dashboard(cycle_id: int, current_user: dict = Depends(get_current_
             section['progress'] = calculate_section_progress(cursor, section['id'], cycle_id)
             sections.append(section)
 
-        # NC Level breakdown - compute status from linked records
+        # NC Level breakdown - compute status from linked records with three-level breakdown
         # Points with records: verified if all submissions approved
         # Points without records: use manual status
         cursor.execute("""
@@ -479,6 +496,7 @@ def get_cycle_dashboard(cycle_id: int, current_user: dict = Depends(get_current_
                     ap.id,
                     ap.nc_level,
                     ap.status as manual_status,
+                    COALESCE(ap.internal_verified, false) as internal_verified,
                     COALESCE(rec.record_count, 0) as record_count,
                     COALESCE(rec.total_subs, 0) as total_subs,
                     COALESCE(rec.approved_subs, 0) as approved_subs
@@ -504,7 +522,11 @@ def get_cycle_dashboard(cycle_id: int, current_user: dict = Depends(get_current_
                     WHEN record_count > 0 AND total_subs > 0 AND approved_subs = total_subs THEN 1
                     WHEN record_count = 0 AND manual_status IN ('evidence_collected', 'verified') THEN 1
                     ELSE 0
-                END) as completed
+                END) as completed,
+                -- Three-level breakdown
+                SUM(CASE WHEN record_count > 0 AND total_subs > 0 AND approved_subs = total_subs THEN 1 ELSE 0 END) as prework_ready,
+                SUM(CASE WHEN record_count = 0 AND internal_verified THEN 1 ELSE 0 END) as internal_walk_ready,
+                SUM(CASE WHEN record_count = 0 AND manual_status IN ('evidence_collected', 'verified') THEN 1 ELSE 0 END) as audit_walk_ready
             FROM point_status
             GROUP BY nc_level
             ORDER BY nc_level
@@ -512,11 +534,16 @@ def get_cycle_dashboard(cycle_id: int, current_user: dict = Depends(get_current_
 
         nc_breakdown = []
         for row in cursor.fetchall():
+            total = row['total'] or 0
             nc_breakdown.append({
                 "nc_level": row['nc_level'],
-                "total": row['total'],
+                "total": total,
                 "completed": row['completed'],
-                "completion_pct": round((row['completed'] / row['total'] * 100) if row['total'] > 0 else 0, 1)
+                "completion_pct": round((row['completed'] / total * 100) if total > 0 else 0, 1),
+                # Three-level breakdown (as percentages of total)
+                "prework_pct": round((row['prework_ready'] / total * 100) if total > 0 else 0, 1),
+                "internal_pct": round((row['internal_walk_ready'] / total * 100) if total > 0 else 0, 1),
+                "audit_pct": round((row['audit_walk_ready'] / total * 100) if total > 0 else 0, 1),
             })
 
         # Days until audit

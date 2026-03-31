@@ -306,8 +306,23 @@
 }
 
 .stat-card.stat-card-compact {
-  padding: var(--space-4);
+  padding: var(--space-3) var(--space-2);
   text-align: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  min-width: 80px;
+}
+
+.stat-card.stat-card-compact .stat-value {
+  font-size: var(--text-2xl);
+  line-height: 1;
+}
+
+.stat-card.stat-card-compact .stat-label {
+  font-size: var(--text-xs);
+  white-space: nowrap;
 }
 
 .stat-card.progress-card {
@@ -513,6 +528,65 @@
   height: 100%;
   border-radius: var(--radius-sm);
   transition: width 0.3s ease;
+}
+
+/* Stacked progress bar for three-level readiness */
+.stacked-bar {
+  display: flex;
+  flex-direction: row;
+}
+
+.stacked-segment {
+  height: 100%;
+  transition: width 0.3s ease;
+}
+
+.segment-prework {
+  background: var(--color-green);
+}
+
+.segment-internal {
+  background: var(--color-blue);
+}
+
+.segment-audit {
+  background: var(--color-yellow);
+}
+
+/* Progress Legend */
+.progress-legend {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-6);
+  padding: var(--space-2) 0;
+  margin-top: calc(-1 * var(--space-2));
+  margin-bottom: var(--space-2);
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+}
+
+.legend-color {
+  width: 12px;
+  height: 12px;
+  border-radius: var(--radius-sm);
+}
+
+.legend-prework {
+  background: var(--color-green);
+}
+
+.legend-internal {
+  background: var(--color-blue);
+}
+
+.legend-audit {
+  background: var(--color-yellow);
 }
 
 .section-progress-stats {

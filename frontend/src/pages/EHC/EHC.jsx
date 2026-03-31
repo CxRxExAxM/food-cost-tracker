@@ -115,26 +115,38 @@ function ProgressRing({ percentage, size = 120, strokeWidth = 8 }) {
 
 // Section progress bar
 function SectionProgress({ section }) {
-  const pct = section.progress?.completion_pct || 0;
+  const progress = section.progress || {};
+  const preworkPct = progress.prework_pct || 0;
+  const internalPct = progress.internal_pct || 0;
+  const auditPct = progress.audit_pct || 0;
+  const totalPct = progress.completion_pct || 0;
 
   return (
     <div className="section-progress">
       <div className="section-progress-header">
         <span className="section-number">{section.ref_number}</span>
         <span className="section-name">{section.name}</span>
-        <span className="section-pct">{pct}%</span>
+        <span className="section-pct">{totalPct}%</span>
       </div>
-      <div className="section-progress-bar">
+      <div className="section-progress-bar stacked-bar">
         <div
-          className="section-progress-fill"
-          style={{
-            width: `${pct}%`,
-            backgroundColor: pct >= 80 ? 'var(--color-green)' : pct >= 50 ? 'var(--color-yellow)' : 'var(--color-red)'
-          }}
+          className="stacked-segment segment-prework"
+          style={{ width: `${preworkPct}%` }}
+          title={`Pre-Work: ${preworkPct}%`}
+        />
+        <div
+          className="stacked-segment segment-internal"
+          style={{ width: `${internalPct}%` }}
+          title={`Internal Walk: ${internalPct}%`}
+        />
+        <div
+          className="stacked-segment segment-audit"
+          style={{ width: `${auditPct}%` }}
+          title={`Audit Walk: ${auditPct}%`}
         />
       </div>
       <div className="section-progress-stats">
-        <span>{section.progress?.completed_points || 0} / {section.progress?.total_points || 0} points</span>
+        <span>{progress.completed_points || 0} / {progress.total_points || 0} points</span>
       </div>
     </div>
   );
@@ -1042,6 +1054,22 @@ function EHC() {
               </div>
             </div>
 
+            {/* Progress Legend */}
+            <div className="progress-legend">
+              <span className="legend-item">
+                <span className="legend-color legend-prework"></span>
+                Pre-Work
+              </span>
+              <span className="legend-item">
+                <span className="legend-color legend-internal"></span>
+                Internal Walk
+              </span>
+              <span className="legend-item">
+                <span className="legend-color legend-audit"></span>
+                Audit Walk
+              </span>
+            </div>
+
             {/* Sections Progress */}
             <div className="sections-card">
               <h3>Section Progress</h3>
@@ -1060,10 +1088,21 @@ function EHC() {
                   <div key={nc.nc_level} className="nc-item">
                     <NCBadge level={nc.nc_level} />
                     <div className="nc-progress">
-                      <div className="nc-progress-bar">
+                      <div className="nc-progress-bar stacked-bar">
                         <div
-                          className="nc-progress-fill"
-                          style={{ width: `${nc.completion_pct}%` }}
+                          className="stacked-segment segment-prework"
+                          style={{ width: `${nc.prework_pct || 0}%` }}
+                          title={`Pre-Work: ${nc.prework_pct || 0}%`}
+                        />
+                        <div
+                          className="stacked-segment segment-internal"
+                          style={{ width: `${nc.internal_pct || 0}%` }}
+                          title={`Internal Walk: ${nc.internal_pct || 0}%`}
+                        />
+                        <div
+                          className="stacked-segment segment-audit"
+                          style={{ width: `${nc.audit_pct || 0}%` }}
+                          title={`Audit Walk: ${nc.audit_pct || 0}%`}
                         />
                       </div>
                       <span className="nc-progress-text">
