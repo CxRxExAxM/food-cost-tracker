@@ -311,13 +311,13 @@ function EHC() {
     loadCycles();
   }, []);
 
-  // Load dashboard and submissions when active cycle changes
+  // Load dashboard and submissions when active cycle changes or switching to dashboard
   useEffect(() => {
-    if (activeCycle) {
+    if (activeCycle && view === 'dashboard') {
       loadDashboard(activeCycle.id);
-      loadSubmissions(activeCycle.id); // Load submissions for due date stats
+      loadSubmissions(activeCycle.id); // Load fresh submissions for due date stats
     }
-  }, [activeCycle]);
+  }, [activeCycle, view]);
 
   // Load points when filters change or view switches to points
   useEffect(() => {
