@@ -739,6 +739,55 @@ ingredient_mappings
 
 ---
 
+## EHC Module (Environmental Health Compliance)
+
+### Overview
+Annual food safety audit tracking with hierarchical structure: Cycles → Sections → Subsections → Audit Points. Supports record-based evidence and observational verification.
+
+### Key Components
+
+**Backend (`api/app/routers/ehc.py`):**
+- Audit cycle CRUD with seeding from template
+- Points with computed status from linked records
+- Submission tracking with file uploads
+- Dashboard with three-level readiness stats
+
+**Frontend (`frontend/src/pages/EHC/`):**
+- `EHC.jsx` - Main page with Dashboard/Points/Records views
+- `EHC.css` - Styles including stacked progress bars
+
+### Database Tables
+```sql
+ehc_audit_cycle      -- Annual cycles (2026, 2027, etc.)
+ehc_section          -- 6 sections per cycle
+ehc_subsection       -- Groups of related points
+ehc_audit_point      -- Individual audit items (144 per cycle)
+ehc_record           -- Master record list (forms, logs, etc.)
+ehc_record_submission -- Per-cycle record evidence
+ehc_point_record_link -- Links records to audit points
+```
+
+### Three-Level Readiness Model
+1. **Pre-Work Ready** - Record-based points with all submissions approved
+2. **Internal Walk** - Observational points with `internal_verified = true`
+3. **Audit Walk** - Observational points with `status = 'verified'`
+
+### Status Computation Pattern
+Points with linked records derive status from submission approval:
+```python
+# In calculate_cycle_progress()
+CASE WHEN record_count > 0 AND approved_subs = total_subs THEN 'verified'
+     WHEN record_count = 0 THEN manual_status  -- Observational
+END
+```
+
+### Key Patterns
+- **Optimistic updates** for inline editing (checkbox, status dropdown)
+- **LATERAL JOIN** for per-point record stats in single query
+- **Stacked progress bars** showing three readiness levels (green/blue/yellow)
+
+---
+
 ## Questions to Ask User
 
 Before making significant changes, confirm:

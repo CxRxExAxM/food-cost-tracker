@@ -7,11 +7,20 @@ A comprehensive multi-tenant SaaS platform for F&B operations to manage food cos
 
 ---
 
-## Current Status (March 2026)
+## Current Status (April 2026)
 
 **Platform Status:** Production-ready with active development
 
 ### Completed Modules
+
+**EHC (Environmental Health Compliance)** - ✅ Complete
+- Annual audit cycle management with 6-section hierarchy
+- Three-level readiness tracking: Pre-Work, Internal Walk, Audit Walk
+- Record management with submission tracking and file uploads
+- Due date status indicators (Approved/Due/Past Due/Pending)
+- Stacked progress bars showing readiness across sections and NC levels
+- Internal verification checkbox for pre-audit practice walks
+- Record linking for observational audit points
 
 **Food Cost Tracking** - ✅ Complete
 - Multi-distributor price tracking with automated imports
@@ -220,6 +229,7 @@ Clean_Invoices/
 ├── api/                           # FastAPI backend
 │   ├── app/
 │   │   ├── routers/              # API endpoints
+│   │   │   ├── ehc.py            # Environmental Health Compliance
 │   │   │   ├── ai_parse.py       # AI recipe parser
 │   │   │   ├── potentials.py     # F&B planning dashboard
 │   │   │   ├── recipes.py        # Recipe management
@@ -237,6 +247,7 @@ Clean_Invoices/
 ├── frontend/                      # React + Vite frontend
 │   ├── src/
 │   │   ├── pages/
+│   │   │   ├── EHC/              # Environmental Health Compliance
 │   │   │   ├── Potentials/       # F&B planning dashboard
 │   │   │   └── ...
 │   │   ├── components/
@@ -275,14 +286,20 @@ Clean_Invoices/
 - `forecast_metrics` - Daily occupancy, ADR, IHG
 - `group_rooms` - Group arrivals/departures
 
+**EHC (Environmental Health Compliance):**
+- `ehc_audit_cycle` - Annual audit cycles
+- `ehc_section`, `ehc_subsection`, `ehc_audit_point` - Audit hierarchy
+- `ehc_record`, `ehc_record_submission` - Record tracking
+- `ehc_point_record_link` - Links records to audit points
+
 ---
 
 ## Development Roadmap
 
 ### Current Priorities
+- EHC Digital Forms (tablet-friendly audit walk interface)
 - AI Recipe Parser enhancements (method step parsing)
 - Potentials Phase 2 (group resume ingestion)
-- Database refactor (ingredient taxonomy)
 
 ### Future Considerations
 - HACCP & Temperature Monitoring

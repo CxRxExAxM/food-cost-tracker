@@ -1,6 +1,6 @@
 # Future Plans: RestauranTek Platform
 
-**Date:** March 26, 2026
+**Date:** April 2, 2026
 **Status:** Active Development
 **Timeline:** Ongoing
 
@@ -11,13 +11,23 @@
 This document outlines the technical roadmap for RestauranTek, covering both near-term enhancements and long-term platform evolution.
 
 **Current Focus:**
-1. Enhance AI Recipe Parser with method step parsing
-2. Potentials Phase 2 - Group resume ingestion and daily briefs
-3. Database refactor - Ingredient taxonomy and attribute-based schema
+1. EHC Digital Forms - Tablet-friendly audit walk interface
+2. AI Recipe Parser enhancements - Method step parsing
+3. Potentials Phase 2 - Group resume ingestion and daily briefs
 
 ---
 
 ## Recently Completed (Reference)
+
+### EHC Module ✅ (March-April 2026)
+- Full audit cycle management with 6-section hierarchy (144 audit points)
+- Three-level readiness tracking: Pre-Work Ready, Internal Walk, Audit Walk
+- Dashboard with stacked progress bars and three progress rings
+- Record management with file uploads and submission tracking
+- Due date status system (Approved/Due/Past Due/Pending)
+- Internal verification checkbox for pre-audit practice walks
+- Record linking to convert observational points to record-based
+- NC Level breakdown with three-level readiness visualization
 
 ### AI Recipe Parser ✅
 - Word/PDF/Excel parsing with Claude API
@@ -40,7 +50,19 @@ This document outlines the technical roadmap for RestauranTek, covering both nea
 
 ## Near-Term Priorities
 
-### 1. AI Recipe Parser Enhancements
+### 1. EHC Digital Forms (Next)
+
+**Tablet-Friendly Audit Walk Interface:**
+- Dedicated walk mode optimized for iPad/tablet use
+- Section-by-section navigation during physical walkthrough
+- Quick status toggles (pass/fail/flag)
+- Photo capture for evidence documentation
+- Offline capability with sync on reconnect
+- Touch-friendly UI with large tap targets
+
+**See:** `docs/EHC_DIGITAL_FORMS_PLAN.md` for full specification
+
+### 2. AI Recipe Parser Enhancements
 
 **Method Step Parsing (Next):**
 - Extract cooking instructions from documents
@@ -257,10 +279,10 @@ api/app/routers/
 
 ## Action Items
 
-### This Month
+### This Month (April 2026)
+- [ ] EHC Digital Forms implementation
 - [ ] Method step parsing for AI parser
 - [ ] Group resume ingestion planning
-- [ ] Ingredient taxonomy design review
 
 ### Next Quarter
 - [ ] Potentials Phase 2 implementation
@@ -269,11 +291,11 @@ api/app/routers/
 
 ### This Year
 - [ ] Complete database refactor
-- [ ] Evaluate HACCP module demand
+- [ ] Evaluate additional compliance modules
 - [ ] Three-branch workflow (if needed)
 
 ---
 
-**Document Version:** 2.0
-**Last Updated:** March 26, 2026
-**Next Review:** After Potentials Phase 2 completion
+**Document Version:** 2.1
+**Last Updated:** April 2, 2026
+**Next Review:** After EHC Digital Forms completion
