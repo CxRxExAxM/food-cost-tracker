@@ -251,6 +251,8 @@ def submit_form_response(
         user_agent = request.headers.get('user-agent', '')[:500]
 
         # Insert response
+        response_data_json = json.dumps(response.response_data) if response.response_data else None
+
         cursor.execute("""
             INSERT INTO ehc_form_response (
                 form_link_id, respondent_name, respondent_role, respondent_dept,
@@ -263,7 +265,7 @@ def submit_form_response(
             response.respondent_name.strip(),
             response.respondent_role,
             response.respondent_dept,
-            response.response_data,
+            response_data_json,
             response.signature_data,
             ip_address,
             user_agent
