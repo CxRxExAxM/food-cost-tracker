@@ -295,6 +295,7 @@
   justify-content: center;
   width: 28px;
   height: 28px;
+  padding: 0;
   background: var(--bg-primary);
   color: var(--text-primary);
   border: 1px solid var(--border-default);
@@ -304,10 +305,20 @@
   transition: all 0.15s ease;
 }
 
+.btn-icon svg {
+  width: 14px;
+  height: 14px;
+  stroke: var(--text-primary);
+  stroke-width: 2;
+}
+
 .btn-icon:hover {
   background: var(--bg-elevated);
-  color: var(--text-primary);
-  border-color: var(--border-default);
+  border-color: var(--border-strong);
+}
+
+.btn-icon:hover svg {
+  stroke: var(--text-primary);
 }
 
 .link-card-actions {
