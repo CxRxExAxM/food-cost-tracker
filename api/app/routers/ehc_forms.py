@@ -308,7 +308,35 @@ def create_form_link(
         if not submission:
             raise HTTPException(status_code=404, detail="Submission not found")
 
-        # Generate unique token
+        # Check for existing active link with same form_type
+        cursor.execute("""
+            SELECT id, token, title, form_type, expected_responses, expires_at, created_at
+            FROM ehc_form_link
+            WHERE submission_id = %s AND form_type = %s AND is_active = true
+            ORDER BY created_at DESC
+            LIMIT 1
+        """, (submission_id, data.form_type))
+
+        existing = dict_from_row(cursor.fetchone())
+        if existing:
+            # Return existing link instead of creating new one
+            form_url = generate_form_url(existing['token'])
+            qr_code = generate_form_qr(existing['token'])
+            return {
+                "status": "ok",
+                "reused": True,
+                "form_link_id": existing['id'],
+                "token": existing['token'],
+                "url": form_url,
+                "qr_code": qr_code,
+                "title": existing['title'],
+                "form_type": existing['form_type'],
+                "expected_responses": existing['expected_responses'],
+                "expires_at": existing['expires_at'].isoformat() if existing['expires_at'] else None,
+                "created_at": existing['created_at'].isoformat()
+            }
+
+        # Generate unique token for new link
         token = secrets.token_urlsafe(32)
 
         # Build config with defaults

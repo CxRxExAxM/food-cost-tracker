@@ -174,9 +174,9 @@ export default function FormLinkModal({
           {/* Just Created Link - Show prominently */}
           {createdLink && (
             <div className="created-link-section">
-              <div className="success-banner">
+              <div className={`success-banner ${createdLink.reused ? 'reused' : ''}`}>
                 <Check size={20} />
-                <span>Form link created!</span>
+                <span>{createdLink.reused ? 'Using existing link' : 'Form link created!'}</span>
               </div>
 
               <div className="qr-display">

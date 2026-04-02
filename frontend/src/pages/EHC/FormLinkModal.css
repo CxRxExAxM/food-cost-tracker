@@ -99,6 +99,11 @@
   font-weight: var(--font-weight-medium);
 }
 
+.success-banner.reused {
+  background: rgba(59, 130, 246, 0.15);
+  color: var(--color-blue);
+}
+
 .qr-display {
   background: white;
   padding: var(--space-4);
