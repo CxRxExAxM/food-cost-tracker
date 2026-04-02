@@ -143,13 +143,18 @@ def get_public_form(token: str):
             if resp.get('submitted_at'):
                 resp['submitted_at'] = resp['submitted_at'].isoformat()
 
+        # Parse config if it's a string (stored via json.dumps)
+        config = form_link.get('config') or {}
+        if isinstance(config, str):
+            config = json.loads(config)
+
         return {
             "title": form_link.get('title') or f"{form_link['record_name']} - EHC {form_link['cycle_year']}",
             "form_type": form_link['form_type'],
             "record_number": form_link['record_number'],
             "record_name": form_link['record_name'],
             "cycle_year": form_link['cycle_year'],
-            "config": form_link.get('config') or {},
+            "config": config,
             "responses": responses,
             "total_responses": len(responses),
             "expected_responses": form_link.get('expected_responses'),

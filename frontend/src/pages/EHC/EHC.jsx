@@ -2035,7 +2035,7 @@ function EHC() {
         onClose={() => setFormLinkModalSubmission(null)}
         submission={formLinkModalSubmission}
         onLinkCreated={(linkData) => {
-          showToast('Form link created successfully', 'success');
+          toast.showToast('Form link created successfully', 'success');
         }}
         onViewResponses={(link) => {
           setFormLinkModalSubmission(null);
@@ -2049,7 +2049,7 @@ function EHC() {
         onClose={() => setResponseTrackerLink(null)}
         formLink={responseTrackerLink}
         onResponseDeleted={(responseId) => {
-          showToast('Response removed', 'info');
+          toast.showToast('Response removed', 'info');
         }}
       />
     </div>

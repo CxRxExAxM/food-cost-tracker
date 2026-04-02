@@ -31,7 +31,7 @@ export default function FormPage() {
         setLoading(true);
         setError(null);
 
-        const response = await axios.get(`/api/ehc/forms/${token}`);
+        const response = await axios.get(`/ehc/forms/${token}`);
         setFormData(response.data);
       } catch (err) {
         console.error('Error fetching form:', err);
@@ -62,13 +62,13 @@ export default function FormPage() {
     try {
       setSubmitting(true);
 
-      const response = await axios.post(`/api/ehc/forms/${token}/respond`, data);
+      const response = await axios.post(`/ehc/forms/${token}/respond`, data);
 
       setSubmittedName(data.respondent_name);
       setSubmitted(true);
 
       // Refresh form data to show updated response count
-      const refreshed = await axios.get(`/api/ehc/forms/${token}`);
+      const refreshed = await axios.get(`/ehc/forms/${token}`);
       setFormData(refreshed.data);
     } catch (err) {
       console.error('Error submitting form:', err);
@@ -83,11 +83,11 @@ export default function FormPage() {
         if (confirm) {
           // Retry with force=true
           try {
-            await axios.post(`/api/ehc/forms/${token}/respond?force=true`, data);
+            await axios.post(`/ehc/forms/${token}/respond?force=true`, data);
             setSubmittedName(data.respondent_name);
             setSubmitted(true);
 
-            const refreshed = await axios.get(`/api/ehc/forms/${token}`);
+            const refreshed = await axios.get(`/ehc/forms/${token}`);
             setFormData(refreshed.data);
           } catch (retryErr) {
             alert(retryErr.response?.data?.detail || 'Failed to submit');
