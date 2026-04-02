@@ -10,6 +10,7 @@ from pydantic import BaseModel, field_validator
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 import secrets
+import json
 
 from ..database import get_db, dicts_from_rows, dict_from_row
 from ..auth import get_current_user
@@ -344,7 +345,7 @@ def create_form_link(
             token,
             data.form_type,
             title,
-            config,
+            json.dumps(config),
             data.expected_responses,
             expires_at,
             user_id

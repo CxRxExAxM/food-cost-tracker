@@ -78,8 +78,16 @@ export default function FormLinkModal({
       );
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || 'Failed to create link');
+        const text = await response.text();
+        let errorMsg = 'Failed to create link';
+        try {
+          const error = JSON.parse(text);
+          errorMsg = error.detail || errorMsg;
+        } catch {
+          console.error('Server response:', text);
+          errorMsg = `Server error (${response.status}): ${text.substring(0, 100)}`;
+        }
+        throw new Error(errorMsg);
       }
 
       const data = await response.json();
