@@ -1500,6 +1500,27 @@
   color: var(--color-red);
 }
 
+/* Form Link button */
+.btn-link-sm {
+  background: transparent;
+  border: 1px solid var(--border-default);
+  color: var(--text-secondary);
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-base) var(--ease-in-out);
+}
+
+.btn-link-sm:hover {
+  border-color: var(--color-blue);
+  color: var(--color-blue);
+  background: rgba(59, 130, 246, 0.15);
+}
+
 /* Approve button */
 .btn-approve-sm {
   background: transparent;

@@ -2,6 +2,9 @@ import { useState, useEffect, useRef } from 'react';
 import Navigation from '../../components/Navigation';
 import { useToast } from '../../contexts/ToastContext';
 import { useAuth } from '../../contexts/AuthContext';
+import FormLinkModal from './FormLinkModal';
+import ResponseTrackerModal from './ResponseTrackerModal';
+import { Link } from 'lucide-react';
 import './EHC.css';
 
 // API helper with auth
@@ -319,6 +322,10 @@ function EHC() {
   const [editingRecord, setEditingRecord] = useState(null); // record id being edited
   const [editingSubmission, setEditingSubmission] = useState(null); // submission id being edited
   const [editValues, setEditValues] = useState({});
+
+  // Form link modal state
+  const [formLinkModalSubmission, setFormLinkModalSubmission] = useState(null);
+  const [responseTrackerLink, setResponseTrackerLink] = useState(null);
 
   // Load cycles on mount
   useEffect(() => {
@@ -1670,6 +1677,18 @@ function EHC() {
                                                   <SubmissionStatusBadge submission={sub} />
                                                 </td>
                                                 <td className="actions-cell">
+                                                  <button
+                                                    className="btn-link-sm"
+                                                    onClick={() => setFormLinkModalSubmission({
+                                                      id: sub.id,
+                                                      record_name: record.name,
+                                                      period_label: sub.period_label,
+                                                      outlet_name: sub.outlet_name
+                                                    })}
+                                                    title="Form Link"
+                                                  >
+                                                    <Link size={12} />
+                                                  </button>
                                                   {sub.status !== 'approved' ? (
                                                     <button
                                                       className="btn-approve-sm"
@@ -1810,6 +1829,18 @@ function EHC() {
                                       <SubmissionStatusBadge submission={sub} />
                                     </td>
                                     <td className="actions-cell">
+                                      <button
+                                        className="btn-link-sm"
+                                        onClick={() => setFormLinkModalSubmission({
+                                          id: sub.id,
+                                          record_name: record.name,
+                                          period_label: sub.period_label,
+                                          outlet_name: null
+                                        })}
+                                        title="Form Link"
+                                      >
+                                        <Link size={12} />
+                                      </button>
                                       {sub.status !== 'approved' ? (
                                         <button
                                           className="btn-approve-sm"
@@ -1997,6 +2028,30 @@ function EHC() {
           </div>
         </div>
       )}
+
+      {/* Form Link Modal */}
+      <FormLinkModal
+        isOpen={!!formLinkModalSubmission}
+        onClose={() => setFormLinkModalSubmission(null)}
+        submission={formLinkModalSubmission}
+        onLinkCreated={(linkData) => {
+          showToast('Form link created successfully', 'success');
+        }}
+        onViewResponses={(link) => {
+          setFormLinkModalSubmission(null);
+          setResponseTrackerLink(link);
+        }}
+      />
+
+      {/* Response Tracker Modal */}
+      <ResponseTrackerModal
+        isOpen={!!responseTrackerLink}
+        onClose={() => setResponseTrackerLink(null)}
+        formLink={responseTrackerLink}
+        onResponseDeleted={(responseId) => {
+          showToast('Response removed', 'info');
+        }}
+      />
     </div>
   );
 }
