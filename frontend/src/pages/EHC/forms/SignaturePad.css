@@ -1,0 +1,99 @@
+/* SignaturePad.css - Following DESIGN_SYSTEM.md */
+
+.signature-pad-container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.signature-pad-container.disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.signature-pad-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--text-secondary);
+}
+
+.signature-hint {
+  font-size: var(--text-xs);
+  color: var(--color-yellow);
+}
+
+.signature-valid {
+  font-size: var(--text-xs);
+  color: var(--color-green);
+}
+
+.signature-pad-wrapper {
+  position: relative;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.signature-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 150px;
+  touch-action: none; /* Prevent page scroll while signing */
+  cursor: crosshair;
+}
+
+.signature-canvas.disabled {
+  cursor: not-allowed;
+}
+
+.signature-placeholder {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+  pointer-events: none;
+  user-select: none;
+}
+
+.signature-pad-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.btn-clear {
+  font-family: var(--font-primary);
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-medium);
+  padding: var(--space-1) var(--space-3);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-clear:hover:not(:disabled) {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+
+.btn-clear:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Mobile responsive */
+@media (max-width: 480px) {
+  .signature-canvas {
+    max-height: 120px;
+  }
+}

@@ -21,6 +21,7 @@ import Vessels from './pages/Settings/Vessels';
 import BaseConversions from './pages/Settings/BaseConversions';
 import Potentials from './pages/Potentials/Potentials';
 import EHC from './pages/EHC/EHC';
+import FormPage from './pages/EHC/forms/FormPage';
 import ImpersonationBanner from './components/ImpersonationBanner';
 import './App.css';
 
@@ -112,6 +113,8 @@ function AppRoutes() {
           </PublicRoute>
         }
       />
+      {/* Public form route - no auth required, token provides access */}
+      <Route path="/form/:token" element={<FormPage />} />
       <Route
         path="/"
         element={
