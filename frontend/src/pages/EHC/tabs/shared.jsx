@@ -245,7 +245,7 @@ export function getSubmissionDisplayStatus(submission) {
     in_progress: { status: 'in_progress', label: 'In Progress', class: 'badge-yellow' },
     submitted: { status: 'submitted', label: 'Submitted', class: 'badge-blue' },
     not_applicable: { status: 'not_applicable', label: 'N/A', class: 'badge-neutral' },
-    collecting_signatures: { status: 'collecting_signatures', label: 'Collecting', class: 'badge-blue' },
+    collecting: { status: 'collecting', label: 'Collecting', class: 'badge-blue' },
     pending_approval: { status: 'pending_approval', label: 'Ready for Approval', class: 'badge-green-dim' },
   };
   return statusMap[submission.status] || { status: submission.status, label: submission.status, class: 'badge-neutral' };
