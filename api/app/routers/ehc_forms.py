@@ -15,6 +15,11 @@ import json
 from ..database import get_db, dicts_from_rows, dict_from_row
 from ..auth import get_current_user
 from ..utils.qr_generator import generate_form_qr, generate_form_url, generate_qr_code_bytes
+from ..services.pdf_generator import (
+    generate_record_11_pdf,
+    generate_record_35_pdf,
+    generate_flyer_pdf
+)
 from fastapi import Depends
 
 
@@ -664,4 +669,160 @@ def get_form_link_qr(
             content=qr_bytes,
             media_type="image/png",
             headers={"Content-Disposition": f"attachment; filename=qr_form_{link_id}.png"}
+        )
+
+
+# ============================================
+# PDF Generation Endpoints
+# ============================================
+
+@router.post("/form-links/{link_id}/generate-pdf")
+def generate_form_pdf(
+    link_id: int,
+    current_user: dict = Depends(get_current_user)
+):
+    """Generate PDF for completed form responses.
+
+    Returns PDF file for download.
+    Supports: staff_declaration (Record 11), team_roster (Record 35)
+    """
+    org_id = current_user["organization_id"]
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Get form link with config
+        cursor.execute("""
+            SELECT
+                fl.id, fl.form_type, fl.title, fl.config, fl.expected_responses,
+                c.year as cycle_year
+            FROM ehc_form_link fl
+            JOIN ehc_audit_cycle c ON c.id = fl.audit_cycle_id
+            WHERE fl.id = %s AND fl.organization_id = %s
+        """, (link_id, org_id))
+
+        form_link = dict_from_row(cursor.fetchone())
+        if not form_link:
+            raise HTTPException(status_code=404, detail="Form link not found")
+
+        # Parse config
+        config = form_link.get('config') or {}
+        if isinstance(config, str):
+            config = json.loads(config)
+
+        property_name = config.get('property_name', 'Property')
+        cycle_year = form_link.get('cycle_year', datetime.now().year)
+        form_type = form_link.get('form_type')
+        title = form_link.get('title', f"Record - EHC {cycle_year}")
+
+        # Get all responses with signature data
+        cursor.execute("""
+            SELECT
+                id, respondent_name, respondent_role, respondent_dept,
+                response_data, signature_data, submitted_at
+            FROM ehc_form_response
+            WHERE form_link_id = %s
+            ORDER BY submitted_at ASC
+        """, (link_id,))
+
+        responses = dicts_from_rows(cursor.fetchall())
+
+        # Parse response_data JSON
+        for resp in responses:
+            if resp.get('response_data') and isinstance(resp['response_data'], str):
+                resp['response_data'] = json.loads(resp['response_data'])
+            if resp.get('submitted_at'):
+                resp['submitted_at'] = resp['submitted_at'].isoformat()
+
+        # Generate PDF based on form type
+        if form_type == 'staff_declaration':
+            pdf_bytes = generate_record_11_pdf(
+                title=title,
+                property_name=property_name,
+                cycle_year=cycle_year,
+                responses=responses,
+                expected_count=form_link.get('expected_responses')
+            )
+            filename = f"Record_11_Staff_Declaration_{cycle_year}.pdf"
+
+        elif form_type == 'team_roster':
+            team_members = config.get('team_members', [])
+            pdf_bytes = generate_record_35_pdf(
+                title=title,
+                property_name=property_name,
+                cycle_year=cycle_year,
+                team_members=team_members,
+                responses=responses
+            )
+            filename = f"Record_35_Food_Safety_Team_{cycle_year}.pdf"
+
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"PDF generation not supported for form type: {form_type}"
+            )
+
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+
+
+@router.get("/form-links/{link_id}/flyer")
+def get_form_flyer(
+    link_id: int,
+    current_user: dict = Depends(get_current_user)
+):
+    """Generate printable flyer PDF with QR code for posting.
+
+    Returns PDF with large QR code and instructions.
+    """
+    org_id = current_user["organization_id"]
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Get form link details
+        cursor.execute("""
+            SELECT
+                fl.id, fl.token, fl.form_type, fl.title, fl.config,
+                c.year as cycle_year
+            FROM ehc_form_link fl
+            JOIN ehc_audit_cycle c ON c.id = fl.audit_cycle_id
+            WHERE fl.id = %s AND fl.organization_id = %s
+        """, (link_id, org_id))
+
+        form_link = dict_from_row(cursor.fetchone())
+        if not form_link:
+            raise HTTPException(status_code=404, detail="Form link not found")
+
+        # Parse config
+        config = form_link.get('config') or {}
+        if isinstance(config, str):
+            config = json.loads(config)
+
+        property_name = config.get('property_name', 'Property')
+        cycle_year = form_link.get('cycle_year', datetime.now().year)
+        form_type = form_link.get('form_type', 'staff_declaration')
+        title = form_link.get('title', f"EHC Form {cycle_year}")
+
+        # Generate QR code
+        qr_code_base64 = generate_form_qr(form_link['token'])
+
+        # Generate flyer PDF
+        pdf_bytes = generate_flyer_pdf(
+            title=title,
+            property_name=property_name,
+            cycle_year=cycle_year,
+            qr_code_base64=qr_code_base64,
+            form_type=form_type
+        )
+
+        filename = f"QR_Flyer_{form_type}_{cycle_year}.pdf"
+
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
         )

@@ -323,7 +323,19 @@
 
 .link-card-actions {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+/* PDF Actions (in created link section) */
+.pdf-actions {
+  display: flex;
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border-subtle);
+  width: 100%;
+  justify-content: center;
 }
 
 .btn-new-link {
@@ -458,6 +470,87 @@
   cursor: not-allowed;
 }
 
+/* Team Members Editor */
+.team-members-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.team-member-row {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.team-input {
+  font-family: var(--font-primary);
+  font-size: var(--text-sm);
+  padding: var(--space-2) var(--space-2);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  outline: none;
+  min-width: 0;
+  flex: 1;
+}
+
+.team-input.name {
+  flex: 1.5;
+}
+
+.team-input:focus {
+  border-color: var(--color-focus);
+}
+
+.team-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.btn-remove {
+  flex-shrink: 0;
+  background: transparent;
+  border-color: transparent;
+}
+
+.btn-remove:hover:not(:disabled) {
+  background: var(--color-red-dim);
+  border-color: var(--color-red);
+}
+
+.btn-remove:hover:not(:disabled) svg {
+  stroke: var(--color-red);
+}
+
+.btn-remove:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.btn-add-member {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px dashed var(--border-default);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  transition: all 0.15s ease;
+  margin-top: var(--space-1);
+}
+
+.btn-add-member:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+
 /* Mobile */
 @media (max-width: 500px) {
   .form-link-modal {
@@ -468,5 +561,17 @@
   .qr-image {
     width: 160px;
     height: 160px;
+  }
+
+  .team-member-row {
+    flex-wrap: wrap;
+  }
+
+  .team-input {
+    flex: 1 1 45%;
+  }
+
+  .team-input.name {
+    flex: 1 1 100%;
   }
 }

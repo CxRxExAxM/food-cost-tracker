@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Copy, Download, QrCode, Link, Check, ExternalLink, Users } from 'lucide-react';
+import { X, Copy, Download, QrCode, Link, Check, ExternalLink, Users, FileText, Printer, Plus, Trash2 } from 'lucide-react';
 import './FormLinkModal.css';
 
 const API_BASE = '/api/ehc';
@@ -32,6 +32,11 @@ export default function FormLinkModal({
   const [expectedResponses, setExpectedResponses] = useState(50);
   const [createdLink, setCreatedLink] = useState(null);
 
+  // Team roster specific state
+  const [teamMembers, setTeamMembers] = useState([
+    { name: '', position: '', department: '', date_approved: '' }
+  ]);
+
   // Load existing links when modal opens
   useEffect(() => {
     if (isOpen && submission?.id) {
@@ -60,8 +65,35 @@ export default function FormLinkModal({
   }
 
   async function createFormLink() {
+    // Validate team members for team_roster
+    if (formType === 'team_roster') {
+      const validMembers = teamMembers.filter(m => m.name.trim());
+      if (validMembers.length === 0) {
+        alert('Please add at least one team member');
+        return;
+      }
+    }
+
     try {
       setLoading(true);
+
+      // Build config based on form type
+      const config = {
+        property_name: 'Fairmont Scottsdale Princess'
+      };
+
+      if (formType === 'team_roster') {
+        // Filter out empty rows and include team members
+        config.team_members = teamMembers
+          .filter(m => m.name.trim())
+          .map(m => ({
+            name: m.name.trim(),
+            position: m.position.trim(),
+            department: m.department.trim(),
+            date_approved: m.date_approved || new Date().toISOString().split('T')[0]
+          }));
+      }
+
       const response = await fetch(
         `${API_BASE}/submissions/${submission.id}/generate-form-link`,
         {
@@ -69,10 +101,10 @@ export default function FormLinkModal({
           headers: getAuthHeaders(),
           body: JSON.stringify({
             form_type: formType,
-            expected_responses: expectedResponses,
-            config: {
-              property_name: 'Fairmont Scottsdale Princess'
-            }
+            expected_responses: formType === 'team_roster'
+              ? teamMembers.filter(m => m.name.trim()).length
+              : expectedResponses,
+            config
           })
         }
       );
@@ -144,6 +176,74 @@ export default function FormLinkModal({
     } catch (err) {
       console.error('Failed to update link:', err);
     }
+  }
+
+  async function downloadPDF(linkId, formType) {
+    try {
+      const response = await fetch(
+        `${API_BASE}/form-links/${linkId}/generate-pdf`,
+        {
+          method: 'POST',
+          headers: getAuthHeaders()
+        }
+      );
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.detail || 'Failed to generate PDF');
+      }
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const filename = formType === 'staff_declaration'
+        ? `Record_11_Staff_Declaration.pdf`
+        : `Record_35_Food_Safety_Team.pdf`;
+      a.download = filename;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Failed to download PDF:', err);
+      alert(err.message);
+    }
+  }
+
+  async function downloadFlyer(linkId) {
+    try {
+      const response = await fetch(
+        `${API_BASE}/form-links/${linkId}/flyer`,
+        { headers: getAuthHeaders() }
+      );
+      if (!response.ok) {
+        throw new Error('Failed to generate flyer');
+      }
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `QR_Flyer_${linkId}.pdf`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Failed to download flyer:', err);
+      alert(err.message);
+    }
+  }
+
+  // Team member management functions
+  function addTeamMember() {
+    setTeamMembers([...teamMembers, { name: '', position: '', department: '', date_approved: '' }]);
+  }
+
+  function removeTeamMember(index) {
+    if (teamMembers.length > 1) {
+      setTeamMembers(teamMembers.filter((_, i) => i !== index));
+    }
+  }
+
+  function updateTeamMember(index, field, value) {
+    const updated = [...teamMembers];
+    updated[index] = { ...updated[index], [field]: value };
+    setTeamMembers(updated);
   }
 
   if (!isOpen) return null;
@@ -222,6 +322,25 @@ export default function FormLinkModal({
                 </a>
               </div>
 
+              <div className="pdf-actions">
+                <button
+                  className="btn-secondary"
+                  onClick={() => downloadFlyer(createdLink.form_link_id)}
+                  title="Download printable flyer with QR code"
+                >
+                  <Printer size={16} />
+                  Print Flyer
+                </button>
+                <button
+                  className="btn-secondary"
+                  onClick={() => downloadPDF(createdLink.form_link_id, createdLink.form_type)}
+                  title="Download PDF with collected signatures"
+                >
+                  <FileText size={16} />
+                  Export PDF
+                </button>
+              </div>
+
               <button
                 className="btn-ghost"
                 onClick={() => setCreatedLink(null)}
@@ -288,6 +407,20 @@ export default function FormLinkModal({
 
                   <div className="link-card-actions">
                     <button
+                      className="btn-icon"
+                      onClick={() => downloadFlyer(link.id)}
+                      title="Download printable flyer"
+                    >
+                      <Printer size={14} />
+                    </button>
+                    <button
+                      className="btn-icon"
+                      onClick={() => downloadPDF(link.id, link.form_type)}
+                      title="Export signatures PDF"
+                    >
+                      <FileText size={14} />
+                    </button>
+                    <button
                       className="btn-ghost btn-sm"
                       onClick={() => toggleLinkActive(link.id, link.is_active)}
                     >
@@ -336,21 +469,84 @@ export default function FormLinkModal({
                 </div>
               </div>
 
-              <div className="form-field">
-                <label htmlFor="expectedResponses">Expected Responses</label>
-                <input
-                  id="expectedResponses"
-                  type="number"
-                  min="1"
-                  max="500"
-                  value={expectedResponses}
-                  onChange={e => setExpectedResponses(parseInt(e.target.value) || 50)}
-                  className="input"
-                />
-                <span className="field-hint">
-                  Used for progress tracking (e.g., 95 staff members)
-                </span>
-              </div>
+              {/* Expected Responses - only for staff_declaration */}
+              {formType === 'staff_declaration' && (
+                <div className="form-field">
+                  <label htmlFor="expectedResponses">Expected Responses</label>
+                  <input
+                    id="expectedResponses"
+                    type="number"
+                    min="1"
+                    max="500"
+                    value={expectedResponses}
+                    onChange={e => setExpectedResponses(parseInt(e.target.value) || 50)}
+                    className="input"
+                  />
+                  <span className="field-hint">
+                    Used for progress tracking (e.g., 95 staff members)
+                  </span>
+                </div>
+              )}
+
+              {/* Team Members Editor - only for team_roster */}
+              {formType === 'team_roster' && (
+                <div className="form-field">
+                  <label>Food Safety Team Members</label>
+                  <span className="field-hint" style={{ marginBottom: 'var(--space-2)' }}>
+                    Add team members who will sign. Each person finds their name and signs.
+                  </span>
+
+                  <div className="team-members-editor">
+                    {teamMembers.map((member, idx) => (
+                      <div key={idx} className="team-member-row">
+                        <input
+                          type="text"
+                          placeholder="Name *"
+                          value={member.name}
+                          onChange={e => updateTeamMember(idx, 'name', e.target.value)}
+                          className="input team-input name"
+                        />
+                        <input
+                          type="text"
+                          placeholder="Position"
+                          value={member.position}
+                          onChange={e => updateTeamMember(idx, 'position', e.target.value)}
+                          className="input team-input"
+                        />
+                        <input
+                          type="text"
+                          placeholder="Department"
+                          value={member.department}
+                          onChange={e => updateTeamMember(idx, 'department', e.target.value)}
+                          className="input team-input"
+                        />
+                        <button
+                          type="button"
+                          className="btn-icon btn-remove"
+                          onClick={() => removeTeamMember(idx)}
+                          disabled={teamMembers.length === 1}
+                          title="Remove member"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    ))}
+
+                    <button
+                      type="button"
+                      className="btn-add-member"
+                      onClick={addTeamMember}
+                    >
+                      <Plus size={14} />
+                      Add Team Member
+                    </button>
+                  </div>
+
+                  <span className="field-hint" style={{ marginTop: 'var(--space-2)' }}>
+                    {teamMembers.filter(m => m.name.trim()).length} team member(s) configured
+                  </span>
+                </div>
+              )}
 
               <div className="form-actions">
                 {existingLinks.length > 0 && (
