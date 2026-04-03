@@ -1,8 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import axios from '../../../lib/axios';
-import StaffDeclarationForm from './StaffDeclarationForm';
-import TeamRosterForm from './TeamRosterForm';
 import TableSignoffForm from './TableSignoffForm';
 import { CheckCircle, AlertTriangle, Clock } from 'lucide-react';
 import './FormPage.css';
@@ -167,49 +165,18 @@ export default function FormPage() {
     );
   }
 
-  // Render appropriate form type
+  // Render form
   const renderForm = () => {
-    const { form_type, config, responses } = formData;
+    const { config, responses } = formData;
 
-    switch (form_type) {
-      case 'staff_declaration':
-        return (
-          <StaffDeclarationForm
-            config={config}
-            existingResponses={responses}
-            onSubmit={handleSubmit}
-            submitting={submitting}
-          />
-        );
-
-      case 'team_roster':
-        return (
-          <TeamRosterForm
-            config={config}
-            existingResponses={responses}
-            onSubmit={handleSubmit}
-            submitting={submitting}
-          />
-        );
-
-      case 'table_signoff':
-        return (
-          <TableSignoffForm
-            config={config}
-            existingResponses={responses}
-            onSubmit={handleSubmit}
-            submitting={submitting}
-          />
-        );
-
-      default:
-        return (
-          <div className="unsupported-form">
-            <AlertTriangle size={32} />
-            <p>This form type is not yet supported.</p>
-          </div>
-        );
-    }
+    return (
+      <TableSignoffForm
+        config={config}
+        existingResponses={responses}
+        onSubmit={handleSubmit}
+        submitting={submitting}
+      />
+    );
   };
 
   return (

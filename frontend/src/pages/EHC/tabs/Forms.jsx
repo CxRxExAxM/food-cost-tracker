@@ -2,10 +2,10 @@
  * Forms Tab Component
  *
  * Admin workbench for digital form management:
- * - Create new forms from template gallery
+ * - Create new sign-off forms
  * - View all form links for the current cycle
  * - Track response progress
- * - Quick actions: QR, Flyer, Responses, Deactivate
+ * - Quick actions: QR, Flyer, Responses, Edit, Delete
  */
 
 import { useState, useEffect } from 'react';
@@ -13,9 +13,6 @@ import {
   API_BASE,
   fetchWithAuth,
 } from './shared';
-import SimpleSignoffModal from '../modals/SimpleSignoffModal';
-import StaffDeclarationModal from '../modals/StaffDeclarationModal';
-import TeamRosterModal from '../modals/TeamRosterModal';
 import TableSignoffModal from '../modals/TableSignoffModal';
 
 export default function Forms({ activeCycle, toast }) {
@@ -23,7 +20,6 @@ export default function Forms({ activeCycle, toast }) {
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
-  const [typeFilter, setTypeFilter] = useState('all');
   const [expandedLink, setExpandedLink] = useState(null);
   const [responses, setResponses] = useState({});
   const [loadingResponses, setLoadingResponses] = useState(null);
@@ -34,10 +30,7 @@ export default function Forms({ activeCycle, toast }) {
   const [saving, setSaving] = useState(false);
 
   // Modal state
-  const [showSimpleSignoff, setShowSimpleSignoff] = useState(false);
-  const [showStaffDeclaration, setShowStaffDeclaration] = useState(false);
-  const [showTeamRoster, setShowTeamRoster] = useState(false);
-  const [showTableSignoff, setShowTableSignoff] = useState(false);
+  const [showCreateForm, setShowCreateForm] = useState(false);
 
   // Load form links and records when cycle changes
   useEffect(() => {
@@ -225,7 +218,6 @@ export default function Forms({ activeCycle, toast }) {
   const filteredLinks = formLinks.filter(link => {
     if (filter === 'active' && !link.is_active) return false;
     if (filter === 'inactive' && link.is_active) return false;
-    if (typeFilter !== 'all' && link.form_type !== typeFilter) return false;
     return true;
   });
 
@@ -240,14 +232,7 @@ export default function Forms({ activeCycle, toast }) {
   }, {});
 
   const formTypeLabel = (type) => {
-    switch (type) {
-      case 'staff_declaration': return 'Staff Declaration';
-      case 'team_roster': return 'Team Roster';
-      case 'simple_signoff': return 'Simple Sign-off';
-      case 'table_signoff': return 'Table Sign-off';
-      case 'checklist': return 'Checklist';
-      default: return type;
-    }
+    return 'Sign-off Form';
   };
 
   const formatDate = (dateStr) => {
@@ -380,62 +365,12 @@ export default function Forms({ activeCycle, toast }) {
 
   return (
     <div className="forms-view">
-      {/* Template Gallery - Create New Forms */}
-      <div className="template-gallery">
-        <h3>Create New Form</h3>
-        <div className="template-cards">
-          <div
-            className="template-card"
-            onClick={() => setShowStaffDeclaration(true)}
-          >
-            <span className="template-icon">📋</span>
-            <div className="template-info">
-              <strong>Staff Declaration</strong>
-              <p>Collect acknowledgment signatures from all staff (Record 11)</p>
-            </div>
-          </div>
-
-          <div
-            className="template-card"
-            onClick={() => setShowTeamRoster(true)}
-          >
-            <span className="template-icon">👥</span>
-            <div className="template-info">
-              <strong>Team Roster</strong>
-              <p>Food Safety Team sign-off with configured members (Record 35)</p>
-            </div>
-          </div>
-
-          <div
-            className="template-card"
-            onClick={() => setShowSimpleSignoff(true)}
-          >
-            <span className="template-icon">📄</span>
-            <div className="template-info">
-              <strong>Simple Sign-off</strong>
-              <p>Upload any PDF document for staff to read and sign</p>
-            </div>
-          </div>
-
-          <div
-            className="template-card"
-            onClick={() => setShowTableSignoff(true)}
-          >
-            <span className="template-icon">📊</span>
-            <div className="template-info">
-              <strong>Table Sign-off</strong>
-              <p>Custom table with configurable columns and rows</p>
-            </div>
-          </div>
-
-          <div className="template-card disabled">
-            <span className="template-icon">✅</span>
-            <div className="template-info">
-              <strong>Checklist</strong>
-              <p>Coming soon - dynamic checklist forms</p>
-            </div>
-          </div>
-        </div>
+      {/* Create Form Header */}
+      <div className="forms-header">
+        <h3>Sign-off Forms</h3>
+        <button className="btn-primary" onClick={() => setShowCreateForm(true)}>
+          + Create Form
+        </button>
       </div>
 
       {/* Existing Form Links */}
@@ -663,39 +598,14 @@ export default function Forms({ activeCycle, toast }) {
         </>
       ) : (
         <div className="forms-empty-hint">
-          <p>No form links created yet. Choose a template above to get started.</p>
+          <p>No form links created yet. Click "Create Form" to get started.</p>
         </div>
       )}
 
-      {/* Creation Modals */}
-      <SimpleSignoffModal
-        isOpen={showSimpleSignoff}
-        onClose={() => setShowSimpleSignoff(false)}
-        activeCycle={activeCycle}
-        records={records}
-        onFormCreated={handleFormCreated}
-        toast={toast}
-      />
-
-      <StaffDeclarationModal
-        isOpen={showStaffDeclaration}
-        onClose={() => setShowStaffDeclaration(false)}
-        activeCycle={activeCycle}
-        onFormCreated={handleFormCreated}
-        toast={toast}
-      />
-
-      <TeamRosterModal
-        isOpen={showTeamRoster}
-        onClose={() => setShowTeamRoster(false)}
-        activeCycle={activeCycle}
-        onFormCreated={handleFormCreated}
-        toast={toast}
-      />
-
+      {/* Create Form Modal */}
       <TableSignoffModal
-        isOpen={showTableSignoff}
-        onClose={() => setShowTableSignoff(false)}
+        isOpen={showCreateForm}
+        onClose={() => setShowCreateForm(false)}
         activeCycle={activeCycle}
         records={records}
         onFormCreated={handleFormCreated}

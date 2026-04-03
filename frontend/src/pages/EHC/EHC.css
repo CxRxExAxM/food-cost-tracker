@@ -2044,6 +2044,13 @@
   border: 1px solid var(--border-subtle);
 }
 
+.forms-header h3 {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+}
+
 .forms-stats {
   display: flex;
   gap: var(--space-6);

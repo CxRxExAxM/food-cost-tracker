@@ -1,11 +1,11 @@
 /**
- * Table Sign-off Form Creation Modal
+ * Sign-off Form Creation Modal
  *
- * For custom table-based sign-off forms:
- * - Admin configures column definitions
- * - Admin optionally pre-fills rows
- * - Staff view table and sign their row
- * - PDF generated with same column structure
+ * Flexible form builder for any sign-off needs:
+ * - Configure custom columns (text, date, signature)
+ * - Optionally pre-fill rows
+ * - Optionally attach a reference PDF
+ * - Staff view form and sign
  */
 
 import { useState, useEffect } from 'react';
@@ -30,13 +30,18 @@ export default function TableSignoffModal({
   onFormCreated,
   toast
 }) {
-  const [step, setStep] = useState(1); // 1: Select record, 2: Configure columns, 3: Add rows
+  const [step, setStep] = useState(1); // 1: Select record, 2: Configure form, 3: Add rows
   const [selectedRecord, setSelectedRecord] = useState(null);
   const [title, setTitle] = useState('');
   const [introText, setIntroText] = useState('');
   const [columns, setColumns] = useState([...DEFAULT_COLUMNS]);
   const [rows, setRows] = useState([]);
   const [creating, setCreating] = useState(false);
+
+  // PDF upload state
+  const [pdfFile, setPdfFile] = useState(null);
+  const [uploadingPdf, setUploadingPdf] = useState(false);
+  const [uploadedPdfPath, setUploadedPdfPath] = useState(null);
 
   // Reset state when modal opens
   useEffect(() => {
@@ -47,6 +52,8 @@ export default function TableSignoffModal({
       setIntroText('');
       setColumns([...DEFAULT_COLUMNS]);
       setRows([]);
+      setPdfFile(null);
+      setUploadedPdfPath(null);
     }
   }, [isOpen]);
 
@@ -56,7 +63,6 @@ export default function TableSignoffModal({
   }
 
   function removeColumn(index) {
-    // Don't allow removing the signature column
     if (columns[index].type === 'signature') {
       toast?.error?.('Cannot remove the signature column');
       return;
@@ -103,15 +109,61 @@ export default function TableSignoffModal({
     ));
   }
 
+  async function handlePdfSelect(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.type !== 'application/pdf') {
+      toast?.error?.('Please select a PDF file');
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      toast?.error?.('File size must be under 10MB');
+      return;
+    }
+
+    setPdfFile(file);
+
+    // Upload immediately
+    try {
+      setUploadingPdf(true);
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await fetch(`${API_BASE}/form-links/upload-document`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: formData
+      });
+
+      if (!response.ok) throw new Error('Upload failed');
+
+      const data = await response.json();
+      setUploadedPdfPath(data.document_path);
+      toast?.success?.('PDF uploaded');
+    } catch (error) {
+      toast?.error?.('Failed to upload PDF');
+      setPdfFile(null);
+    } finally {
+      setUploadingPdf(false);
+    }
+  }
+
+  function removePdf() {
+    setPdfFile(null);
+    setUploadedPdfPath(null);
+  }
+
   async function handleCreate() {
-    // Validate columns
     const validColumns = columns.filter(c => c.label.trim());
     if (validColumns.length < 2) {
       toast?.error?.('Add at least 2 columns (including signature)');
       return;
     }
 
-    // Ensure there's a signature column
     if (!validColumns.some(c => c.type === 'signature')) {
       toast?.error?.('A signature column is required');
       return;
@@ -124,6 +176,7 @@ export default function TableSignoffModal({
         columns: validColumns,
         rows: rows,
         intro_text: introText,
+        document_path: uploadedPdfPath,
         property_name: 'Fairmont Scottsdale Princess' // TODO: Get from org settings
       };
 
@@ -140,11 +193,11 @@ export default function TableSignoffModal({
         body: JSON.stringify(payload)
       });
 
-      toast?.success?.('Table sign-off form created');
+      toast?.success?.('Form created successfully');
       onFormCreated?.(data);
       onClose();
     } catch (error) {
-      toast?.error?.(error.message || 'Failed to create form link');
+      toast?.error?.(error.message || 'Failed to create form');
     } finally {
       setCreating(false);
     }
@@ -156,7 +209,7 @@ export default function TableSignoffModal({
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content form-create-modal extra-wide" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
-          <h3>Create Table Sign-off Form</h3>
+          <h3>Create Sign-off Form</h3>
           <button className="modal-close" onClick={onClose}>&times;</button>
         </div>
 
@@ -164,7 +217,7 @@ export default function TableSignoffModal({
         {step === 1 && (
           <div className="modal-body">
             <p className="modal-description">
-              Select which record this form is for. You'll configure the table columns next.
+              Select which EHC record this form is for.
             </p>
 
             <div className="record-select-list">
@@ -187,13 +240,13 @@ export default function TableSignoffModal({
                 onClick={() => setStep(2)}
                 disabled={!selectedRecord}
               >
-                Next: Configure Columns
+                Next: Configure Form
               </button>
             </div>
           </div>
         )}
 
-        {/* Step 2: Configure Columns */}
+        {/* Step 2: Configure Form */}
         {step === 2 && (
           <div className="modal-body">
             <div className="selected-record-banner">
@@ -217,9 +270,45 @@ export default function TableSignoffModal({
               <textarea
                 value={introText}
                 onChange={e => setIntroText(e.target.value)}
-                placeholder="Text shown at the top of the form..."
+                placeholder="Instructions shown at the top of the form..."
                 rows={2}
               />
+            </div>
+
+            {/* PDF Upload */}
+            <div className="form-field">
+              <label>Reference Document (optional)</label>
+              <p className="field-hint">
+                Attach a PDF that staff should review before signing.
+              </p>
+              {pdfFile ? (
+                <div className="uploaded-file">
+                  <span className="file-icon">📄</span>
+                  <span className="file-name">{pdfFile.name}</span>
+                  <span className="file-size">
+                    {uploadingPdf ? 'Uploading...' : `${(pdfFile.size / 1024).toFixed(0)} KB`}
+                  </span>
+                  <button
+                    className="btn-icon danger"
+                    onClick={removePdf}
+                    disabled={uploadingPdf}
+                    title="Remove"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ) : (
+                <div className="file-upload-area">
+                  <input
+                    type="file"
+                    accept=".pdf"
+                    onChange={handlePdfSelect}
+                  />
+                  <span className="file-upload-label">
+                    Click or drag to upload PDF
+                  </span>
+                </div>
+              )}
             </div>
 
             <div className="form-field">
@@ -300,7 +389,7 @@ export default function TableSignoffModal({
             <div className="selected-record-banner">
               <span className="record-number">{selectedRecord.record_number}</span>
               <span className="record-name">{selectedRecord.name}</span>
-              <button className="btn-link" onClick={() => setStep(2)}>Edit columns</button>
+              <button className="btn-link" onClick={() => setStep(2)}>Edit form</button>
             </div>
 
             <div className="form-field">
@@ -353,7 +442,7 @@ export default function TableSignoffModal({
                 onClick={handleCreate}
                 disabled={creating}
               >
-                {creating ? 'Creating...' : 'Create Form Link'}
+                {creating ? 'Creating...' : 'Create Form'}
               </button>
             </div>
           </div>
