@@ -35,7 +35,7 @@ router = APIRouter(prefix="/ehc", tags=["ehc-forms"])
 # Pydantic Models
 # ============================================
 
-ALLOWED_FORM_TYPES = ['staff_declaration', 'team_roster', 'simple_signoff', 'checklist']
+ALLOWED_FORM_TYPES = ['staff_declaration', 'team_roster', 'simple_signoff', 'table_signoff', 'checklist']
 
 
 class FormLinkCreate(BaseModel):
@@ -894,6 +894,54 @@ def update_form_link(
 
         conn.commit()
         return {"status": "ok", "link_id": link_id, "updated_fields": list(update_dict.keys())}
+
+
+@router.delete("/form-links/{link_id}")
+def delete_form_link(
+    link_id: int,
+    current_user: dict = Depends(get_current_user)
+):
+    """Delete a form link and all its responses.
+
+    This is a destructive action - all response data will be permanently deleted.
+    Consider deactivating instead if you want to preserve response history.
+    """
+    org_id = current_user["organization_id"]
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Verify ownership and get info for response
+        cursor.execute("""
+            SELECT fl.id, fl.title, fl.form_type, COUNT(fr.id) as response_count
+            FROM ehc_form_link fl
+            LEFT JOIN ehc_form_response fr ON fr.form_link_id = fl.id
+            WHERE fl.id = %s AND fl.organization_id = %s
+            GROUP BY fl.id
+        """, (link_id, org_id))
+
+        form_link = dict_from_row(cursor.fetchone())
+        if not form_link:
+            raise HTTPException(status_code=404, detail="Form link not found")
+
+        # Delete responses first (cascade should handle this, but be explicit)
+        cursor.execute("""
+            DELETE FROM ehc_form_response WHERE form_link_id = %s
+        """, (link_id,))
+
+        # Delete form link
+        cursor.execute("""
+            DELETE FROM ehc_form_link WHERE id = %s
+        """, (link_id,))
+
+        conn.commit()
+
+        return {
+            "status": "ok",
+            "deleted_link_id": link_id,
+            "deleted_title": form_link['title'],
+            "deleted_responses": form_link['response_count']
+        }
 
 
 @router.delete("/form-links/{link_id}/responses/{response_id}")

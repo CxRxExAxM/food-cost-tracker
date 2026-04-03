@@ -16,6 +16,7 @@ import {
 import SimpleSignoffModal from '../modals/SimpleSignoffModal';
 import StaffDeclarationModal from '../modals/StaffDeclarationModal';
 import TeamRosterModal from '../modals/TeamRosterModal';
+import TableSignoffModal from '../modals/TableSignoffModal';
 
 export default function Forms({ activeCycle, toast }) {
   const [formLinks, setFormLinks] = useState([]);
@@ -26,11 +27,14 @@ export default function Forms({ activeCycle, toast }) {
   const [expandedLink, setExpandedLink] = useState(null);
   const [responses, setResponses] = useState({});
   const [loadingResponses, setLoadingResponses] = useState(null);
+  const [deletingLink, setDeletingLink] = useState(null);
+  const [confirmDelete, setConfirmDelete] = useState(null);
 
   // Modal state
   const [showSimpleSignoff, setShowSimpleSignoff] = useState(false);
   const [showStaffDeclaration, setShowStaffDeclaration] = useState(false);
   const [showTeamRoster, setShowTeamRoster] = useState(false);
+  const [showTableSignoff, setShowTableSignoff] = useState(false);
 
   // Load form links and records when cycle changes
   useEffect(() => {
@@ -86,6 +90,23 @@ export default function Forms({ activeCycle, toast }) {
       loadFormLinks();
     } catch (error) {
       toast?.error?.('Failed to update form link');
+    }
+  }
+
+  async function deleteFormLink(link) {
+    try {
+      setDeletingLink(link.id);
+      await fetchWithAuth(`${API_BASE}/form-links/${link.id}`, {
+        method: 'DELETE'
+      });
+      toast?.success?.('Form link deleted');
+      setConfirmDelete(null);
+      setExpandedLink(null);
+      loadFormLinks();
+    } catch (error) {
+      toast?.error?.('Failed to delete form link');
+    } finally {
+      setDeletingLink(null);
     }
   }
 
@@ -186,6 +207,7 @@ export default function Forms({ activeCycle, toast }) {
       case 'staff_declaration': return 'Staff Declaration';
       case 'team_roster': return 'Team Roster';
       case 'simple_signoff': return 'Simple Sign-off';
+      case 'table_signoff': return 'Table Sign-off';
       case 'checklist': return 'Checklist';
       default: return type;
     }
@@ -244,6 +266,17 @@ export default function Forms({ activeCycle, toast }) {
             </div>
           </div>
 
+          <div
+            className="template-card"
+            onClick={() => setShowTableSignoff(true)}
+          >
+            <span className="template-icon">📊</span>
+            <div className="template-info">
+              <strong>Table Sign-off</strong>
+              <p>Custom table with configurable columns and rows</p>
+            </div>
+          </div>
+
           <div className="template-card disabled">
             <span className="template-icon">✅</span>
             <div className="template-info">
@@ -283,6 +316,7 @@ export default function Forms({ activeCycle, toast }) {
                 <option value="staff_declaration">Staff Declaration</option>
                 <option value="team_roster">Team Roster</option>
                 <option value="simple_signoff">Simple Sign-off</option>
+                <option value="table_signoff">Table Sign-off</option>
               </select>
             </div>
           </div>
@@ -414,6 +448,41 @@ export default function Forms({ activeCycle, toast }) {
                             <p className="no-responses">No responses yet.</p>
                           )}
                         </div>
+
+                        {/* Delete Section */}
+                        <div className="danger-zone">
+                          {confirmDelete === link.id ? (
+                            <div className="delete-confirm">
+                              <p>
+                                Delete this form link and all {link.response_count || 0} responses?
+                                This cannot be undone.
+                              </p>
+                              <div className="delete-actions">
+                                <button
+                                  className="btn-ghost"
+                                  onClick={() => setConfirmDelete(null)}
+                                  disabled={deletingLink === link.id}
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  className="btn-danger"
+                                  onClick={() => deleteFormLink(link)}
+                                  disabled={deletingLink === link.id}
+                                >
+                                  {deletingLink === link.id ? 'Deleting...' : 'Delete Permanently'}
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <button
+                              className="btn-link danger"
+                              onClick={() => setConfirmDelete(link.id)}
+                            >
+                              Delete this form link
+                            </button>
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -450,6 +519,15 @@ export default function Forms({ activeCycle, toast }) {
         isOpen={showTeamRoster}
         onClose={() => setShowTeamRoster(false)}
         activeCycle={activeCycle}
+        onFormCreated={handleFormCreated}
+        toast={toast}
+      />
+
+      <TableSignoffModal
+        isOpen={showTableSignoff}
+        onClose={() => setShowTableSignoff(false)}
+        activeCycle={activeCycle}
+        records={records}
         onFormCreated={handleFormCreated}
         toast={toast}
       />
