@@ -21,6 +21,12 @@ A comprehensive multi-tenant SaaS platform for F&B operations to manage food cos
 - Stacked progress bars showing readiness across sections and NC levels
 - Internal verification checkbox for pre-audit practice walks
 - Record linking for observational audit points
+- **Digital Forms** - Tokenized public signature collection:
+  - QR code generation for tablet/phone signing
+  - Staff declarations (Record 11) with scroll-to-sign gate
+  - Team roster signing (Record 35)
+  - Duplicate detection with force override
+  - Response tracking with signature previews
 
 **Food Cost Tracking** - ✅ Complete
 - Multi-distributor price tracking with automated imports
@@ -291,17 +297,21 @@ Clean_Invoices/
 - `ehc_section`, `ehc_subsection`, `ehc_audit_point` - Audit hierarchy
 - `ehc_record`, `ehc_record_submission` - Record tracking
 - `ehc_point_record_link` - Links records to audit points
+- `ehc_form_link` - Tokenized public form links with QR codes
+- `ehc_form_response` - Signatures with audit trail (IP, user agent)
 
 ---
 
 ## Development Roadmap
 
 ### Current Priorities
-- EHC Digital Forms (tablet-friendly audit walk interface)
+- EHC Module Restructure (Forms tab, Settings tab, outlet management)
+- EHC PDF Export (completed signature sheets)
 - AI Recipe Parser enhancements (method step parsing)
 - Potentials Phase 2 (group resume ingestion)
 
 ### Future Considerations
+- EHC Monthly Outlet Checks (automated email distribution)
 - HACCP & Temperature Monitoring
 - Inventory Management
 - Labor Scheduling

@@ -786,6 +786,40 @@ END
 - **LATERAL JOIN** for per-point record stats in single query
 - **Stacked progress bars** showing three readiness levels (green/blue/yellow)
 
+### EHC Digital Forms (April 2026)
+
+Tokenized public signature collection for staff declarations and team rosters.
+
+**Key Files:**
+- `api/app/routers/ehc_forms.py` - Public + admin endpoints
+- `api/app/utils/qr_generator.py` - QR code generation
+- `frontend/src/pages/EHC/forms/` - Public form UI
+- `frontend/src/pages/EHC/FormLinkModal.jsx` - Admin link management
+- `frontend/src/pages/EHC/ResponseTrackerModal.jsx` - Response viewing
+
+**Database Tables:**
+```sql
+ehc_form_link      -- Tokenized links with QR codes
+ehc_form_response  -- Individual signatures with audit trail
+```
+
+**Key Patterns:**
+- **Tokenized access** - 43-char URL-safe tokens via `secrets.token_urlsafe(32)`
+- **Scroll-to-sign gate** - Users must scroll declaration before signing
+- **Duplicate detection** - Warns if name exists, allows force override
+- **Link reuse** - Same submission+form_type returns existing link
+- **JSON serialization** - Use `json.dumps()` for JSON columns with psycopg2
+
+**Public Routes (no auth):**
+- `GET /api/ehc/forms/{token}` - Fetch form data
+- `POST /api/ehc/forms/{token}/respond` - Submit signature
+
+**Future: Module Restructure**
+Planning doc: `docs/EHC_MODULE_RESTRUCTURE_PLAN.md`
+- Add Forms tab (central form link management)
+- Add Settings tab (outlets, cycle config, responsibility codes)
+- Monthly outlet checks with email distribution
+
 ---
 
 ## Questions to Ask User
@@ -859,5 +893,5 @@ At the end of each session, provide:
 
 ---
 
-**Last Updated:** March 26, 2026
+**Last Updated:** April 2, 2026
 **Next Review:** After next major feature completion

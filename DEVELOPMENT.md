@@ -112,52 +112,62 @@ Frontend available at: http://localhost:5173
 
 ## Git Workflow
 
-### Branch Strategy (Current)
+### Branch Strategy (Current: Simplified Main-Branch)
 
 ```
-main (production)
-  └── dev (development)
-      ├── feature/* (short-lived)
-      └── fix/* (short-lived)
+main (production + development)
 ```
 
-**Branch Purposes:**
-- `main` - Production environment (https://food-cost-tracker.onrender.com)
-- `dev` - Development environment (https://food-cost-tracker-dev.onrender.com)
-- `feature/*` - New features (branch from `dev`)
-- `fix/*` - Bug fixes (branch from `dev`)
+**Current Workflow:**
+- All development happens directly on `main`
+- Render auto-deploys on push to `main`
+- Migrations run automatically on Render deploy (`alembic upgrade head`)
+- Live testing on production URL (https://www.restaurantek.io)
 
-### Feature Development Process
+**Why This Works:**
+- Single developer workflow
+- Rapid iteration with immediate feedback
+- No merge conflicts between branches
+- Render handles migration execution
+
+**When to Use Feature Branches:**
+- Large multi-day features
+- Experimental changes that might be reverted
+- Collaborative work with other developers
+
+### Development Process
 
 ```bash
-# 1. Start from dev branch
-git checkout dev
-git pull origin dev
+# 1. Pull latest
+git pull origin main
 
-# 2. Create feature branch
+# 2. Make changes and commit
+git add <specific-files>
+git commit -m "feat: description of your feature"
+
+# 3. Push to deploy
+git push origin main
+# Auto-deploys to Render, migrations run automatically
+
+# 4. Monitor deploy
+# Check Render dashboard for build/deploy status
+# View logs for any errors
+```
+
+### Feature Branch (When Needed)
+
+```bash
+# 1. Create feature branch from main
 git checkout -b feature/your-feature-name
 
-# 3. Make changes and commit
+# 2. Make changes and commit
 git add .
 git commit -m "feat: description of your feature"
 
-# 4. Push feature branch
-git push origin feature/your-feature-name
-
-# 5. Merge to dev for testing
-git checkout dev
-git merge feature/your-feature-name
-git push origin dev
-# Auto-deploys to dev.onrender.com
-
-# 6. Test in dev environment
-# Verify functionality at https://food-cost-tracker-dev.onrender.com
-
-# 7. Deploy to production when ready
+# 3. Merge back to main when ready
 git checkout main
-git merge dev
+git merge feature/your-feature-name
 git push origin main
-# Auto-deploys to production
 ```
 
 ### Commit Message Format
@@ -192,24 +202,14 @@ git commit -m "refactor: Reorganize docs into archive structure"
 ### Hotfix Process (Critical Production Bugs)
 
 ```bash
-# 1. Branch from main
-git checkout main
+# Fix directly on main for rapid response
 git pull origin main
-git checkout -b hotfix/critical-issue
 
-# 2. Fix quickly
-# ... make changes ...
-git commit -m "hotfix: Fix critical payment processing error"
-
-# 3. Deploy to production
-git checkout main
-git merge hotfix/critical-issue
+# Make fix
+git add <files>
+git commit -m "fix: Critical issue description"
 git push origin main
-
-# 4. Back-merge to dev
-git checkout dev
-git merge main
-git push origin dev
+# Deploys immediately to production
 ```
 
 ---
@@ -364,29 +364,24 @@ Before merging to main, verify:
 
 **Production Deployment:**
 ```bash
-git checkout main
-git merge dev
 git push origin main
-# Triggers automatic deploy to food-cost-tracker.onrender.com
+# Triggers automatic deploy to restaurantek.io
 ```
 
-**Development Deployment:**
-```bash
-git checkout dev
-git push origin dev
-# Triggers automatic deploy to food-cost-tracker-dev.onrender.com
-```
+All deploys are automatic on push to `main`. No manual steps required.
 
 ### Deployment Process (Automatic)
 
-1. **Render detects push** to main or dev branch
+1. **Render detects push** to main branch
 2. **Docker build starts**:
    - Frontend builds (Vite)
    - Backend prepares (Python)
-3. **Migrations run**: `alembic upgrade head`
+3. **Migrations run automatically**: `alembic upgrade head`
 4. **Server starts**: `uvicorn api.app.main:app --host 0.0.0.0 --port ${PORT}`
 5. **Health check** confirms deployment
 6. **Traffic switches** to new deployment
+
+**Important:** You do NOT need to run migrations locally. Render executes `alembic upgrade head` as part of every deploy. Just create the migration file locally, commit, and push.
 
 ### Environment Variables (Render Dashboard)
 
@@ -626,9 +621,8 @@ venv/bin/alembic upgrade head
 ### Deploy to Production
 
 ```bash
-git checkout main
-git merge dev
 git push origin main
+# Migrations run automatically on Render
 ```
 
 ### View Logs
@@ -643,8 +637,8 @@ git push origin main
 - **Project Overview:** [README.md](README.md)
 - **Future Roadmap:** [FUTURE_PLANS.md](FUTURE_PLANS.md)
 - **UI Guidelines:** [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md)
-- **AI Development:** [CLAUDE_INSTRUCTIONS.md](CLAUDE_INSTRUCTIONS.md)
+- **AI Development:** [CLAUDE.md](CLAUDE.md)
 
 ---
 
-**Last Updated:** December 18, 2024
+**Last Updated:** April 2, 2026
