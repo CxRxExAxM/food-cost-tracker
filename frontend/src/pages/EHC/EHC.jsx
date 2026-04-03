@@ -404,7 +404,11 @@ function EHC() {
         )}
 
         {view === 'settings' && (
-          <Settings activeCycle={activeCycle} />
+          <Settings
+            activeCycle={activeCycle}
+            onCycleUpdated={loadCycles}
+            toast={toast}
+          />
         )}
       </div>
 
