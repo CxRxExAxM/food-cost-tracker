@@ -29,6 +29,9 @@ export default function Forms({ activeCycle, toast }) {
   const [loadingResponses, setLoadingResponses] = useState(null);
   const [deletingLink, setDeletingLink] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
+  const [editingLink, setEditingLink] = useState(null);
+  const [editForm, setEditForm] = useState({ title: '', expected_responses: '' });
+  const [saving, setSaving] = useState(false);
 
   // Modal state
   const [showSimpleSignoff, setShowSimpleSignoff] = useState(false);
@@ -107,6 +110,40 @@ export default function Forms({ activeCycle, toast }) {
       toast?.error?.('Failed to delete form link');
     } finally {
       setDeletingLink(null);
+    }
+  }
+
+  function startEditing(link) {
+    setEditingLink(link.id);
+    setEditForm({
+      title: link.title || '',
+      expected_responses: link.expected_responses || ''
+    });
+  }
+
+  function cancelEditing() {
+    setEditingLink(null);
+    setEditForm({ title: '', expected_responses: '' });
+  }
+
+  async function saveEdit(linkId) {
+    try {
+      setSaving(true);
+      const payload = {
+        title: editForm.title || null,
+        expected_responses: editForm.expected_responses ? parseInt(editForm.expected_responses) : null
+      };
+      await fetchWithAuth(`${API_BASE}/form-links/${linkId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(payload)
+      });
+      toast?.success?.('Form link updated');
+      setEditingLink(null);
+      loadFormLinks();
+    } catch (error) {
+      toast?.error?.('Failed to update form link');
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -446,6 +483,56 @@ export default function Forms({ activeCycle, toast }) {
                             </div>
                           ) : (
                             <p className="no-responses">No responses yet.</p>
+                          )}
+                        </div>
+
+                        {/* Edit Section */}
+                        <div className="edit-section">
+                          {editingLink === link.id ? (
+                            <div className="edit-form">
+                              <div className="edit-field">
+                                <label>Title</label>
+                                <input
+                                  type="text"
+                                  value={editForm.title}
+                                  onChange={e => setEditForm({ ...editForm, title: e.target.value })}
+                                  placeholder="Form title"
+                                />
+                              </div>
+                              <div className="edit-field">
+                                <label>Expected Responses</label>
+                                <input
+                                  type="number"
+                                  value={editForm.expected_responses}
+                                  onChange={e => setEditForm({ ...editForm, expected_responses: e.target.value })}
+                                  placeholder="Leave empty for unlimited"
+                                  min="1"
+                                />
+                              </div>
+                              <div className="edit-actions">
+                                <button
+                                  className="btn-ghost"
+                                  onClick={cancelEditing}
+                                  disabled={saving}
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  className="btn-primary"
+                                  onClick={() => saveEdit(link.id)}
+                                  disabled={saving}
+                                >
+                                  {saving ? 'Saving...' : 'Save Changes'}
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <button
+                              className="btn-link"
+                              onClick={() => startEditing(link)}
+                            >
+                              Edit form settings
+                            </button>
                           )}
                         </div>
 

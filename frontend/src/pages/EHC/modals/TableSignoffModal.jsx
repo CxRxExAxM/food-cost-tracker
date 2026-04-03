@@ -154,7 +154,7 @@ export default function TableSignoffModal({
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content form-create-modal wide" onClick={e => e.stopPropagation()}>
+      <div className="modal-content form-create-modal extra-wide" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <h3>Create Table Sign-off Form</h3>
           <button className="modal-close" onClick={onClose}>&times;</button>
