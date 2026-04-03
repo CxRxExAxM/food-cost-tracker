@@ -400,7 +400,7 @@ function EHC() {
         )}
 
         {view === 'forms' && (
-          <Forms activeCycle={activeCycle} />
+          <Forms activeCycle={activeCycle} toast={toast} />
         )}
 
         {view === 'settings' && (

@@ -463,6 +463,60 @@ def get_submission_form_links(
         return {"data": links, "count": len(links)}
 
 
+@router.get("/cycles/{cycle_id}/form-links")
+def get_cycle_form_links(
+    cycle_id: int,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get all form links for a cycle - for the Forms admin workbench."""
+    org_id = current_user["organization_id"]
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Verify cycle ownership
+        cursor.execute("""
+            SELECT id FROM ehc_audit_cycle WHERE id = %s AND organization_id = %s
+        """, (cycle_id, org_id))
+
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Cycle not found")
+
+        # Get all form links with response counts and record info
+        cursor.execute("""
+            SELECT
+                fl.id, fl.token, fl.form_type, fl.title, fl.config,
+                fl.is_active, fl.expires_at, fl.expected_responses,
+                fl.submission_id, fl.record_id,
+                fl.created_at, fl.updated_at,
+                r.record_number, r.name as record_name,
+                COUNT(fr.id) as response_count
+            FROM ehc_form_link fl
+            JOIN ehc_record r ON r.id = fl.record_id
+            LEFT JOIN ehc_form_response fr ON fr.form_link_id = fl.id
+            WHERE fl.audit_cycle_id = %s AND fl.organization_id = %s
+            GROUP BY fl.id, r.id
+            ORDER BY r.record_number, fl.created_at DESC
+        """, (cycle_id, org_id))
+
+        links = dicts_from_rows(cursor.fetchall())
+
+        # Add URLs and format dates
+        for link in links:
+            link['url'] = generate_form_url(link['token'])
+            if link.get('expires_at'):
+                link['expires_at'] = link['expires_at'].isoformat()
+            if link.get('created_at'):
+                link['created_at'] = link['created_at'].isoformat()
+            if link.get('updated_at'):
+                link['updated_at'] = link['updated_at'].isoformat()
+            # Parse config
+            if link.get('config') and isinstance(link['config'], str):
+                link['config'] = json.loads(link['config'])
+
+        return {"data": links, "count": len(links)}
+
+
 @router.get("/form-links/{link_id}")
 def get_form_link(
     link_id: int,
