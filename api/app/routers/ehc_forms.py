@@ -680,12 +680,15 @@ def get_cycle_records(
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Cycle not found")
 
-        # Get all records
+        # Get all records for this organization
         cursor.execute("""
-            SELECT id, record_number, name, description, location_type, frequency
+            SELECT id, record_number, name, description, location_type, record_type
             FROM ehc_record
-            ORDER BY record_number
-        """)
+            WHERE organization_id = %s
+            ORDER BY
+                CASE WHEN record_number ~ '^[0-9]+$' THEN CAST(record_number AS INTEGER) ELSE 999 END,
+                record_number
+        """, (org_id,))
 
         records = dicts_from_rows(cursor.fetchall())
         return {"data": records, "count": len(records)}
