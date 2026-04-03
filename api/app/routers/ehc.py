@@ -1209,9 +1209,22 @@ def get_submissions(
                 rs.period_start, rs.period_end, rs.status, rs.is_physical,
                 rs.file_path, rs.original_filename, rs.notes, rs.submitted_at, rs.approved_at,
                 rs.responsibility_code,
-                r.record_number, r.name as record_name, r.location_type
+                r.record_number, r.name as record_name, r.location_type,
+                -- Form link info (if this submission is linked to a form)
+                fl.id as form_link_id,
+                fl.token as form_token,
+                fl.title as form_title,
+                fl.expected_responses as form_expected,
+                fl.is_active as form_is_active,
+                COALESCE(resp_count.response_count, 0) as form_responses
             FROM ehc_record_submission rs
             JOIN ehc_record r ON r.id = rs.record_id
+            LEFT JOIN ehc_form_link fl ON fl.submission_id = rs.id AND fl.is_active = true
+            LEFT JOIN LATERAL (
+                SELECT COUNT(*) as response_count
+                FROM ehc_form_response fr
+                WHERE fr.form_link_id = fl.id
+            ) resp_count ON true
             WHERE rs.audit_cycle_id = %s
         """
         params = [cycle_id]
@@ -1237,12 +1250,31 @@ def get_submissions(
         cursor.execute(query, params)
         submissions = dicts_from_rows(cursor.fetchall())
 
-        # Convert dates to strings
+        # Convert dates to strings and build form_link object
         for sub in submissions:
             if sub.get('period_start'):
                 sub['period_start'] = str(sub['period_start'])
             if sub.get('period_end'):
                 sub['period_end'] = str(sub['period_end'])
+
+            # Nest form link info if present
+            if sub.get('form_link_id'):
+                sub['form_link'] = {
+                    'id': sub.pop('form_link_id'),
+                    'token': sub.pop('form_token'),
+                    'title': sub.pop('form_title'),
+                    'expected_responses': sub.pop('form_expected'),
+                    'response_count': sub.pop('form_responses'),
+                    'is_active': sub.pop('form_is_active'),
+                }
+            else:
+                # Remove the null fields
+                sub.pop('form_link_id', None)
+                sub.pop('form_token', None)
+                sub.pop('form_title', None)
+                sub.pop('form_expected', None)
+                sub.pop('form_responses', None)
+                sub.pop('form_is_active', None)
 
         return {"data": submissions, "count": len(submissions)}
 

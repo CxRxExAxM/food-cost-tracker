@@ -302,6 +302,25 @@ def submit_form_response(
         ))
 
         result = cursor.fetchone()
+
+        # Check if all expected signatures are collected - if so, update submission status
+        if form_link.get('expected_responses'):
+            cursor.execute("""
+                SELECT COUNT(*) as count FROM ehc_form_response WHERE form_link_id = %s
+            """, (form_link_id,))
+            new_count = cursor.fetchone()['count']
+
+            if new_count >= form_link['expected_responses']:
+                # All signatures collected - update linked submission to pending_approval
+                cursor.execute("""
+                    UPDATE ehc_record_submission
+                    SET status = 'pending_approval', updated_at = NOW()
+                    WHERE id = (
+                        SELECT submission_id FROM ehc_form_link WHERE id = %s
+                    )
+                    AND status = 'collecting_signatures'
+                """, (form_link_id,))
+
         conn.commit()
 
         return {
@@ -581,19 +600,20 @@ def create_standalone_form_link(
         if not record:
             raise HTTPException(status_code=404, detail="Record not found")
 
-        # If submission_id provided, verify it exists and belongs to this cycle
-        submission_id = None
-        if data.submission_id:
-            cursor.execute("""
-                SELECT id FROM ehc_record_submission
-                WHERE id = %s AND audit_cycle_id = %s AND record_id = %s
-            """, (data.submission_id, cycle_id, data.record_id))
-            if not cursor.fetchone():
-                raise HTTPException(
-                    status_code=400,
-                    detail="Submission not found or doesn't match cycle/record"
-                )
-            submission_id = data.submission_id
+        # Auto-create a submission for this form link
+        # Status: collecting_signatures (special status for form-linked submissions)
+        cursor.execute("""
+            INSERT INTO ehc_record_submission (
+                audit_cycle_id, record_id, period_label, status
+            )
+            VALUES (%s, %s, %s, 'collecting_signatures')
+            RETURNING id
+        """, (
+            cycle_id,
+            data.record_id,
+            f"EHC {cycle['year']}"  # Default period label
+        ))
+        submission_id = cursor.fetchone()['id']
 
         # Generate unique token
         token = secrets.token_urlsafe(32)

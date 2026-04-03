@@ -245,13 +245,34 @@ export function getSubmissionDisplayStatus(submission) {
     in_progress: { status: 'in_progress', label: 'In Progress', class: 'badge-yellow' },
     submitted: { status: 'submitted', label: 'Submitted', class: 'badge-blue' },
     not_applicable: { status: 'not_applicable', label: 'N/A', class: 'badge-neutral' },
+    collecting_signatures: { status: 'collecting_signatures', label: 'Collecting', class: 'badge-blue' },
+    pending_approval: { status: 'pending_approval', label: 'Ready for Approval', class: 'badge-green-dim' },
   };
   return statusMap[submission.status] || { status: submission.status, label: submission.status, class: 'badge-neutral' };
 }
 
-// Submission status badge with computed due date logic
+// Submission status badge with computed due date logic and form link progress
 export function SubmissionStatusBadge({ submission }) {
   const displayStatus = getSubmissionDisplayStatus(submission);
+
+  // If this submission has a form link, show progress
+  if (submission.form_link) {
+    const { response_count, expected_responses } = submission.form_link;
+    const progress = expected_responses
+      ? `${response_count}/${expected_responses}`
+      : `${response_count}`;
+
+    // Determine color based on completion
+    const isComplete = expected_responses && response_count >= expected_responses;
+    const progressClass = isComplete ? 'badge-green' : 'badge-blue';
+
+    return (
+      <span className={`status-badge ${progressClass}`} title={`Form signatures: ${progress}`}>
+        {isComplete ? '✓ Complete' : `${progress} signatures`}
+      </span>
+    );
+  }
+
   return (
     <span className={`status-badge ${displayStatus.class}`} title={`DB status: ${submission.status}`}>
       {displayStatus.label}
