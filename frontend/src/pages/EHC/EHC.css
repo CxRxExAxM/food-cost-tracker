@@ -2021,3 +2021,69 @@
     padding: var(--space-1) var(--space-2);
   }
 }
+
+/* ==============================================
+   Placeholder Views (Forms & Settings)
+   ============================================== */
+
+.forms-view,
+.settings-view {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: var(--space-10) var(--space-6);
+}
+
+.placeholder-content {
+  max-width: 500px;
+  text-align: center;
+  padding: var(--space-8);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+}
+
+.placeholder-content h2 {
+  font-family: var(--font-primary);
+  font-size: var(--text-xl);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+  margin: 0 0 var(--space-4);
+}
+
+.placeholder-description {
+  font-size: var(--text-base);
+  color: var(--text-secondary);
+  margin: 0 0 var(--space-6);
+}
+
+.placeholder-features {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 var(--space-6);
+  text-align: left;
+}
+
+.placeholder-features li {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  padding: var(--space-2) 0;
+  padding-left: var(--space-6);
+  position: relative;
+}
+
+.placeholder-features li::before {
+  content: "•";
+  position: absolute;
+  left: var(--space-2);
+  color: var(--color-blue);
+}
+
+.placeholder-note {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  font-style: italic;
+  margin: 0;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border-subtle);
+}
