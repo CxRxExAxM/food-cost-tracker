@@ -602,18 +602,27 @@ def create_standalone_form_link(
 
         # Auto-create a submission for this form link
         # Status: collecting_signatures (special status for form-linked submissions)
-        cursor.execute("""
-            INSERT INTO ehc_record_submission (
-                audit_cycle_id, record_id, period_label, status
-            )
-            VALUES (%s, %s, %s, 'collecting_signatures')
-            RETURNING id
-        """, (
-            cycle_id,
-            data.record_id,
-            f"EHC {cycle['year']}"  # Default period label
-        ))
-        submission_id = cursor.fetchone()['id']
+        try:
+            cursor.execute("""
+                INSERT INTO ehc_record_submission (
+                    audit_cycle_id, record_id, period_label, status
+                )
+                VALUES (%s, %s, %s, 'collecting_signatures')
+                RETURNING id
+            """, (
+                cycle_id,
+                data.record_id,
+                f"EHC {cycle['year']}"  # Default period label
+            ))
+            result = cursor.fetchone()
+            if not result:
+                raise HTTPException(status_code=500, detail="Failed to create submission - no ID returned")
+            submission_id = result['id']
+        except Exception as e:
+            import traceback
+            print(f"Error creating submission: {e}")
+            print(traceback.format_exc())
+            raise HTTPException(status_code=500, detail=f"Failed to create linked submission: {str(e)}")
 
         # Generate unique token
         token = secrets.token_urlsafe(32)
