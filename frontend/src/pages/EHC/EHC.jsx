@@ -289,13 +289,23 @@ function EHC() {
 
       {/* Header */}
       <div className="ehc-header">
-        <div className="ehc-header-content">
-          <div className="ehc-title-row">
+        <div className="header-content">
+          <div className="header-title">
             <h1>Environmental Health Compliance</h1>
+            <p>
+              EHC {activeCycle?.year}
+              {daysUntil !== null && (
+                <span className="days-until">
+                  {' '} — {daysUntil > 0 ? `${daysUntil} days until audit` : daysUntil === 0 ? 'Audit today!' : `${Math.abs(daysUntil)} days since audit`}
+                </span>
+              )}
+            </p>
+          </div>
 
+          <div className="header-actions">
             {/* Cycle selector */}
             <select
-              className="cycle-select"
+              className="cycle-selector"
               value={activeCycle?.id || ''}
               onChange={e => {
                 const cycle = cycles.find(c => c.id === parseInt(e.target.value));
@@ -311,55 +321,48 @@ function EHC() {
 
             {/* Audit Date Picker */}
             <div className="audit-date-picker">
+              <label>Audit Date:</label>
               <input
                 type="date"
                 value={activeCycle?.target_date?.split('T')[0] || ''}
                 onChange={e => updateAuditDate(e.target.value)}
-                className="audit-date-input"
+                className="date-input"
               />
-              <span className="audit-date-label">
-                {formatTargetDate()}
-                {daysUntil !== null && (
-                  <span className={`days-countdown ${daysUntil <= 30 ? 'urgent' : ''}`}>
-                    {daysUntil > 0 ? `${daysUntil} days` : daysUntil === 0 ? 'Today!' : `${Math.abs(daysUntil)} days ago`}
-                  </span>
-                )}
-              </span>
             </div>
-          </div>
 
-          {/* 5-Tab Navigation */}
-          <div className="ehc-tabs">
-            <button
-              className={`ehc-tab ${view === 'dashboard' ? 'active' : ''}`}
-              onClick={() => setView('dashboard')}
-            >
-              Dashboard
-            </button>
-            <button
-              className={`ehc-tab ${view === 'points' ? 'active' : ''}`}
-              onClick={() => setView('points')}
-            >
-              Audit Points
-            </button>
-            <button
-              className={`ehc-tab ${view === 'records' ? 'active' : ''}`}
-              onClick={() => setView('records')}
-            >
-              Records
-            </button>
-            <button
-              className={`ehc-tab ${view === 'forms' ? 'active' : ''}`}
-              onClick={() => setView('forms')}
-            >
-              Forms
-            </button>
-            <button
-              className={`ehc-tab ${view === 'settings' ? 'active' : ''}`}
-              onClick={() => setView('settings')}
-            >
-              Settings
-            </button>
+            {/* 5-Tab Navigation */}
+            <div className="view-tabs">
+              <button
+                className={`view-tab ${view === 'dashboard' ? 'active' : ''}`}
+                onClick={() => setView('dashboard')}
+              >
+                Dashboard
+              </button>
+              <button
+                className={`view-tab ${view === 'points' ? 'active' : ''}`}
+                onClick={() => setView('points')}
+              >
+                Audit Points
+              </button>
+              <button
+                className={`view-tab ${view === 'records' ? 'active' : ''}`}
+                onClick={() => setView('records')}
+              >
+                Records
+              </button>
+              <button
+                className={`view-tab ${view === 'forms' ? 'active' : ''}`}
+                onClick={() => setView('forms')}
+              >
+                Forms
+              </button>
+              <button
+                className={`view-tab ${view === 'settings' ? 'active' : ''}`}
+                onClick={() => setView('settings')}
+              >
+                Settings
+              </button>
+            </div>
           </div>
         </div>
       </div>
