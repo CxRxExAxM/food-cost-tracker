@@ -853,6 +853,9 @@ def update_form_link(
     current_user: dict = Depends(get_current_user)
 ):
     """Update a form link (deactivate, change expiry, update config)."""
+    import json
+    from psycopg2.extras import Json
+
     org_id = current_user["organization_id"]
 
     with get_db() as conn:
@@ -884,7 +887,11 @@ def update_form_link(
         params = []
         for field, value in update_dict.items():
             update_fields.append(f"{field} = %s")
-            params.append(value)
+            # Wrap dict/list values with Json for proper PostgreSQL JSON serialization
+            if isinstance(value, (dict, list)):
+                params.append(Json(value))
+            else:
+                params.append(value)
 
         update_fields.append("updated_at = NOW()")
         params.append(link_id)

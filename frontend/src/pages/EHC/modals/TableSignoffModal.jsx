@@ -1,11 +1,13 @@
 /**
- * Sign-off Form Creation Modal
+ * Sign-off Form Creation/Edit Modal
  *
  * Flexible form builder for any sign-off needs:
  * - Configure custom columns (text, date, signature)
  * - Optionally pre-fill rows
  * - Optionally attach a reference PDF
  * - Staff view form and sign
+ *
+ * Edit mode: Pass editingLink prop with existing form data
  */
 
 import { useState, useEffect } from 'react';
@@ -28,34 +30,69 @@ export default function TableSignoffModal({
   activeCycle,
   records,
   onFormCreated,
+  editingLink,  // Optional: existing form link data for edit mode
   toast
 }) {
+  const isEditMode = !!editingLink;
+
   const [step, setStep] = useState(1); // 1: Select record, 2: Configure form, 3: Add rows
   const [selectedRecord, setSelectedRecord] = useState(null);
   const [title, setTitle] = useState('');
   const [introText, setIntroText] = useState('');
   const [columns, setColumns] = useState([...DEFAULT_COLUMNS]);
   const [rows, setRows] = useState([]);
+  const [expectedResponses, setExpectedResponses] = useState('');
   const [creating, setCreating] = useState(false);
 
   // PDF upload state
   const [pdfFile, setPdfFile] = useState(null);
   const [uploadingPdf, setUploadingPdf] = useState(false);
   const [uploadedPdfPath, setUploadedPdfPath] = useState(null);
+  const [existingPdfName, setExistingPdfName] = useState(null);
 
-  // Reset state when modal opens
+  // Reset/populate state when modal opens
   useEffect(() => {
     if (isOpen) {
-      setStep(1);
-      setSelectedRecord(null);
-      setTitle('');
-      setIntroText('');
-      setColumns([...DEFAULT_COLUMNS]);
-      setRows([]);
-      setPdfFile(null);
-      setUploadedPdfPath(null);
+      if (editingLink) {
+        // Edit mode: populate from existing data
+        setStep(2); // Skip record selection
+        setSelectedRecord({
+          id: editingLink.record_id,
+          record_number: editingLink.record_number,
+          name: editingLink.record_name
+        });
+        setTitle(editingLink.title || '');
+        setIntroText(editingLink.config?.intro_text || '');
+        setColumns(editingLink.config?.columns || [...DEFAULT_COLUMNS]);
+        setRows(editingLink.config?.rows || []);
+        setExpectedResponses(editingLink.expected_responses?.toString() || '');
+
+        // Handle existing PDF
+        if (editingLink.config?.document_path) {
+          setUploadedPdfPath(editingLink.config.document_path);
+          // Extract filename from path
+          const pathParts = editingLink.config.document_path.split('/');
+          setExistingPdfName(pathParts[pathParts.length - 1]);
+        } else {
+          setUploadedPdfPath(null);
+          setExistingPdfName(null);
+        }
+        setPdfFile(null);
+      } else {
+        // Create mode: reset to defaults
+        setStep(1);
+        setSelectedRecord(null);
+        setTitle('');
+        setIntroText('');
+        setColumns([...DEFAULT_COLUMNS]);
+        setRows([]);
+        setExpectedResponses('');
+        setPdfFile(null);
+        setUploadedPdfPath(null);
+        setExistingPdfName(null);
+      }
     }
-  }, [isOpen]);
+  }, [isOpen, editingLink]);
 
   function addColumn() {
     const newKey = `col_${columns.length}`;
@@ -155,9 +192,10 @@ export default function TableSignoffModal({
   function removePdf() {
     setPdfFile(null);
     setUploadedPdfPath(null);
+    setExistingPdfName(null);
   }
 
-  async function handleCreate() {
+  async function handleSubmit() {
     const validColumns = columns.filter(c => c.label.trim());
     if (validColumns.length < 2) {
       toast?.error?.('Add at least 2 columns (including signature)');
@@ -180,24 +218,47 @@ export default function TableSignoffModal({
         property_name: 'Fairmont Scottsdale Princess' // TODO: Get from org settings
       };
 
-      const payload = {
-        form_type: 'table_signoff',
-        record_id: selectedRecord.id,
-        title: title || `${selectedRecord.name} - EHC ${activeCycle.year}`,
-        config,
-        expected_responses: rows.length > 0 ? rows.length : null
-      };
+      // Determine expected responses: use explicit value, fall back to row count, or null
+      const expResp = expectedResponses
+        ? parseInt(expectedResponses)
+        : (rows.length > 0 ? rows.length : null);
 
-      const data = await fetchWithAuth(`${API_BASE}/cycles/${activeCycle.id}/form-links`, {
-        method: 'POST',
-        body: JSON.stringify(payload)
-      });
+      if (isEditMode) {
+        // PATCH existing form link
+        const payload = {
+          title: title || `${selectedRecord.name} - EHC ${activeCycle.year}`,
+          config,
+          expected_responses: expResp
+        };
 
-      toast?.success?.('Form created successfully');
-      onFormCreated?.(data);
+        await fetchWithAuth(`${API_BASE}/form-links/${editingLink.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify(payload)
+        });
+
+        toast?.success?.('Form updated successfully');
+      } else {
+        // POST new form link
+        const payload = {
+          form_type: 'table_signoff',
+          record_id: selectedRecord.id,
+          title: title || `${selectedRecord.name} - EHC ${activeCycle.year}`,
+          config,
+          expected_responses: expResp
+        };
+
+        await fetchWithAuth(`${API_BASE}/cycles/${activeCycle.id}/form-links`, {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        });
+
+        toast?.success?.('Form created successfully');
+      }
+
+      onFormCreated?.();
       onClose();
     } catch (error) {
-      toast?.error?.(error.message || 'Failed to create form');
+      toast?.error?.(error.message || `Failed to ${isEditMode ? 'update' : 'create'} form`);
     } finally {
       setCreating(false);
     }
@@ -209,7 +270,7 @@ export default function TableSignoffModal({
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content form-create-modal extra-wide" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
-          <h3>Create Sign-off Form</h3>
+          <h3>{isEditMode ? 'Edit Sign-off Form' : 'Create Sign-off Form'}</h3>
           <button className="modal-close" onClick={onClose}>&times;</button>
         </div>
 
@@ -252,7 +313,9 @@ export default function TableSignoffModal({
             <div className="selected-record-banner">
               <span className="record-number">{selectedRecord.record_number}</span>
               <span className="record-name">{selectedRecord.name}</span>
-              <button className="btn-link" onClick={() => setStep(1)}>Change</button>
+              {!isEditMode && (
+                <button className="btn-link" onClick={() => setStep(1)}>Change</button>
+              )}
             </div>
 
             <div className="form-field">
@@ -292,6 +355,19 @@ export default function TableSignoffModal({
                     className="btn-icon danger"
                     onClick={removePdf}
                     disabled={uploadingPdf}
+                    title="Remove"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ) : existingPdfName ? (
+                <div className="uploaded-file">
+                  <span className="file-icon">📄</span>
+                  <span className="file-name">{existingPdfName}</span>
+                  <span className="file-size existing">Attached</span>
+                  <button
+                    className="btn-icon danger"
+                    onClick={removePdf}
                     title="Remove"
                   >
                     ✕
@@ -435,14 +511,35 @@ export default function TableSignoffModal({
               </button>
             </div>
 
+            {/* Expected Responses (in edit mode, show explicitly) */}
+            {isEditMode && (
+              <div className="form-field">
+                <label>Expected Responses (optional)</label>
+                <input
+                  type="number"
+                  value={expectedResponses}
+                  onChange={e => setExpectedResponses(e.target.value)}
+                  placeholder="Leave empty for unlimited"
+                  min="1"
+                  style={{ maxWidth: '200px' }}
+                />
+                <p className="field-hint">
+                  If set, a progress bar shows completion status.
+                </p>
+              </div>
+            )}
+
             <div className="modal-actions">
               <button className="btn-ghost" onClick={() => setStep(2)}>Back</button>
               <button
                 className="btn-primary"
-                onClick={handleCreate}
+                onClick={handleSubmit}
                 disabled={creating}
               >
-                {creating ? 'Creating...' : 'Create Form'}
+                {creating
+                  ? (isEditMode ? 'Saving...' : 'Creating...')
+                  : (isEditMode ? 'Save Changes' : 'Create Form')
+                }
               </button>
             </div>
           </div>
