@@ -20,6 +20,7 @@ from ..utils.qr_generator import generate_form_qr, generate_form_url, generate_q
 from ..services.pdf_generator import (
     generate_record_11_pdf,
     generate_record_35_pdf,
+    generate_table_signoff_pdf,
     generate_flyer_pdf
 )
 from fastapi import Depends
@@ -1126,6 +1127,23 @@ def generate_form_pdf(
                 responses=responses
             )
             filename = f"Record_35_Food_Safety_Team_{cycle_year}.pdf"
+
+        elif form_type == 'table_signoff':
+            columns = config.get('columns', [])
+            rows = config.get('rows', [])
+            intro_text = config.get('intro_text', '')
+            pdf_bytes = generate_table_signoff_pdf(
+                title=title,
+                property_name=property_name,
+                cycle_year=cycle_year,
+                columns=columns,
+                rows=rows,
+                responses=responses,
+                intro_text=intro_text
+            )
+            # Create safe filename from title
+            safe_title = "".join(c for c in title if c.isalnum() or c in ' -_')[:50]
+            filename = f"{safe_title}_{cycle_year}.pdf"
 
         else:
             raise HTTPException(

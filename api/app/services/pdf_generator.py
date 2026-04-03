@@ -366,6 +366,165 @@ def generate_record_35_pdf(
 
 
 # ============================================
+# Generic Table Sign-off PDF
+# ============================================
+
+def generate_table_signoff_pdf(
+    title: str,
+    property_name: str,
+    cycle_year: int,
+    columns: List[Dict[str, Any]],
+    rows: List[Dict[str, Any]],
+    responses: List[Dict[str, Any]],
+    intro_text: Optional[str] = None
+) -> bytes:
+    """
+    Generate PDF for generic table sign-off forms.
+
+    Uses dynamic columns from config to build the table.
+    Matches responses to rows by name column.
+    """
+    buffer = BytesIO()
+    styles = get_styles()
+
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=letter,
+        rightMargin=0.5*inch,
+        leftMargin=0.5*inch,
+        topMargin=0.75*inch,
+        bottomMargin=0.75*inch
+    )
+
+    elements = []
+
+    # Header
+    elements.append(Paragraph(f"{property_name}", styles['EHCSubtitle']))
+    elements.append(Paragraph(title, styles['EHCTitle']))
+    elements.append(Paragraph(f"EHC Audit Cycle {cycle_year}", styles['EHCSubtitle']))
+    elements.append(Spacer(1, 0.25*inch))
+
+    # Intro text if provided
+    if intro_text:
+        elements.append(Paragraph(intro_text, styles['EHCBody']))
+        elements.append(Spacer(1, 0.25*inch))
+
+    # Build response lookup by name (case-insensitive)
+    response_lookup = {}
+    for resp in responses:
+        name_key = resp.get('respondent_name', '').strip().lower()
+        response_lookup[name_key] = resp
+
+    # Build table headers from columns
+    non_sig_columns = [c for c in columns if c.get('type') != 'signature']
+    header_row = [c.get('label', c.get('key', '')) for c in non_sig_columns]
+    header_row.append('Signature')  # Always add signature column at end
+
+    table_data = [header_row]
+
+    # Determine if we have pre-filled rows or use responses directly
+    if rows and len(rows) > 0:
+        # Pre-filled rows mode: show all rows, match signatures
+        for row in rows:
+            row_data = []
+            name_value = ''
+
+            for col in non_sig_columns:
+                key = col.get('key', '')
+                value = row.get(key, '')
+                row_data.append(Paragraph(str(value), styles['EHCBody']))
+
+                # Track name for signature lookup
+                if col.get('type') == 'text' and key in ['name', 'col_0']:
+                    name_value = value
+
+            # Look up signature
+            name_key = name_value.strip().lower() if name_value else ''
+            resp = response_lookup.get(name_key, {})
+            sig_data = resp.get('signature_data', '')
+            sig_img = decode_signature_image(sig_data, max_width=1.2*inch, max_height=0.4*inch)
+
+            row_data.append(sig_img if sig_img else Paragraph('—', styles['EHCSmall']))
+            table_data.append(row_data)
+    else:
+        # No pre-filled rows: show responses directly
+        for resp in responses:
+            row_data = []
+            resp_data = resp.get('response_data', {}) or {}
+            if isinstance(resp_data, str):
+                import json
+                resp_data = json.loads(resp_data)
+            row_values = resp_data.get('row_data', {})
+
+            for col in non_sig_columns:
+                key = col.get('key', '')
+                # Try row_data first, then respondent_name for name column
+                value = row_values.get(key, '')
+                if not value and key in ['name', 'col_0']:
+                    value = resp.get('respondent_name', '')
+                row_data.append(Paragraph(str(value), styles['EHCBody']))
+
+            # Add signature
+            sig_data = resp.get('signature_data', '')
+            sig_img = decode_signature_image(sig_data, max_width=1.2*inch, max_height=0.4*inch)
+            row_data.append(sig_img if sig_img else Paragraph('—', styles['EHCSmall']))
+
+            table_data.append(row_data)
+
+    # Calculate column widths dynamically
+    num_cols = len(header_row)
+    available_width = 7 * inch  # Letter width minus margins
+    sig_col_width = 1.5 * inch
+    remaining_width = available_width - sig_col_width
+    other_col_width = remaining_width / (num_cols - 1) if num_cols > 1 else remaining_width
+
+    col_widths = [other_col_width] * (num_cols - 1) + [sig_col_width]
+
+    table = Table(table_data, colWidths=col_widths, repeatRows=1)
+
+    table.setStyle(TableStyle([
+        # Header
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#f0f0f0')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.HexColor('#333333')),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 9),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+        ('TOPPADDING', (0, 0), (-1, 0), 8),
+
+        # Body
+        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 1), (-1, -1), 9),
+        ('TOPPADDING', (0, 1), (-1, -1), 8),
+        ('BOTTOMPADDING', (0, 1), (-1, -1), 8),
+
+        # Grid
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#cccccc')),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+
+        # Alternating row colors
+        *[('BACKGROUND', (0, i), (-1, i), colors.HexColor('#fafafa'))
+          for i in range(2, len(table_data), 2)]
+    ]))
+
+    elements.append(table)
+    elements.append(Spacer(1, 0.5*inch))
+
+    # Footer
+    signed_count = len(responses)
+    total_rows = len(rows) if rows else signed_count
+    generated_at = datetime.now().strftime('%B %d, %Y at %H:%M')
+
+    elements.append(Paragraph(
+        f"Generated: {generated_at} | Signatures: {signed_count}/{total_rows} | "
+        f"Document: Table Sign-off",
+        styles['EHCFooter']
+    ))
+
+    doc.build(elements)
+    return buffer.getvalue()
+
+
+# ============================================
 # Flyer PDF with QR Code
 # ============================================
 
