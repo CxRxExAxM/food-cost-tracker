@@ -396,14 +396,6 @@ export default function Forms({ activeCycle, toast }) {
                 <option value="active">Active Only</option>
                 <option value="inactive">Inactive Only</option>
               </select>
-
-              <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
-                <option value="all">All Types</option>
-                <option value="staff_declaration">Staff Declaration</option>
-                <option value="team_roster">Team Roster</option>
-                <option value="simple_signoff">Simple Sign-off</option>
-                <option value="table_signoff">Table Sign-off</option>
-              </select>
             </div>
           </div>
 
