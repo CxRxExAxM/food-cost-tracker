@@ -256,6 +256,120 @@ export default function Forms({ activeCycle, toast }) {
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
+  // Render responses table dynamically based on form type
+  const renderResponsesTable = (link, respList) => {
+    // For table_signoff, use dynamic columns from config
+    if (link.form_type === 'table_signoff' && link.config?.columns) {
+      const columns = link.config.columns.filter(c => c.type !== 'signature');
+      return (
+        <table className="responses-table">
+          <thead>
+            <tr>
+              {columns.map(col => (
+                <th key={col.key}>{col.label || col.key}</th>
+              ))}
+              <th>Signed</th>
+              <th>Signature</th>
+            </tr>
+          </thead>
+          <tbody>
+            {respList.map(resp => (
+              <tr key={resp.id}>
+                {columns.map(col => (
+                  <td key={col.key}>
+                    {resp.response_data?.row_data?.[col.key] || resp.respondent_name || '-'}
+                  </td>
+                ))}
+                <td>{formatDate(resp.submitted_at)}</td>
+                <td>
+                  {resp.signature_data && (
+                    <img
+                      src={resp.signature_data.startsWith('data:')
+                        ? resp.signature_data
+                        : `data:image/png;base64,${resp.signature_data}`}
+                      alt="Signature"
+                      className="signature-preview"
+                    />
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      );
+    }
+
+    // For team_roster, show name, position, department
+    if (link.form_type === 'team_roster') {
+      return (
+        <table className="responses-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Position</th>
+              <th>Department</th>
+              <th>Signed</th>
+              <th>Signature</th>
+            </tr>
+          </thead>
+          <tbody>
+            {respList.map(resp => (
+              <tr key={resp.id}>
+                <td>{resp.respondent_name}</td>
+                <td>{resp.respondent_role || '-'}</td>
+                <td>{resp.respondent_dept || '-'}</td>
+                <td>{formatDate(resp.submitted_at)}</td>
+                <td>
+                  {resp.signature_data && (
+                    <img
+                      src={resp.signature_data.startsWith('data:')
+                        ? resp.signature_data
+                        : `data:image/png;base64,${resp.signature_data}`}
+                      alt="Signature"
+                      className="signature-preview"
+                    />
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      );
+    }
+
+    // Default: staff_declaration and others - just name and signature
+    return (
+      <table className="responses-table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Signed</th>
+            <th>Signature</th>
+          </tr>
+        </thead>
+        <tbody>
+          {respList.map(resp => (
+            <tr key={resp.id}>
+              <td>{resp.respondent_name}</td>
+              <td>{formatDate(resp.submitted_at)}</td>
+              <td>
+                {resp.signature_data && (
+                  <img
+                    src={resp.signature_data.startsWith('data:')
+                      ? resp.signature_data
+                      : `data:image/png;base64,${resp.signature_data}`}
+                    alt="Signature"
+                    className="signature-preview"
+                  />
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    );
+  };
+
   if (loading) {
     return (
       <div className="forms-view">
@@ -448,38 +562,7 @@ export default function Forms({ activeCycle, toast }) {
 
                           {responses[link.id]?.length > 0 ? (
                             <div className="responses-table-wrapper">
-                              <table className="responses-table">
-                                <thead>
-                                  <tr>
-                                    <th>Name</th>
-                                    <th>Role</th>
-                                    <th>Department</th>
-                                    <th>Signed</th>
-                                    <th>Signature</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {responses[link.id].map(resp => (
-                                    <tr key={resp.id}>
-                                      <td>{resp.respondent_name}</td>
-                                      <td>{resp.respondent_role || '-'}</td>
-                                      <td>{resp.respondent_dept || '-'}</td>
-                                      <td>{formatDate(resp.submitted_at)}</td>
-                                      <td>
-                                        {resp.signature_data && (
-                                          <img
-                                            src={resp.signature_data.startsWith('data:')
-                                              ? resp.signature_data
-                                              : `data:image/png;base64,${resp.signature_data}`}
-                                            alt="Signature"
-                                            className="signature-preview"
-                                          />
-                                        )}
-                                      </td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
+                              {renderResponsesTable(link, responses[link.id])}
                             </div>
                           ) : (
                             <p className="no-responses">No responses yet.</p>
