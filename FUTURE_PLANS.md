@@ -1,6 +1,6 @@
 # Future Plans: RestauranTek Platform
 
-**Date:** April 2, 2026
+**Date:** April 3, 2026
 **Status:** Active Development
 **Timeline:** Ongoing
 
@@ -11,13 +11,22 @@
 This document outlines the technical roadmap for RestauranTek, covering both near-term enhancements and long-term platform evolution.
 
 **Current Focus:**
-1. EHC Digital Forms - Tablet-friendly audit walk interface
+1. EHC Settings Tab - Outlets, contacts, responsibility coding
 2. AI Recipe Parser enhancements - Method step parsing
 3. Potentials Phase 2 - Group resume ingestion and daily briefs
 
 ---
 
 ## Recently Completed (Reference)
+
+### EHC Digital Forms ✅ (April 2026)
+- **Flexible Form Builder:** Configurable table sign-off forms with dynamic columns
+- **Form→Submission Lifecycle:** Auto-creates submission, tracks progress, auto-updates status
+- **Public Form Page:** Token-based access, no authentication required
+- **Signature Collection:** Touch-friendly canvas with scroll-to-sign gate
+- **PDF Generation:** Dynamic table rendering from form config
+- **Deep Edit Mode:** Modify columns, rows, intro text, PDF attachment after creation
+- **Admin Workbench:** Forms tab with progress tracking, QR codes, flyers
 
 ### EHC Module ✅ (March-April 2026)
 - Full audit cycle management with 6-section hierarchy (144 audit points)
@@ -50,17 +59,22 @@ This document outlines the technical roadmap for RestauranTek, covering both nea
 
 ## Near-Term Priorities
 
-### 1. EHC Digital Forms (Next)
+### 1. EHC Settings Tab (Next)
 
-**Tablet-Friendly Audit Walk Interface:**
-- Dedicated walk mode optimized for iPad/tablet use
-- Section-by-section navigation during physical walkthrough
-- Quick status toggles (pass/fail/flag)
-- Photo capture for evidence documentation
-- Offline capability with sync on reconnect
-- Touch-friendly UI with large tap targets
+**Outlet Management:**
+- Configure which outlets participate in EHC
+- Outlet book vs office book designation
+- Per-outlet record requirements (which records apply where)
 
-**See:** `docs/EHC_DIGITAL_FORMS_PLAN.md` for full specification
+**Contacts:**
+- Property contacts for audit coordination
+- Emergency contacts for compliance issues
+- Auditor contact information
+
+**Responsibility Coding:**
+- Define responsibility codes (KC, STWD, F&B, etc.)
+- Assign default responsibility per record
+- Filter records/submissions by responsible party
 
 ### 2. AI Recipe Parser Enhancements
 
@@ -280,7 +294,8 @@ api/app/routers/
 ## Action Items
 
 ### This Month (April 2026)
-- [ ] EHC Digital Forms implementation
+- [x] EHC Digital Forms implementation ✅
+- [ ] EHC Settings Tab (outlets, contacts, responsibility coding)
 - [ ] Method step parsing for AI parser
 - [ ] Group resume ingestion planning
 
@@ -296,6 +311,6 @@ api/app/routers/
 
 ---
 
-**Document Version:** 2.1
-**Last Updated:** April 2, 2026
-**Next Review:** After EHC Digital Forms completion
+**Document Version:** 2.2
+**Last Updated:** April 3, 2026
+**Next Review:** After EHC Settings Tab completion
