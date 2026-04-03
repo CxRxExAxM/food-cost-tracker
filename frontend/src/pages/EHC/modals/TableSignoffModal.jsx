@@ -225,6 +225,12 @@ export default function TableSignoffModal({
             <div className="form-field">
               <label>Table Columns</label>
               <div className="columns-editor">
+                <div className="columns-header">
+                  <span></span>
+                  <span>Column Label</span>
+                  <span>Type</span>
+                  <span></span>
+                </div>
                 {columns.map((col, index) => (
                   <div key={index} className="column-row">
                     <button

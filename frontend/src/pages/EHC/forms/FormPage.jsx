@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import axios from '../../../lib/axios';
 import StaffDeclarationForm from './StaffDeclarationForm';
 import TeamRosterForm from './TeamRosterForm';
+import TableSignoffForm from './TableSignoffForm';
 import { CheckCircle, AlertTriangle, Clock } from 'lucide-react';
 import './FormPage.css';
 
@@ -184,6 +185,16 @@ export default function FormPage() {
       case 'team_roster':
         return (
           <TeamRosterForm
+            config={config}
+            existingResponses={responses}
+            onSubmit={handleSubmit}
+            submitting={submitting}
+          />
+        );
+
+      case 'table_signoff':
+        return (
+          <TableSignoffForm
             config={config}
             existingResponses={responses}
             onSubmit={handleSubmit}

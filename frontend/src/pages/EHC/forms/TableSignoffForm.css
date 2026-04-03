@@ -1,0 +1,245 @@
+/* Table Sign-off Form Styles */
+
+.table-signoff-form {
+  padding: 0;
+}
+
+.table-signoff-form .form-header {
+  text-align: center;
+  padding: 24px 20px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.table-signoff-form .form-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #111827;
+  margin: 0 0 8px;
+}
+
+.table-signoff-form .form-meta {
+  font-size: 0.875rem;
+  color: #6b7280;
+}
+
+.table-signoff-form .form-intro {
+  padding: 16px 20px;
+  background: #f9fafb;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.table-signoff-form .form-intro p {
+  margin: 0;
+  font-size: 0.875rem;
+  color: #374151;
+  line-height: 1.5;
+}
+
+.table-signoff-form .response-count {
+  padding: 12px 20px;
+  font-size: 0.875rem;
+  color: #6b7280;
+  background: #f3f4f6;
+  text-align: center;
+}
+
+/* Completion Banner */
+.table-signoff-form .completion-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 20px;
+  background: #d1fae5;
+  color: #065f46;
+  font-weight: 500;
+  font-size: 0.875rem;
+}
+
+/* Progress */
+.table-signoff-form .roster-progress {
+  padding: 16px 20px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.table-signoff-form .progress-count {
+  display: block;
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin-bottom: 8px;
+}
+
+.table-signoff-form .progress-bar {
+  height: 6px;
+  background: #e5e7eb;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.table-signoff-form .progress-fill {
+  height: 100%;
+  background: #10b981;
+  transition: width 0.3s ease;
+}
+
+/* Table Container */
+.table-signoff-container {
+  overflow-x: auto;
+  padding: 0 20px;
+}
+
+.signoff-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.signoff-table th {
+  text-align: left;
+  padding: 12px;
+  background: #f9fafb;
+  border-bottom: 2px solid #e5e7eb;
+  font-weight: 600;
+  color: #374151;
+  white-space: nowrap;
+}
+
+.signoff-table td {
+  padding: 12px;
+  border-bottom: 1px solid #e5e7eb;
+  color: #111827;
+}
+
+.signoff-table tr.active-row {
+  background: #eff6ff;
+}
+
+.signoff-table .signature-cell {
+  width: 100px;
+  text-align: center;
+}
+
+/* Sign Button */
+.table-signoff-form .btn-sign {
+  padding: 6px 16px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.table-signoff-form .btn-sign:hover {
+  background: #2563eb;
+}
+
+.table-signoff-form .btn-sign.active {
+  background: #6b7280;
+}
+
+/* Signed Indicator */
+.table-signoff-form .signed-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #059669;
+  font-weight: 500;
+  font-size: 0.875rem;
+}
+
+/* Inline Signature Area */
+.table-signoff-form .inline-signature-area {
+  margin: 20px;
+  padding: 20px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+}
+
+.table-signoff-form .signing-for {
+  margin-bottom: 16px;
+  font-size: 0.875rem;
+  color: #374151;
+}
+
+.table-signoff-form .signing-for strong {
+  color: #111827;
+}
+
+.table-signoff-form .btn-submit-signature {
+  display: block;
+  width: 100%;
+  padding: 12px 24px;
+  margin-top: 16px;
+  font-size: 1rem;
+  font-weight: 600;
+  background: #10b981;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.table-signoff-form .btn-submit-signature:hover:not(:disabled) {
+  background: #059669;
+}
+
+.table-signoff-form .btn-submit-signature:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+}
+
+/* Self-fill Form */
+.self-fill-form {
+  padding: 20px;
+}
+
+.self-fill-form h3 {
+  margin: 0 0 16px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #111827;
+}
+
+.self-fill-form .form-field {
+  margin-bottom: 16px;
+}
+
+.self-fill-form .form-field label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 6px;
+}
+
+.self-fill-form .form-field input {
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 1rem;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  color: #111827;
+}
+
+.self-fill-form .form-field input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.self-fill-form .signature-section {
+  margin-top: 24px;
+}
+
+.self-fill-form .signature-section label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 8px;
+}
