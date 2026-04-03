@@ -2,6 +2,7 @@
  * Forms Tab Component
  *
  * Admin workbench for digital form management:
+ * - Create new forms from template gallery
  * - View all form links for the current cycle
  * - Track response progress
  * - Quick actions: QR, Flyer, Responses, Deactivate
@@ -12,20 +13,30 @@ import {
   API_BASE,
   fetchWithAuth,
 } from './shared';
+import SimpleSignoffModal from '../modals/SimpleSignoffModal';
+import StaffDeclarationModal from '../modals/StaffDeclarationModal';
+import TeamRosterModal from '../modals/TeamRosterModal';
 
 export default function Forms({ activeCycle, toast }) {
   const [formLinks, setFormLinks] = useState([]);
+  const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('all'); // 'all', 'active', 'inactive'
-  const [typeFilter, setTypeFilter] = useState('all'); // 'all', 'staff_declaration', 'team_roster'
+  const [filter, setFilter] = useState('all');
+  const [typeFilter, setTypeFilter] = useState('all');
   const [expandedLink, setExpandedLink] = useState(null);
   const [responses, setResponses] = useState({});
   const [loadingResponses, setLoadingResponses] = useState(null);
 
-  // Load form links when cycle changes
+  // Modal state
+  const [showSimpleSignoff, setShowSimpleSignoff] = useState(false);
+  const [showStaffDeclaration, setShowStaffDeclaration] = useState(false);
+  const [showTeamRoster, setShowTeamRoster] = useState(false);
+
+  // Load form links and records when cycle changes
   useEffect(() => {
     if (activeCycle?.id) {
       loadFormLinks();
+      loadRecords();
     }
   }, [activeCycle?.id]);
 
@@ -42,11 +53,17 @@ export default function Forms({ activeCycle, toast }) {
     }
   }
 
-  async function loadResponses(linkId) {
-    if (responses[linkId]) {
-      // Already loaded
-      return;
+  async function loadRecords() {
+    try {
+      const data = await fetchWithAuth(`${API_BASE}/cycles/${activeCycle.id}/records`);
+      setRecords(data.data || []);
+    } catch (error) {
+      console.error('Failed to load records:', error);
     }
+  }
+
+  async function loadResponses(linkId) {
+    if (responses[linkId]) return;
     try {
       setLoadingResponses(linkId);
       const data = await fetchWithAuth(`${API_BASE}/form-links/${linkId}/responses`);
@@ -75,9 +92,7 @@ export default function Forms({ activeCycle, toast }) {
   async function downloadQR(link) {
     try {
       const response = await fetch(`/api/ehc/form-links/${link.id}/qr`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
       });
       if (!response.ok) throw new Error('Failed to download QR');
       const blob = await response.blob();
@@ -95,9 +110,7 @@ export default function Forms({ activeCycle, toast }) {
   async function downloadFlyer(link) {
     try {
       const response = await fetch(`/api/ehc/form-links/${link.id}/flyer`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
       });
       if (!response.ok) throw new Error('Failed to download flyer');
       const blob = await response.blob();
@@ -116,9 +129,7 @@ export default function Forms({ activeCycle, toast }) {
     try {
       const response = await fetch(`/api/ehc/form-links/${link.id}/generate-pdf`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
       });
       if (!response.ok) throw new Error('Failed to generate PDF');
       const blob = await response.blob();
@@ -148,6 +159,10 @@ export default function Forms({ activeCycle, toast }) {
     }
   }
 
+  function handleFormCreated() {
+    loadFormLinks();
+  }
+
   // Filter links
   const filteredLinks = formLinks.filter(link => {
     if (filter === 'active' && !link.is_active) return false;
@@ -170,6 +185,7 @@ export default function Forms({ activeCycle, toast }) {
     switch (type) {
       case 'staff_declaration': return 'Staff Declaration';
       case 'team_roster': return 'Team Roster';
+      case 'simple_signoff': return 'Simple Sign-off';
       case 'checklist': return 'Checklist';
       default: return type;
     }
@@ -189,222 +205,254 @@ export default function Forms({ activeCycle, toast }) {
     );
   }
 
-  if (formLinks.length === 0) {
-    return (
-      <div className="forms-view">
-        <div className="forms-empty">
-          <h2>No Form Links Yet</h2>
-          <p>Create form links from the Records tab by clicking the link icon (🔗) on any record submission.</p>
-          <div className="empty-features">
-            <div className="feature">
-              <span className="feature-icon">📋</span>
-              <div>
-                <strong>Record 11</strong>
-                <p>Staff Food Safety Declaration — collect signatures from 50–100 staff</p>
-              </div>
+  return (
+    <div className="forms-view">
+      {/* Template Gallery - Create New Forms */}
+      <div className="template-gallery">
+        <h3>Create New Form</h3>
+        <div className="template-cards">
+          <div
+            className="template-card"
+            onClick={() => setShowStaffDeclaration(true)}
+          >
+            <span className="template-icon">📋</span>
+            <div className="template-info">
+              <strong>Staff Declaration</strong>
+              <p>Collect acknowledgment signatures from all staff (Record 11)</p>
             </div>
-            <div className="feature">
-              <span className="feature-icon">👥</span>
-              <div>
-                <strong>Record 35</strong>
-                <p>Food Safety Team Record — collect signatures from team members</p>
-              </div>
+          </div>
+
+          <div
+            className="template-card"
+            onClick={() => setShowTeamRoster(true)}
+          >
+            <span className="template-icon">👥</span>
+            <div className="template-info">
+              <strong>Team Roster</strong>
+              <p>Food Safety Team sign-off with configured members (Record 35)</p>
+            </div>
+          </div>
+
+          <div
+            className="template-card"
+            onClick={() => setShowSimpleSignoff(true)}
+          >
+            <span className="template-icon">📄</span>
+            <div className="template-info">
+              <strong>Simple Sign-off</strong>
+              <p>Upload any PDF document for staff to read and sign</p>
+            </div>
+          </div>
+
+          <div className="template-card disabled">
+            <span className="template-icon">✅</span>
+            <div className="template-info">
+              <strong>Checklist</strong>
+              <p>Coming soon - dynamic checklist forms</p>
             </div>
           </div>
         </div>
       </div>
-    );
-  }
 
-  return (
-    <div className="forms-view">
-      {/* Header with filters */}
-      <div className="forms-header">
-        <div className="forms-stats">
-          <span className="stat-item">
-            <strong>{formLinks.length}</strong> form links
-          </span>
-          <span className="stat-item">
-            <strong>{formLinks.filter(l => l.is_active).length}</strong> active
-          </span>
-          <span className="stat-item">
-            <strong>{formLinks.reduce((sum, l) => sum + (l.response_count || 0), 0)}</strong> total responses
-          </span>
-        </div>
-
-        <div className="forms-filters">
-          <select value={filter} onChange={e => setFilter(e.target.value)}>
-            <option value="all">All Links</option>
-            <option value="active">Active Only</option>
-            <option value="inactive">Inactive Only</option>
-          </select>
-
-          <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
-            <option value="all">All Types</option>
-            <option value="staff_declaration">Staff Declaration</option>
-            <option value="team_roster">Team Roster</option>
-          </select>
-        </div>
-      </div>
-
-      {/* Form Links by Record */}
-      <div className="forms-list">
-        {Object.values(groupedLinks).map(group => (
-          <div key={group.record_number} className="forms-record-group">
-            <div className="record-group-header">
-              <span className="record-number">{group.record_number}</span>
-              <span className="record-name">{group.record_name}</span>
-              <span className="link-count">{group.links.length} link{group.links.length !== 1 ? 's' : ''}</span>
+      {/* Existing Form Links */}
+      {formLinks.length > 0 ? (
+        <>
+          {/* Header with filters */}
+          <div className="forms-header">
+            <div className="forms-stats">
+              <span className="stat-item">
+                <strong>{formLinks.length}</strong> form links
+              </span>
+              <span className="stat-item">
+                <strong>{formLinks.filter(l => l.is_active).length}</strong> active
+              </span>
+              <span className="stat-item">
+                <strong>{formLinks.reduce((sum, l) => sum + (l.response_count || 0), 0)}</strong> total responses
+              </span>
             </div>
 
-            {group.links.map(link => (
-              <div key={link.id} className={`form-link-card ${!link.is_active ? 'inactive' : ''}`}>
-                <div className="form-link-header" onClick={() => handleExpandLink(link.id)}>
-                  <div className="form-link-info">
-                    <span className={`form-type-badge ${link.form_type}`}>
-                      {formTypeLabel(link.form_type)}
-                    </span>
-                    <span className="form-link-title">{link.title}</span>
-                    {!link.is_active && <span className="inactive-badge">Inactive</span>}
-                  </div>
+            <div className="forms-filters">
+              <select value={filter} onChange={e => setFilter(e.target.value)}>
+                <option value="all">All Links</option>
+                <option value="active">Active Only</option>
+                <option value="inactive">Inactive Only</option>
+              </select>
 
-                  <div className="form-link-progress">
-                    <div className="progress-text">
-                      <strong>{link.response_count || 0}</strong>
-                      {link.expected_responses && (
-                        <span> / {link.expected_responses}</span>
-                      )}
-                      <span className="responses-label"> responses</span>
+              <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
+                <option value="all">All Types</option>
+                <option value="staff_declaration">Staff Declaration</option>
+                <option value="team_roster">Team Roster</option>
+                <option value="simple_signoff">Simple Sign-off</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Form Links by Record */}
+          <div className="forms-list">
+            {Object.values(groupedLinks).map(group => (
+              <div key={group.record_number} className="forms-record-group">
+                <div className="record-group-header">
+                  <span className="record-number">{group.record_number}</span>
+                  <span className="record-name">{group.record_name}</span>
+                  <span className="link-count">{group.links.length} link{group.links.length !== 1 ? 's' : ''}</span>
+                </div>
+
+                {group.links.map(link => (
+                  <div key={link.id} className={`form-link-card ${!link.is_active ? 'inactive' : ''}`}>
+                    <div className="form-link-header" onClick={() => handleExpandLink(link.id)}>
+                      <div className="form-link-info">
+                        <span className={`form-type-badge ${link.form_type}`}>
+                          {formTypeLabel(link.form_type)}
+                        </span>
+                        <span className="form-link-title">{link.title}</span>
+                        {!link.is_active && <span className="inactive-badge">Inactive</span>}
+                      </div>
+
+                      <div className="form-link-progress">
+                        <div className="progress-text">
+                          <strong>{link.response_count || 0}</strong>
+                          {link.expected_responses && (
+                            <span> / {link.expected_responses}</span>
+                          )}
+                          <span className="responses-label"> responses</span>
+                        </div>
+                        {link.expected_responses && (
+                          <div className="progress-bar">
+                            <div
+                              className="progress-fill"
+                              style={{
+                                width: `${Math.min(100, ((link.response_count || 0) / link.expected_responses) * 100)}%`,
+                                backgroundColor: (link.response_count || 0) >= link.expected_responses
+                                  ? 'var(--color-green)'
+                                  : 'var(--color-blue)'
+                              }}
+                            />
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="form-link-actions" onClick={e => e.stopPropagation()}>
+                        <button className="btn-icon" title="Copy link" onClick={() => copyLink(link.url)}>📋</button>
+                        <button className="btn-icon" title="Download QR code" onClick={() => downloadQR(link)}>📱</button>
+                        <button className="btn-icon" title="Download flyer" onClick={() => downloadFlyer(link)}>🖨️</button>
+                        <button className="btn-icon" title="Generate PDF" onClick={() => downloadPDF(link)}>📄</button>
+                        <button
+                          className={`btn-icon ${link.is_active ? 'danger' : 'success'}`}
+                          title={link.is_active ? 'Deactivate' : 'Reactivate'}
+                          onClick={() => toggleLinkActive(link)}
+                        >
+                          {link.is_active ? '⏸️' : '▶️'}
+                        </button>
+                      </div>
+
+                      <span className="expand-icon">{expandedLink === link.id ? '▼' : '▶'}</span>
                     </div>
-                    {link.expected_responses && (
-                      <div className="progress-bar">
-                        <div
-                          className="progress-fill"
-                          style={{
-                            width: `${Math.min(100, ((link.response_count || 0) / link.expected_responses) * 100)}%`,
-                            backgroundColor: (link.response_count || 0) >= link.expected_responses
-                              ? 'var(--color-green)'
-                              : 'var(--color-blue)'
-                          }}
-                        />
+
+                    {/* Expanded details */}
+                    {expandedLink === link.id && (
+                      <div className="form-link-expanded">
+                        <div className="link-details">
+                          <div className="detail-row">
+                            <span className="detail-label">URL:</span>
+                            <code className="detail-value url">{link.url}</code>
+                          </div>
+                          <div className="detail-row">
+                            <span className="detail-label">Created:</span>
+                            <span className="detail-value">{formatDate(link.created_at)}</span>
+                          </div>
+                          {link.expires_at && (
+                            <div className="detail-row">
+                              <span className="detail-label">Expires:</span>
+                              <span className="detail-value">{formatDate(link.expires_at)}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Responses list */}
+                        <div className="responses-section">
+                          <h4>
+                            Responses ({responses[link.id]?.length || link.response_count || 0})
+                            {loadingResponses === link.id && <span className="loading-indicator">...</span>}
+                          </h4>
+
+                          {responses[link.id]?.length > 0 ? (
+                            <div className="responses-table-wrapper">
+                              <table className="responses-table">
+                                <thead>
+                                  <tr>
+                                    <th>Name</th>
+                                    <th>Role</th>
+                                    <th>Department</th>
+                                    <th>Signed</th>
+                                    <th>Signature</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {responses[link.id].map(resp => (
+                                    <tr key={resp.id}>
+                                      <td>{resp.respondent_name}</td>
+                                      <td>{resp.respondent_role || '-'}</td>
+                                      <td>{resp.respondent_dept || '-'}</td>
+                                      <td>{formatDate(resp.submitted_at)}</td>
+                                      <td>
+                                        {resp.signature_data && (
+                                          <img
+                                            src={resp.signature_data.startsWith('data:')
+                                              ? resp.signature_data
+                                              : `data:image/png;base64,${resp.signature_data}`}
+                                            alt="Signature"
+                                            className="signature-preview"
+                                          />
+                                        )}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          ) : (
+                            <p className="no-responses">No responses yet.</p>
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>
-
-                  <div className="form-link-actions" onClick={e => e.stopPropagation()}>
-                    <button
-                      className="btn-icon"
-                      title="Copy link"
-                      onClick={() => copyLink(link.url)}
-                    >
-                      📋
-                    </button>
-                    <button
-                      className="btn-icon"
-                      title="Download QR code"
-                      onClick={() => downloadQR(link)}
-                    >
-                      📱
-                    </button>
-                    <button
-                      className="btn-icon"
-                      title="Download flyer"
-                      onClick={() => downloadFlyer(link)}
-                    >
-                      🖨️
-                    </button>
-                    <button
-                      className="btn-icon"
-                      title="Generate PDF"
-                      onClick={() => downloadPDF(link)}
-                    >
-                      📄
-                    </button>
-                    <button
-                      className={`btn-icon ${link.is_active ? 'danger' : 'success'}`}
-                      title={link.is_active ? 'Deactivate' : 'Reactivate'}
-                      onClick={() => toggleLinkActive(link)}
-                    >
-                      {link.is_active ? '⏸️' : '▶️'}
-                    </button>
-                  </div>
-
-                  <span className="expand-icon">{expandedLink === link.id ? '▼' : '▶'}</span>
-                </div>
-
-                {/* Expanded details */}
-                {expandedLink === link.id && (
-                  <div className="form-link-expanded">
-                    <div className="link-details">
-                      <div className="detail-row">
-                        <span className="detail-label">URL:</span>
-                        <code className="detail-value url">{link.url}</code>
-                      </div>
-                      <div className="detail-row">
-                        <span className="detail-label">Created:</span>
-                        <span className="detail-value">{formatDate(link.created_at)}</span>
-                      </div>
-                      {link.expires_at && (
-                        <div className="detail-row">
-                          <span className="detail-label">Expires:</span>
-                          <span className="detail-value">{formatDate(link.expires_at)}</span>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Responses list */}
-                    <div className="responses-section">
-                      <h4>
-                        Responses ({responses[link.id]?.length || link.response_count || 0})
-                        {loadingResponses === link.id && <span className="loading-indicator">...</span>}
-                      </h4>
-
-                      {responses[link.id]?.length > 0 ? (
-                        <div className="responses-table-wrapper">
-                          <table className="responses-table">
-                            <thead>
-                              <tr>
-                                <th>Name</th>
-                                <th>Role</th>
-                                <th>Department</th>
-                                <th>Signed</th>
-                                <th>Signature</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {responses[link.id].map(resp => (
-                                <tr key={resp.id}>
-                                  <td>{resp.respondent_name}</td>
-                                  <td>{resp.respondent_role || '-'}</td>
-                                  <td>{resp.respondent_dept || '-'}</td>
-                                  <td>{formatDate(resp.submitted_at)}</td>
-                                  <td>
-                                    {resp.signature_data && (
-                                      <img
-                                        src={resp.signature_data.startsWith('data:')
-                                          ? resp.signature_data
-                                          : `data:image/png;base64,${resp.signature_data}`}
-                                        alt="Signature"
-                                        className="signature-preview"
-                                      />
-                                    )}
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      ) : (
-                        <p className="no-responses">No responses yet.</p>
-                      )}
-                    </div>
-                  </div>
-                )}
+                ))}
               </div>
             ))}
           </div>
-        ))}
-      </div>
+        </>
+      ) : (
+        <div className="forms-empty-hint">
+          <p>No form links created yet. Choose a template above to get started.</p>
+        </div>
+      )}
+
+      {/* Creation Modals */}
+      <SimpleSignoffModal
+        isOpen={showSimpleSignoff}
+        onClose={() => setShowSimpleSignoff(false)}
+        activeCycle={activeCycle}
+        records={records}
+        onFormCreated={handleFormCreated}
+        toast={toast}
+      />
+
+      <StaffDeclarationModal
+        isOpen={showStaffDeclaration}
+        onClose={() => setShowStaffDeclaration(false)}
+        activeCycle={activeCycle}
+        onFormCreated={handleFormCreated}
+        toast={toast}
+      />
+
+      <TeamRosterModal
+        isOpen={showTeamRoster}
+        onClose={() => setShowTeamRoster(false)}
+        activeCycle={activeCycle}
+        onFormCreated={handleFormCreated}
+        toast={toast}
+      />
     </div>
   );
 }

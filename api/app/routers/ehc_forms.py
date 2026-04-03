@@ -4,13 +4,15 @@ Public tokenized form links for signature collection (staff declarations, team r
 No authentication required for public endpoints - token provides access control.
 """
 
-from fastapi import APIRouter, HTTPException, Request, Query
-from fastapi.responses import Response
+from fastapi import APIRouter, HTTPException, Request, Query, UploadFile, File, Form
+from fastapi.responses import Response, FileResponse
 from pydantic import BaseModel, field_validator
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 import secrets
 import json
+import os
+import shutil
 
 from ..database import get_db, dicts_from_rows, dict_from_row
 from ..auth import get_current_user
@@ -22,6 +24,9 @@ from ..services.pdf_generator import (
 )
 from fastapi import Depends
 
+# Base upload directory
+UPLOAD_DIR = os.environ.get('UPLOAD_DIR', 'uploads')
+
 
 router = APIRouter(prefix="/ehc", tags=["ehc-forms"])
 
@@ -30,9 +35,12 @@ router = APIRouter(prefix="/ehc", tags=["ehc-forms"])
 # Pydantic Models
 # ============================================
 
+ALLOWED_FORM_TYPES = ['staff_declaration', 'team_roster', 'simple_signoff', 'checklist']
+
+
 class FormLinkCreate(BaseModel):
-    """Create a new form link for signature collection."""
-    form_type: str  # 'staff_declaration', 'team_roster'
+    """Create a new form link for signature collection (tied to a submission)."""
+    form_type: str  # 'staff_declaration', 'team_roster', 'simple_signoff'
     title: Optional[str] = None
     config: Dict[str, Any] = {}
     expected_responses: Optional[int] = None
@@ -41,9 +49,26 @@ class FormLinkCreate(BaseModel):
     @field_validator('form_type')
     @classmethod
     def validate_form_type(cls, v):
-        allowed = ['staff_declaration', 'team_roster', 'checklist']
-        if v not in allowed:
-            raise ValueError(f"form_type must be one of: {', '.join(allowed)}")
+        if v not in ALLOWED_FORM_TYPES:
+            raise ValueError(f"form_type must be one of: {', '.join(ALLOWED_FORM_TYPES)}")
+        return v
+
+
+class StandaloneFormLinkCreate(BaseModel):
+    """Create a standalone form link (not tied to a specific submission)."""
+    form_type: str
+    record_id: int  # Which record type this form is for
+    title: Optional[str] = None
+    config: Dict[str, Any] = {}
+    expected_responses: Optional[int] = None
+    expires_at: Optional[str] = None
+    submission_id: Optional[int] = None  # Optional link to existing submission
+
+    @field_validator('form_type')
+    @classmethod
+    def validate_form_type(cls, v):
+        if v not in ALLOWED_FORM_TYPES:
+            raise ValueError(f"form_type must be one of: {', '.join(ALLOWED_FORM_TYPES)}")
         return v
 
 
@@ -515,6 +540,220 @@ def get_cycle_form_links(
                 link['config'] = json.loads(link['config'])
 
         return {"data": links, "count": len(links)}
+
+
+@router.post("/cycles/{cycle_id}/form-links")
+def create_standalone_form_link(
+    cycle_id: int,
+    data: StandaloneFormLinkCreate,
+    current_user: dict = Depends(get_current_user)
+):
+    """Create a standalone form link from the Forms tab.
+
+    Unlike the submission-based endpoint, this creates forms directly
+    without requiring an existing submission. Great for:
+    - Simple sign-off forms with uploaded PDFs
+    - Staff declarations before submissions exist
+    - Forms that span multiple records
+    """
+    org_id = current_user["organization_id"]
+    user_id = current_user["id"]
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Verify cycle ownership and get year
+        cursor.execute("""
+            SELECT id, year FROM ehc_audit_cycle
+            WHERE id = %s AND organization_id = %s
+        """, (cycle_id, org_id))
+
+        cycle = dict_from_row(cursor.fetchone())
+        if not cycle:
+            raise HTTPException(status_code=404, detail="Cycle not found")
+
+        # Verify record exists
+        cursor.execute("""
+            SELECT id, record_number, name FROM ehc_record WHERE id = %s
+        """, (data.record_id,))
+
+        record = dict_from_row(cursor.fetchone())
+        if not record:
+            raise HTTPException(status_code=404, detail="Record not found")
+
+        # If submission_id provided, verify it exists and belongs to this cycle
+        submission_id = None
+        if data.submission_id:
+            cursor.execute("""
+                SELECT id FROM ehc_record_submission
+                WHERE id = %s AND audit_cycle_id = %s AND record_id = %s
+            """, (data.submission_id, cycle_id, data.record_id))
+            if not cursor.fetchone():
+                raise HTTPException(
+                    status_code=400,
+                    detail="Submission not found or doesn't match cycle/record"
+                )
+            submission_id = data.submission_id
+
+        # Generate unique token
+        token = secrets.token_urlsafe(32)
+
+        # Build config with defaults
+        config = data.config or {}
+        config['property_name'] = config.get('property_name', 'Property')
+        config['cycle_year'] = cycle['year']
+        config['form_type'] = data.form_type
+
+        # Parse expires_at if provided
+        expires_at = None
+        if data.expires_at:
+            try:
+                expires_at = datetime.fromisoformat(data.expires_at.replace('Z', '+00:00'))
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid expires_at format")
+
+        # Default title if not provided
+        title = data.title or f"{record['name']} - EHC {cycle['year']}"
+
+        # Insert form link
+        cursor.execute("""
+            INSERT INTO ehc_form_link (
+                organization_id, audit_cycle_id, submission_id, record_id,
+                token, form_type, title, config,
+                expected_responses, expires_at, created_by
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id, created_at
+        """, (
+            org_id,
+            cycle_id,
+            submission_id,
+            data.record_id,
+            token,
+            data.form_type,
+            title,
+            json.dumps(config),
+            data.expected_responses,
+            expires_at,
+            user_id
+        ))
+
+        result = cursor.fetchone()
+        conn.commit()
+
+        # Generate QR code
+        form_url = generate_form_url(token)
+        qr_code = generate_form_qr(token)
+
+        return {
+            "status": "ok",
+            "form_link_id": result['id'],
+            "token": token,
+            "url": form_url,
+            "qr_code": qr_code,
+            "title": title,
+            "form_type": data.form_type,
+            "record_number": record['record_number'],
+            "record_name": record['name'],
+            "expected_responses": data.expected_responses,
+            "expires_at": expires_at.isoformat() if expires_at else None,
+            "created_at": result['created_at'].isoformat()
+        }
+
+
+@router.get("/cycles/{cycle_id}/records")
+def get_cycle_records(
+    cycle_id: int,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get all records for form creation dropdown."""
+    org_id = current_user["organization_id"]
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Verify cycle ownership
+        cursor.execute("""
+            SELECT id FROM ehc_audit_cycle WHERE id = %s AND organization_id = %s
+        """, (cycle_id, org_id))
+
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Cycle not found")
+
+        # Get all records
+        cursor.execute("""
+            SELECT id, record_number, name, description, location_type, frequency
+            FROM ehc_record
+            ORDER BY record_number
+        """)
+
+        records = dicts_from_rows(cursor.fetchall())
+        return {"data": records, "count": len(records)}
+
+
+@router.post("/form-links/upload-document")
+async def upload_form_document(
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user)
+):
+    """Upload a PDF document for simple sign-off forms.
+
+    Returns a document path to include in form link config.
+    Documents are stored in uploads/ehc/{org_id}/documents/
+    """
+    org_id = current_user["organization_id"]
+
+    # Validate file type
+    if not file.filename.lower().endswith('.pdf'):
+        raise HTTPException(status_code=400, detail="Only PDF files are allowed")
+
+    # Check file size (max 10MB)
+    contents = await file.read()
+    if len(contents) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="File too large (max 10MB)")
+
+    # Create directory if needed
+    doc_dir = os.path.join(UPLOAD_DIR, 'ehc', str(org_id), 'documents')
+    os.makedirs(doc_dir, exist_ok=True)
+
+    # Generate unique filename
+    file_ext = os.path.splitext(file.filename)[1]
+    unique_name = f"{secrets.token_urlsafe(16)}{file_ext}"
+    file_path = os.path.join(doc_dir, unique_name)
+
+    # Save file
+    with open(file_path, 'wb') as f:
+        f.write(contents)
+
+    return {
+        "status": "ok",
+        "document_path": file_path,
+        "document_name": file.filename,
+        "file_size": len(contents)
+    }
+
+
+@router.get("/form-links/document/{org_id}/{filename}")
+def get_form_document(
+    org_id: int,
+    filename: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Download a form document (for admin preview)."""
+    # Verify user belongs to this org
+    if current_user["organization_id"] != org_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    file_path = os.path.join(UPLOAD_DIR, 'ehc', str(org_id), 'documents', filename)
+
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    return FileResponse(
+        file_path,
+        media_type="application/pdf",
+        filename=filename
+    )
 
 
 @router.get("/form-links/{link_id}")
