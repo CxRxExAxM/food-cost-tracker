@@ -51,7 +51,46 @@ The system supports multiple form patterns through a configurable `form_type` fi
 
 **PDF output:** Matches the original Record 35 template — Fairmont header, standard intro text, table with Date Approved | Name | Position | Department | Signature columns. Signature images are placed into the signature column.
 
-### 2.3 Future: `checklist` (Record 20, etc.)
+### 2.3 `simple_signoff` (General Purpose)
+
+**Use case:** Any record where admin wants to upload an existing PDF document and collect a signature from each respondent.
+
+**Form behavior:**
+- Admin uploads a PDF document when creating the form link
+- Staff view the embedded PDF, enter their name, and sign
+- Collected signatures are tracked against the original PDF
+
+**PDF output:** Original uploaded PDF with an appended signature page showing all collected signatures with timestamps.
+
+### 2.4 `table_signoff` (Configurable Table Forms)
+
+**Use case:** Custom table-based sign-off forms where admin defines columns dynamically — similar to Record 35 but without hardcoding each form structure.
+
+**Form behavior:**
+- Admin configures column definitions (name, type: text/date/signature)
+- Admin optionally pre-fills rows (e.g., staff names, positions)
+- Staff view the table, find their row (or add one), and sign
+- Progress tracked by row completion
+
+**Config structure:**
+```json
+{
+  "columns": [
+    { "key": "name", "label": "Name", "type": "text", "required": true },
+    { "key": "position", "label": "Position", "type": "text" },
+    { "key": "signature", "label": "Signature", "type": "signature", "required": true }
+  ],
+  "rows": [
+    { "name": "John Smith", "position": "Line Cook" }
+  ],
+  "intro_text": "Please sign to confirm your attendance.",
+  "property_name": "Fairmont Scottsdale Princess"
+}
+```
+
+**PDF output:** Table matching the configured columns with signature images in the signature column.
+
+### 2.5 Future: `checklist` (Record 20, etc.)
 
 **Use case:** Multi-section checklists with checkboxes, text fields, and corrective action areas.
 
@@ -292,6 +331,11 @@ Full response list including signature data (for admin review and PDF generation
 PATCH /api/ehc/form-links/{link_id}
 ```
 Update form link: deactivate, change expiry, update config (e.g., add team members).
+
+```
+DELETE /api/ehc/form-links/{link_id}
+```
+Permanently delete a form link and all its responses. Use when a form was created in error or is no longer needed. For temporary suspension, use PATCH to set `is_active = false` instead.
 
 ```
 DELETE /api/ehc/form-links/{link_id}/responses/{response_id}
