@@ -21,8 +21,21 @@ export default function StaffDeclarationForm({
   const [hasScrolledToBottom, setHasScrolledToBottom] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
   const [name, setName] = useState('');
+  const [outlet, setOutlet] = useState('');
   const [signature, setSignature] = useState(null);
   const [duplicateWarning, setDuplicateWarning] = useState(null);
+
+  // Outlets from config or placeholder list
+  const outlets = config?.outlets || [
+    'La Hacienda',
+    'Toro Latin Kitchen',
+    'Bourbon Steak',
+    'The Plaza Bar',
+    'Ironwood American Kitchen',
+    'Banquets / Catering',
+    'Stewarding',
+    'Culinary Admin'
+  ];
 
   const declarationRef = useRef(null);
 
@@ -70,9 +83,11 @@ export default function StaffDeclarationForm({
 
     onSubmit({
       respondent_name: name.trim(),
+      respondent_dept: outlet || null,
       response_data: {
         acknowledged: true,
-        scrolled_to_bottom: true
+        scrolled_to_bottom: true,
+        outlet: outlet || null
       },
       signature_data: signature
     });
@@ -159,6 +174,23 @@ export default function StaffDeclarationForm({
               Submitting will replace it.
             </div>
           )}
+        </div>
+
+        {/* Outlet selector */}
+        <div className="form-field">
+          <label htmlFor="respondent-outlet">Outlet / Department</label>
+          <select
+            id="respondent-outlet"
+            value={outlet}
+            onChange={(e) => setOutlet(e.target.value)}
+            disabled={!hasScrolledToBottom}
+            className="input select"
+          >
+            <option value="">Select your outlet...</option>
+            {outlets.map((o, idx) => (
+              <option key={idx} value={o}>{o}</option>
+            ))}
+          </select>
         </div>
 
         {/* Signature */}
