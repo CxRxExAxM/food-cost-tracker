@@ -16,6 +16,7 @@ import {
   API_BASE,
   fetchWithAuth,
 } from './shared';
+import AddSubmissionModal from '../modals/AddSubmissionModal';
 
 export default function Records({
   records,
@@ -36,6 +37,7 @@ export default function Records({
   const [expandedPeriods, setExpandedPeriods] = useState(new Set());
   const [selectedSubmissions, setSelectedSubmissions] = useState(new Set());
   const [uploadingSubmission, setUploadingSubmission] = useState(null);
+  const [addSubmissionModal, setAddSubmissionModal] = useState({ show: false, record: null, locationType: null });
 
   // Inline editing state
   const [editingRecord, setEditingRecord] = useState(null);
@@ -622,13 +624,7 @@ export default function Records({
                       <div className="add-submission-row">
                         <button
                           className="btn-secondary btn-sm"
-                          onClick={() => {
-                            const period = prompt('Enter period (e.g., "January 2026"):');
-                            if (period) {
-                              const outlet = prompt('Enter outlet name:');
-                              if (outlet) createSubmission(record.id, period, outlet);
-                            }
-                          }}
+                          onClick={() => setAddSubmissionModal({ show: true, record, locationType: 'outlet_book' })}
                         >
                           + Add Submission
                         </button>
@@ -755,10 +751,7 @@ export default function Records({
                       <div className="add-submission-row">
                         <button
                           className="btn-secondary btn-sm"
-                          onClick={() => {
-                            const period = prompt('Enter period (e.g., "Annual 2026", "Q1 2026"):');
-                            if (period) createSubmission(record.id, period, null);
-                          }}
+                          onClick={() => setAddSubmissionModal({ show: true, record, locationType: 'office_book' })}
                         >
                           + Add Submission
                         </button>
@@ -783,6 +776,16 @@ export default function Records({
           </div>
         )}
       </div>
+
+      {/* Add Submission Modal */}
+      {addSubmissionModal.show && (
+        <AddSubmissionModal
+          record={addSubmissionModal.record}
+          locationType={addSubmissionModal.locationType}
+          onSave={createSubmission}
+          onClose={() => setAddSubmissionModal({ show: false, record: null, locationType: null })}
+        />
+      )}
     </div>
   );
 }

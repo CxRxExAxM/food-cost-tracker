@@ -3974,3 +3974,26 @@
     width: 95%;
   }
 }
+
+/* Add Submission Modal */
+.record-display {
+  padding: var(--space-3);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.record-display .record-number {
+  font-family: var(--font-mono);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-blue);
+  font-size: var(--text-sm);
+}
+
+.record-display .record-name {
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  flex: 1;
+}
