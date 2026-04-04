@@ -82,6 +82,48 @@ class PointRecordLink(BaseModel):
     notes: Optional[str] = None
 
 
+class OutletCreate(BaseModel):
+    """Create a new EHC outlet."""
+    name: str
+    full_name: Optional[str] = None
+    outlet_type: Optional[str] = None
+    leader_name: Optional[str] = None
+    leader_email: Optional[str] = None
+    sort_order: Optional[int] = 0
+
+
+class OutletUpdate(BaseModel):
+    """Update an EHC outlet."""
+    name: Optional[str] = None
+    full_name: Optional[str] = None
+    outlet_type: Optional[str] = None
+    leader_name: Optional[str] = None
+    leader_email: Optional[str] = None
+    is_active: Optional[bool] = None
+    sort_order: Optional[int] = None
+
+
+class OutletReorder(BaseModel):
+    """Reorder outlets."""
+    outlets: List[dict]  # [{"id": 1, "sort_order": 0}, ...]
+
+
+class ResponsibilityCodeCreate(BaseModel):
+    """Create a new responsibility code."""
+    code: str
+    role_name: Optional[str] = None
+    scope: Optional[str] = None
+    sort_order: Optional[int] = 0
+
+
+class ResponsibilityCodeUpdate(BaseModel):
+    """Update a responsibility code."""
+    role_name: Optional[str] = None
+    scope: Optional[str] = None
+    is_active: Optional[bool] = None
+    sort_order: Optional[int] = None
+
+
 # ============================================
 # Helper Functions
 # ============================================
@@ -1597,3 +1639,380 @@ def get_missing_items(
                 "by_location": submissions_by_location,
             }
         }
+
+
+# ============================================
+# EHC Settings - Outlets Endpoints
+# ============================================
+
+@router.get("/outlets")
+def get_outlets(
+    active_only: bool = Query(default=True),
+    current_user: dict = Depends(get_current_user)
+):
+    """Get all outlets for the organization."""
+    org_id = current_user["organization_id"]
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        query = """
+            SELECT id, name, full_name, outlet_type, leader_name, leader_email,
+                   is_active, sort_order, created_at, updated_at
+            FROM ehc_outlet
+            WHERE organization_id = %s
+        """
+        params = [org_id]
+
+        if active_only:
+            query += " AND is_active = true"
+
+        query += " ORDER BY sort_order, name"
+
+        cursor.execute(query, params)
+        outlets = dicts_from_rows(cursor)
+
+        return {"data": outlets, "count": len(outlets)}
+
+
+@router.post("/outlets")
+def create_outlet(
+    outlet: OutletCreate,
+    current_user: dict = Depends(get_current_user)
+):
+    """Create a new outlet."""
+    org_id = current_user["organization_id"]
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Check if name already exists (case-insensitive)
+        cursor.execute("""
+            SELECT id FROM ehc_outlet
+            WHERE organization_id = %s AND LOWER(name) = LOWER(%s)
+        """, (org_id, outlet.name))
+
+        if cursor.fetchone():
+            raise HTTPException(status_code=400, detail="Outlet name already exists")
+
+        cursor.execute("""
+            INSERT INTO ehc_outlet
+                (organization_id, name, full_name, outlet_type, leader_name,
+                 leader_email, sort_order)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            RETURNING id, name, full_name, outlet_type, leader_name, leader_email,
+                      is_active, sort_order, created_at, updated_at
+        """, (
+            org_id, outlet.name, outlet.full_name, outlet.outlet_type,
+            outlet.leader_name, outlet.leader_email, outlet.sort_order
+        ))
+
+        result = dict_from_row(cursor)
+        conn.commit()
+
+        return result
+
+
+@router.patch("/outlets/{outlet_id}")
+def update_outlet(
+    outlet_id: int,
+    outlet: OutletUpdate,
+    current_user: dict = Depends(get_current_user)
+):
+    """Update an outlet."""
+    org_id = current_user["organization_id"]
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Verify ownership
+        cursor.execute("""
+            SELECT id FROM ehc_outlet
+            WHERE id = %s AND organization_id = %s
+        """, (outlet_id, org_id))
+
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Outlet not found")
+
+        # Check if name conflict (if changing name)
+        if outlet.name:
+            cursor.execute("""
+                SELECT id FROM ehc_outlet
+                WHERE organization_id = %s AND LOWER(name) = LOWER(%s) AND id != %s
+            """, (org_id, outlet.name, outlet_id))
+
+            if cursor.fetchone():
+                raise HTTPException(status_code=400, detail="Outlet name already exists")
+
+        # Build update query
+        updates = []
+        params = []
+
+        if outlet.name is not None:
+            updates.append("name = %s")
+            params.append(outlet.name)
+        if outlet.full_name is not None:
+            updates.append("full_name = %s")
+            params.append(outlet.full_name)
+        if outlet.outlet_type is not None:
+            updates.append("outlet_type = %s")
+            params.append(outlet.outlet_type)
+        if outlet.leader_name is not None:
+            updates.append("leader_name = %s")
+            params.append(outlet.leader_name)
+        if outlet.leader_email is not None:
+            updates.append("leader_email = %s")
+            params.append(outlet.leader_email)
+        if outlet.is_active is not None:
+            updates.append("is_active = %s")
+            params.append(outlet.is_active)
+        if outlet.sort_order is not None:
+            updates.append("sort_order = %s")
+            params.append(outlet.sort_order)
+
+        if not updates:
+            raise HTTPException(status_code=400, detail="No fields to update")
+
+        updates.append("updated_at = NOW()")
+        params.extend([outlet_id, org_id])
+
+        cursor.execute(f"""
+            UPDATE ehc_outlet
+            SET {", ".join(updates)}
+            WHERE id = %s AND organization_id = %s
+            RETURNING id, name, full_name, outlet_type, leader_name, leader_email,
+                      is_active, sort_order, created_at, updated_at
+        """, params)
+
+        result = dict_from_row(cursor)
+        conn.commit()
+
+        return result
+
+
+@router.delete("/outlets/{outlet_id}")
+def delete_outlet(
+    outlet_id: int,
+    current_user: dict = Depends(get_current_user)
+):
+    """Soft-delete an outlet (set is_active = false)."""
+    org_id = current_user["organization_id"]
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Verify ownership
+        cursor.execute("""
+            SELECT id FROM ehc_outlet
+            WHERE id = %s AND organization_id = %s
+        """, (outlet_id, org_id))
+
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Outlet not found")
+
+        cursor.execute("""
+            UPDATE ehc_outlet
+            SET is_active = false, updated_at = NOW()
+            WHERE id = %s AND organization_id = %s
+        """, (outlet_id, org_id))
+
+        conn.commit()
+
+        return {"status": "ok", "outlet_id": outlet_id}
+
+
+@router.patch("/outlets/reorder")
+def reorder_outlets(
+    data: OutletReorder,
+    current_user: dict = Depends(get_current_user)
+):
+    """Bulk update sort order for outlets."""
+    org_id = current_user["organization_id"]
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        for item in data.outlets:
+            outlet_id = item.get("id")
+            sort_order = item.get("sort_order")
+
+            if outlet_id is None or sort_order is None:
+                continue
+
+            # Verify ownership and update
+            cursor.execute("""
+                UPDATE ehc_outlet
+                SET sort_order = %s, updated_at = NOW()
+                WHERE id = %s AND organization_id = %s
+            """, (sort_order, outlet_id, org_id))
+
+        conn.commit()
+
+        return {"status": "ok", "updated": len(data.outlets)}
+
+
+# ============================================
+# EHC Settings - Responsibility Codes Endpoints
+# ============================================
+
+@router.get("/responsibility-codes")
+def get_responsibility_codes(
+    active_only: bool = Query(default=True),
+    current_user: dict = Depends(get_current_user)
+):
+    """Get all responsibility codes for the organization."""
+    org_id = current_user["organization_id"]
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        query = """
+            SELECT id, code, role_name, scope, is_active, sort_order,
+                   created_at, updated_at
+            FROM ehc_responsibility_code
+            WHERE organization_id = %s
+        """
+        params = [org_id]
+
+        if active_only:
+            query += " AND is_active = true"
+
+        query += " ORDER BY sort_order, code"
+
+        cursor.execute(query, params)
+        codes = dicts_from_rows(cursor)
+
+        return {"data": codes, "count": len(codes)}
+
+
+@router.post("/responsibility-codes")
+def create_responsibility_code(
+    code_data: ResponsibilityCodeCreate,
+    current_user: dict = Depends(get_current_user)
+):
+    """Create a new responsibility code."""
+    org_id = current_user["organization_id"]
+
+    # Validate code format
+    if not code_data.code or len(code_data.code) > 10 or ' ' in code_data.code:
+        raise HTTPException(
+            status_code=400,
+            detail="Code must be 1-10 characters with no spaces"
+        )
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Check if code already exists (case-insensitive)
+        cursor.execute("""
+            SELECT id FROM ehc_responsibility_code
+            WHERE organization_id = %s AND LOWER(code) = LOWER(%s)
+        """, (org_id, code_data.code))
+
+        if cursor.fetchone():
+            raise HTTPException(status_code=400, detail="Responsibility code already exists")
+
+        cursor.execute("""
+            INSERT INTO ehc_responsibility_code
+                (organization_id, code, role_name, scope, sort_order)
+            VALUES (%s, %s, %s, %s, %s)
+            RETURNING id, code, role_name, scope, is_active, sort_order,
+                      created_at, updated_at
+        """, (
+            org_id, code_data.code.upper(), code_data.role_name,
+            code_data.scope, code_data.sort_order
+        ))
+
+        result = dict_from_row(cursor)
+        conn.commit()
+
+        return result
+
+
+@router.patch("/responsibility-codes/{code_id}")
+def update_responsibility_code(
+    code_id: int,
+    code_data: ResponsibilityCodeUpdate,
+    current_user: dict = Depends(get_current_user)
+):
+    """Update a responsibility code."""
+    org_id = current_user["organization_id"]
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Verify ownership
+        cursor.execute("""
+            SELECT id FROM ehc_responsibility_code
+            WHERE id = %s AND organization_id = %s
+        """, (code_id, org_id))
+
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Responsibility code not found")
+
+        # Build update query
+        updates = []
+        params = []
+
+        if code_data.role_name is not None:
+            updates.append("role_name = %s")
+            params.append(code_data.role_name)
+        if code_data.scope is not None:
+            updates.append("scope = %s")
+            params.append(code_data.scope)
+        if code_data.is_active is not None:
+            updates.append("is_active = %s")
+            params.append(code_data.is_active)
+        if code_data.sort_order is not None:
+            updates.append("sort_order = %s")
+            params.append(code_data.sort_order)
+
+        if not updates:
+            raise HTTPException(status_code=400, detail="No fields to update")
+
+        updates.append("updated_at = NOW()")
+        params.extend([code_id, org_id])
+
+        cursor.execute(f"""
+            UPDATE ehc_responsibility_code
+            SET {", ".join(updates)}
+            WHERE id = %s AND organization_id = %s
+            RETURNING id, code, role_name, scope, is_active, sort_order,
+                      created_at, updated_at
+        """, params)
+
+        result = dict_from_row(cursor)
+        conn.commit()
+
+        return result
+
+
+@router.delete("/responsibility-codes/{code_id}")
+def delete_responsibility_code(
+    code_id: int,
+    current_user: dict = Depends(get_current_user)
+):
+    """Soft-delete a responsibility code (set is_active = false)."""
+    org_id = current_user["organization_id"]
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Verify ownership
+        cursor.execute("""
+            SELECT id FROM ehc_responsibility_code
+            WHERE id = %s AND organization_id = %s
+        """, (code_id, org_id))
+
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Responsibility code not found")
+
+        cursor.execute("""
+            UPDATE ehc_responsibility_code
+            SET is_active = false, updated_at = NOW()
+            WHERE id = %s AND organization_id = %s
+        """, (code_id, org_id))
+
+        conn.commit()
+
+        return {"status": "ok", "code_id": code_id}

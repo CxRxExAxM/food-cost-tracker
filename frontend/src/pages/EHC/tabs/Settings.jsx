@@ -3,21 +3,32 @@
  *
  * Module configuration:
  * - Audit cycle management (status, dates)
- * - Section overview and progress
- * - NC level reference
- * - Future: Outlets, contacts, responsibility codes
+ * - EHC Outlets (kitchens, restaurants, bars)
+ * - Responsibility Codes (custom role definitions)
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   API_BASE,
   fetchWithAuth,
-  NCBadge,
 } from './shared';
+import OutletModal from '../modals/OutletModal';
+import { X, Edit2, Plus } from 'lucide-react';
 
 export default function Settings({ activeCycle, onCycleUpdated, toast }) {
   const [updating, setUpdating] = useState(false);
   const [showStatusConfirm, setShowStatusConfirm] = useState(null);
+
+  // Outlets state
+  const [outlets, setOutlets] = useState([]);
+  const [loadingOutlets, setLoadingOutlets] = useState(true);
+  const [outletModal, setOutletModal] = useState({ show: false, outlet: null });
+
+  // Responsibility codes state
+  const [respCodes, setRespCodes] = useState([]);
+  const [loadingCodes, setLoadingCodes] = useState(true);
+  const [editingCodeId, setEditingCodeId] = useState(null);
+  const [codeEditData, setCodeEditData] = useState({});
 
   const cycleStatuses = [
     { value: 'preparing', label: 'Preparing', description: 'Setting up records and collecting evidence' },
@@ -25,6 +36,50 @@ export default function Settings({ activeCycle, onCycleUpdated, toast }) {
     { value: 'completed', label: 'Completed', description: 'Audit finished and reviewed' },
     { value: 'archived', label: 'Archived', description: 'Historical record' },
   ];
+
+  const outletTypes = [
+    'Production Kitchen',
+    'Restaurant',
+    'Bar',
+    'Lounge',
+    'Support',
+    'Franchise',
+    'Other'
+  ];
+
+  // Load outlets
+  useEffect(() => {
+    loadOutlets();
+  }, []);
+
+  // Load responsibility codes
+  useEffect(() => {
+    loadRespCodes();
+  }, []);
+
+  async function loadOutlets() {
+    try {
+      setLoadingOutlets(true);
+      const data = await fetchWithAuth(`${API_BASE}/outlets?active_only=true`);
+      setOutlets(data.data || []);
+    } catch (error) {
+      toast?.error?.('Failed to load outlets');
+    } finally {
+      setLoadingOutlets(false);
+    }
+  }
+
+  async function loadRespCodes() {
+    try {
+      setLoadingCodes(true);
+      const data = await fetchWithAuth(`${API_BASE}/responsibility-codes?active_only=true`);
+      setRespCodes(data.data || []);
+    } catch (error) {
+      toast?.error?.('Failed to load responsibility codes');
+    } finally {
+      setLoadingCodes(false);
+    }
+  }
 
   async function updateCycleStatus(newStatus) {
     try {
@@ -40,6 +95,79 @@ export default function Settings({ activeCycle, onCycleUpdated, toast }) {
       toast?.error?.('Failed to update cycle status');
     } finally {
       setUpdating(false);
+    }
+  }
+
+  async function handleSaveOutlet(outletData) {
+    try {
+      if (outletData.id) {
+        // Update existing
+        await fetchWithAuth(`${API_BASE}/outlets/${outletData.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify(outletData)
+        });
+        toast?.success?.('Outlet updated');
+      } else {
+        // Create new
+        await fetchWithAuth(`${API_BASE}/outlets`, {
+          method: 'POST',
+          body: JSON.stringify(outletData)
+        });
+        toast?.success?.('Outlet created');
+      }
+      loadOutlets();
+      setOutletModal({ show: false, outlet: null });
+    } catch (error) {
+      toast?.error?.(error.message || 'Failed to save outlet');
+      throw error;
+    }
+  }
+
+  async function handleDeleteOutlet(outletId) {
+    if (!confirm('Deactivate this outlet? It will be hidden from active lists but historical references will remain.')) {
+      return;
+    }
+
+    try {
+      await fetchWithAuth(`${API_BASE}/outlets/${outletId}`, {
+        method: 'DELETE'
+      });
+      toast?.success?.('Outlet deactivated');
+      loadOutlets();
+      setOutletModal({ show: false, outlet: null });
+    } catch (error) {
+      toast?.error?.('Failed to deactivate outlet');
+    }
+  }
+
+  async function handleUpdateRespCode(codeId, updates) {
+    try {
+      await fetchWithAuth(`${API_BASE}/responsibility-codes/${codeId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(updates)
+      });
+      toast?.success?.('Responsibility code updated');
+      loadRespCodes();
+      setEditingCodeId(null);
+      setCodeEditData({});
+    } catch (error) {
+      toast?.error?.('Failed to update responsibility code');
+    }
+  }
+
+  async function handleDeleteRespCode(codeId) {
+    if (!confirm('Deactivate this responsibility code?')) {
+      return;
+    }
+
+    try {
+      await fetchWithAuth(`${API_BASE}/responsibility-codes/${codeId}`, {
+        method: 'DELETE'
+      });
+      toast?.success?.('Responsibility code deactivated');
+      loadRespCodes();
+    } catch (error) {
+      toast?.error?.('Failed to deactivate responsibility code');
     }
   }
 
@@ -63,6 +191,18 @@ export default function Settings({ activeCycle, onCycleUpdated, toast }) {
   };
 
   const daysUntil = getDaysUntil(activeCycle?.target_date);
+
+  // Group outlets by type
+  const outletsByType = outlets.reduce((acc, outlet) => {
+    const type = outlet.outlet_type || 'Other';
+    if (!acc[type]) acc[type] = [];
+    acc[type].push(outlet);
+    return acc;
+  }, {});
+
+  // Sort outlet groups
+  const typeOrder = ['Production Kitchen', 'Restaurant', 'Bar', 'Lounge', 'Support', 'Franchise', 'Other'];
+  const sortedTypes = typeOrder.filter(type => outletsByType[type]);
 
   return (
     <div className="settings-view-content">
@@ -168,89 +308,169 @@ export default function Settings({ activeCycle, onCycleUpdated, toast }) {
         )}
       </section>
 
-      {/* NC Level Reference */}
+      {/* EHC Outlets */}
       <section className="settings-section">
-        <h2>NC Level Reference</h2>
-        <p className="section-description">
-          Non-conformance levels and their scoring impact.
-        </p>
-
-        <div className="nc-reference-grid">
-          <div className="nc-reference-item">
-            <NCBadge level={1} />
-            <div className="nc-details">
-              <strong>Critical</strong>
-              <p>Immediate food safety risk. Requires immediate correction.</p>
-              <span className="nc-impact">High impact on audit score</span>
-            </div>
+        <div className="section-header">
+          <div>
+            <h2>EHC Outlets</h2>
+            <p className="section-description">
+              Manage property areas for record tracking and form distribution.
+            </p>
           </div>
-
-          <div className="nc-reference-item">
-            <NCBadge level={2} />
-            <div className="nc-details">
-              <strong>Operational</strong>
-              <p>Operational food safety issue. Correction within 24–48 hours.</p>
-              <span className="nc-impact">Moderate impact on audit score</span>
-            </div>
-          </div>
-
-          <div className="nc-reference-item">
-            <NCBadge level={3} />
-            <div className="nc-details">
-              <strong>Structural</strong>
-              <p>Infrastructure or equipment issue. Plan for correction.</p>
-              <span className="nc-impact">Lower impact on audit score</span>
-            </div>
-          </div>
-
-          <div className="nc-reference-item">
-            <NCBadge level={4} />
-            <div className="nc-details">
-              <strong>Administrative</strong>
-              <p>Documentation or record-keeping issue. Low risk.</p>
-              <span className="nc-impact">Minimal impact on audit score</span>
-            </div>
-          </div>
+          <button
+            className="btn-primary"
+            onClick={() => setOutletModal({ show: true, outlet: null })}
+          >
+            <Plus size={16} />
+            Add Outlet
+          </button>
         </div>
+
+        {loadingOutlets ? (
+          <div className="loading-state">Loading outlets...</div>
+        ) : outlets.length === 0 ? (
+          <div className="empty-state">
+            <p>No outlets configured. Click "Add Outlet" to get started.</p>
+          </div>
+        ) : (
+          <div className="outlets-container">
+            {sortedTypes.map(type => (
+              <div key={type} className="outlet-type-group">
+                <h3 className="outlet-type-header">{type}</h3>
+                <div className="outlet-table">
+                  <div className="outlet-table-header">
+                    <span className="col-name">Name</span>
+                    <span className="col-full-name">Full Name</span>
+                    <span className="col-leader">Leader</span>
+                    <span className="col-actions">Actions</span>
+                  </div>
+                  {outletsByType[type].map(outlet => (
+                    <div key={outlet.id} className="outlet-table-row">
+                      <span className="col-name outlet-tag">{outlet.name}</span>
+                      <span className="col-full-name">{outlet.full_name || '—'}</span>
+                      <span className="col-leader">{outlet.leader_name || '—'}</span>
+                      <span className="col-actions">
+                        <button
+                          className="btn-icon"
+                          onClick={() => setOutletModal({ show: true, outlet })}
+                          title="Edit outlet"
+                        >
+                          <Edit2 size={16} />
+                        </button>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </section>
 
-      {/* Future Features */}
-      <section className="settings-section future">
-        <h2>Coming Soon</h2>
-        <div className="future-features">
-          <div className="future-feature">
-            <span className="feature-icon">🏪</span>
-            <div>
-              <strong>EHC Outlets</strong>
-              <p>Manage kitchen areas and restaurants for signature collection</p>
-            </div>
-          </div>
-
-          <div className="future-feature">
-            <span className="feature-icon">👥</span>
-            <div>
-              <strong>Leader Contacts</strong>
-              <p>Configure email distribution for reports and notifications</p>
-            </div>
-          </div>
-
-          <div className="future-feature">
-            <span className="feature-icon">📋</span>
-            <div>
-              <strong>Responsibility Codes</strong>
-              <p>Define area ownership and escalation paths</p>
-            </div>
-          </div>
-
-          <div className="future-feature">
-            <span className="feature-icon">📊</span>
-            <div>
-              <strong>Scoring Configuration</strong>
-              <p>Customize NC level weights and thresholds</p>
-            </div>
+      {/* Responsibility Codes */}
+      <section className="settings-section">
+        <div className="section-header">
+          <div>
+            <h2>Responsibility Codes</h2>
+            <p className="section-description">
+              Define responsibility codes used in audit point assignments and record filtering.
+              You define what each code means for your organization.
+            </p>
           </div>
         </div>
+
+        {loadingCodes ? (
+          <div className="loading-state">Loading responsibility codes...</div>
+        ) : respCodes.length === 0 ? (
+          <div className="empty-state">
+            <p>No responsibility codes configured. These will be used for audit tracking.</p>
+          </div>
+        ) : (
+          <div className="resp-codes-table">
+            <div className="resp-codes-header">
+              <span className="col-code">Code</span>
+              <span className="col-role">Role</span>
+              <span className="col-scope">Scope</span>
+              <span className="col-actions">Actions</span>
+            </div>
+            {respCodes.map(code => (
+              <div key={code.id} className="resp-codes-row">
+                <span className="col-code code-badge">{code.code}</span>
+                {editingCodeId === code.id ? (
+                  <>
+                    <input
+                      type="text"
+                      className="col-role edit-input"
+                      value={codeEditData.role_name ?? code.role_name ?? ''}
+                      onChange={(e) => setCodeEditData({ ...codeEditData, role_name: e.target.value })}
+                      placeholder="e.g., Audit Prep Manager"
+                    />
+                    <input
+                      type="text"
+                      className="col-scope edit-input"
+                      value={codeEditData.scope ?? code.scope ?? ''}
+                      onChange={(e) => setCodeEditData({ ...codeEditData, scope: e.target.value })}
+                      placeholder="e.g., Coordination, swabbing"
+                    />
+                    <span className="col-actions">
+                      <button
+                        className="btn-sm btn-success"
+                        onClick={() => handleUpdateRespCode(code.id, codeEditData)}
+                      >
+                        Save
+                      </button>
+                      <button
+                        className="btn-sm btn-ghost"
+                        onClick={() => {
+                          setEditingCodeId(null);
+                          setCodeEditData({});
+                        }}
+                      >
+                        Cancel
+                      </button>
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span className="col-role">{code.role_name || <em className="text-muted">Not defined</em>}</span>
+                    <span className="col-scope">{code.scope || <em className="text-muted">Not defined</em>}</span>
+                    <span className="col-actions">
+                      <button
+                        className="btn-icon"
+                        onClick={() => {
+                          setEditingCodeId(code.id);
+                          setCodeEditData({ role_name: code.role_name, scope: code.scope });
+                        }}
+                        title="Edit code"
+                      >
+                        <Edit2 size={16} />
+                      </button>
+                      <button
+                        className="btn-icon btn-danger-ghost"
+                        onClick={() => handleDeleteRespCode(code.id)}
+                        title="Deactivate code"
+                      >
+                        <X size={16} />
+                      </button>
+                    </span>
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </section>
+
+      {/* Outlet Modal */}
+      {outletModal.show && (
+        <OutletModal
+          outlet={outletModal.outlet}
+          outletTypes={outletTypes}
+          onSave={handleSaveOutlet}
+          onDelete={handleDeleteOutlet}
+          onClose={() => setOutletModal({ show: false, outlet: null })}
+        />
+      )}
     </div>
   );
 }
