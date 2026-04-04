@@ -1707,7 +1707,7 @@ def create_outlet(
             outlet.leader_name, outlet.leader_email, outlet.sort_order
         ))
 
-        result = dict_from_row(cursor)
+        result = dict_from_row(cursor.fetchone())
         conn.commit()
 
         return result
@@ -1784,7 +1784,7 @@ def update_outlet(
                       is_active, sort_order, created_at, updated_at
         """, params)
 
-        result = dict_from_row(cursor)
+        result = dict_from_row(cursor.fetchone())
         conn.commit()
 
         return result
@@ -1923,7 +1923,7 @@ def create_responsibility_code(
             code_data.scope, code_data.sort_order
         ))
 
-        result = dict_from_row(cursor)
+        result = dict_from_row(cursor.fetchone())
         conn.commit()
 
         return result
@@ -1981,7 +1981,7 @@ def update_responsibility_code(
                       created_at, updated_at
         """, params)
 
-        result = dict_from_row(cursor)
+        result = dict_from_row(cursor.fetchone())
         conn.commit()
 
         return result
