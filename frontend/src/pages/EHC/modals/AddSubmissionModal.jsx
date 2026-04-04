@@ -19,7 +19,7 @@ export default function AddSubmissionModal({
 }) {
   const [formData, setFormData] = useState({
     period_label: '',
-    outlet: null
+    outlets: [] // Changed to array for multi-select
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -36,18 +36,25 @@ export default function AddSubmissionModal({
       return;
     }
 
-    if (isOutletBook && !formData.outlet) {
-      setError('Please select an outlet');
+    if (isOutletBook && formData.outlets.length === 0) {
+      setError('Please select at least one outlet');
       return;
     }
 
     try {
       setSaving(true);
-      const outletName = isOutletBook ? (formData.outlet.name || formData.outlet) : null;
-      await onSave(record.id, formData.period_label, outletName);
+
+      if (isOutletBook) {
+        // Create multiple submissions (one per outlet)
+        await onSave(record.id, formData.period_label, formData.outlets);
+      } else {
+        // Office book: single submission
+        await onSave(record.id, formData.period_label, null);
+      }
+
       onClose();
     } catch (err) {
-      setError(err.message || 'Failed to create submission');
+      setError(err.message || 'Failed to create submission(s)');
       setSaving(false);
     }
   }
@@ -119,15 +126,18 @@ export default function AddSubmissionModal({
           {isOutletBook && (
             <div className="form-group">
               <label>
-                Outlet <span className="required">*</span>
+                Outlets <span className="required">*</span>
               </label>
               <OutletPillSelector
-                selected={formData.outlet}
-                onChange={(outlet) => setFormData({ ...formData, outlet })}
-                multiSelect={false}
+                selected={formData.outlets}
+                onChange={(outlets) => setFormData({ ...formData, outlets })}
+                multiSelect={true}
               />
               <span className="form-help">
-                Select which outlet this submission is for
+                Select outlets to create submissions for. One submission will be created per outlet with the same period label.
+                {formData.outlets.length > 0 && (
+                  <strong> ({formData.outlets.length} selected)</strong>
+                )}
               </span>
             </div>
           )}
@@ -150,7 +160,11 @@ export default function AddSubmissionModal({
               onClick={handleSubmit}
               disabled={saving}
             >
-              {saving ? 'Creating...' : 'Create Submission'}
+              {saving
+                ? 'Creating...'
+                : isOutletBook && formData.outlets.length > 1
+                  ? `Create ${formData.outlets.length} Submissions`
+                  : 'Create Submission'}
             </button>
           </div>
         </div>

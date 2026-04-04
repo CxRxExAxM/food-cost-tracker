@@ -235,21 +235,32 @@ export default function Records({
     }
   }
 
-  // Create new submission
-  async function createSubmission(recordId, periodLabel, outletName = null) {
+  // Create new submission(s)
+  async function createSubmission(recordId, periodLabel, outletsOrName = null) {
     try {
-      await fetchWithAuth(`${API_BASE}/cycles/${activeCycle.id}/submissions`, {
-        method: 'POST',
-        body: JSON.stringify({
-          record_id: recordId,
-          period_label: periodLabel,
-          outlet_name: outletName
-        })
+      // Handle both array of outlets (multi-select) and single outlet name
+      const outlets = Array.isArray(outletsOrName) ? outletsOrName : (outletsOrName ? [outletsOrName] : [null]);
+
+      // Create submissions in parallel
+      const promises = outlets.map(outlet => {
+        const outletName = outlet?.name || outlet || null;
+        return fetchWithAuth(`${API_BASE}/cycles/${activeCycle.id}/submissions`, {
+          method: 'POST',
+          body: JSON.stringify({
+            record_id: recordId,
+            period_label: periodLabel,
+            outlet_name: outletName
+          })
+        });
       });
-      toast.success('Submission created');
+
+      await Promise.all(promises);
+
+      const count = outlets.filter(o => o).length;
+      toast.success(count > 1 ? `${count} submissions created` : 'Submission created');
       onRefreshSubmissions();
     } catch (error) {
-      toast.error(error.message || 'Failed to create submission');
+      toast.error(error.message || 'Failed to create submission(s)');
     }
   }
 
