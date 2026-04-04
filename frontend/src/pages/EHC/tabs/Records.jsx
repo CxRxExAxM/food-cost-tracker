@@ -238,10 +238,9 @@ export default function Records({
   // Create new submission
   async function createSubmission(recordId, periodLabel, outletName = null) {
     try {
-      await fetchWithAuth(`${API_BASE}/submissions`, {
+      await fetchWithAuth(`${API_BASE}/cycles/${activeCycle.id}/submissions`, {
         method: 'POST',
         body: JSON.stringify({
-          audit_cycle_id: activeCycle.id,
           record_id: recordId,
           period_label: periodLabel,
           outlet_name: outletName
