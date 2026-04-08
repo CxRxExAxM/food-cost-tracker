@@ -1,7 +1,7 @@
 """add waste tracking tables
 
-Revision ID: 036_add_waste_tracking_tables
-Revises: 035_ehc_add_responsibility_codes
+Revision ID: 036
+Revises: 035
 Create Date: 2026-04-08 00:00:00.000000
 
 """
@@ -10,8 +10,8 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision = '036_add_waste_tracking_tables'
-down_revision = '035_ehc_add_responsibility_codes'
+revision = '036'
+down_revision = '035'
 branch_labels = None
 depends_on = None
 
