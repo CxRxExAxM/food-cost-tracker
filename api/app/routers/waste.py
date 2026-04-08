@@ -95,7 +95,7 @@ async def get_goal(
             # Try to fetch existing goal
             cur.execute("""
                 SELECT id, organization_id, year, target_grams_per_cover,
-                       created_at, updated_at
+                       prior_year_final, created_at, updated_at
                 FROM waste_goals
                 WHERE organization_id = %s AND year = %s
             """, (org_id, year))
@@ -105,10 +105,10 @@ async def get_goal(
             if not goal:
                 # Create default goal
                 cur.execute("""
-                    INSERT INTO waste_goals (organization_id, year, target_grams_per_cover)
-                    VALUES (%s, %s, 0)
+                    INSERT INTO waste_goals (organization_id, year, target_grams_per_cover, prior_year_final)
+                    VALUES (%s, %s, 0, NULL)
                     RETURNING id, organization_id, year, target_grams_per_cover,
-                              created_at, updated_at
+                              prior_year_final, created_at, updated_at
                 """, (org_id, year))
                 goal = cur.fetchone()
                 conn.commit()
@@ -120,6 +120,7 @@ async def get_goal(
 async def upsert_goal(
     year: int,
     target_grams_per_cover: float,
+    prior_year_final: Optional[float] = None,
     current_user: dict = Depends(get_current_user)
 ):
     """
@@ -131,18 +132,22 @@ async def upsert_goal(
     if target_grams_per_cover < 0:
         raise HTTPException(400, "Target grams per cover must be non-negative")
 
+    if prior_year_final is not None and prior_year_final < 0:
+        raise HTTPException(400, "Prior year final must be non-negative")
+
     with get_db() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute("""
-                INSERT INTO waste_goals (organization_id, year, target_grams_per_cover)
-                VALUES (%s, %s, %s)
+                INSERT INTO waste_goals (organization_id, year, target_grams_per_cover, prior_year_final)
+                VALUES (%s, %s, %s, %s)
                 ON CONFLICT (organization_id, year)
                 DO UPDATE SET
                     target_grams_per_cover = EXCLUDED.target_grams_per_cover,
+                    prior_year_final = EXCLUDED.prior_year_final,
                     updated_at = CURRENT_TIMESTAMP
                 RETURNING id, organization_id, year, target_grams_per_cover,
-                          created_at, updated_at
-            """, (org_id, year, target_grams_per_cover))
+                          prior_year_final, created_at, updated_at
+            """, (org_id, year, target_grams_per_cover, prior_year_final))
 
             goal = cur.fetchone()
             conn.commit()
@@ -447,13 +452,14 @@ async def get_summary(
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             # Fetch goal
             cur.execute("""
-                SELECT target_grams_per_cover
+                SELECT target_grams_per_cover, prior_year_final
                 FROM waste_goals
                 WHERE organization_id = %s AND year = %s
             """, (org_id, year))
 
             goal_row = cur.fetchone()
             target = float(goal_row['target_grams_per_cover']) if goal_row else 0
+            ly_final = float(goal_row['prior_year_final']) if goal_row and goal_row['prior_year_final'] else 0
 
             # Fetch all months with data
             cur.execute("""
@@ -481,9 +487,13 @@ async def get_summary(
             # Calculate YTD grams per cover
             ytd_actual = round(total_diversion_grams / total_covers, 2) if total_covers > 0 else 0
 
-            # Calculate variance
+            # Calculate variance vs goal
             variance = ytd_actual - target
             variance_pct = (variance / target * 100) if target > 0 else 0
+
+            # Calculate variance vs last year (using manually entered prior_year_final)
+            ly_variance = ytd_actual - ly_final if ly_final > 0 else 0
+            ly_variance_pct = (ly_variance / ly_final * 100) if ly_final > 0 else 0
 
             return convert_decimals({
                 'year': year,
@@ -492,5 +502,8 @@ async def get_summary(
                 'variance': round(variance, 2),
                 'variance_pct': round(variance_pct, 2),
                 'total_diversion_grams': round(total_diversion_grams, 2),
-                'total_covers': total_covers
+                'total_covers': total_covers,
+                'last_year_final': ly_final,
+                'ly_variance': round(ly_variance, 2),
+                'ly_variance_pct': round(ly_variance_pct, 2)
             })

@@ -18,6 +18,7 @@ function Waste() {
   const [loading, setLoading] = useState(true);
   const [editingGoal, setEditingGoal] = useState(false);
   const [goalInput, setGoalInput] = useState('');
+  const [priorYearInput, setPriorYearInput] = useState('');
   const [selectedMonth, setSelectedMonth] = useState(null);
 
   useEffect(() => {
@@ -40,6 +41,7 @@ function Waste() {
 
       setGoal(goalRes.data);
       setGoalInput(goalRes.data.target_grams_per_cover);
+      setPriorYearInput(goalRes.data.prior_year_final || '');
       setSummary(summaryRes.data);
       setMetrics(Array.isArray(metricsRes.data) ? metricsRes.data : []);
     } catch (error) {
@@ -63,14 +65,21 @@ function Waste() {
     try {
       const target = parseFloat(goalInput);
       if (isNaN(target) || target < 0) {
-        alert('Please enter a valid non-negative number');
+        alert('Please enter a valid non-negative number for year-end goal');
+        return;
+      }
+
+      const priorYear = priorYearInput !== '' ? parseFloat(priorYearInput) : null;
+      if (priorYear !== null && (isNaN(priorYear) || priorYear < 0)) {
+        alert('Please enter a valid non-negative number for prior year final');
         return;
       }
 
       await axios.put('/waste/goals', null, {
         params: {
           year: selectedYear,
-          target_grams_per_cover: target
+          target_grams_per_cover: target,
+          prior_year_final: priorYear
         }
       });
 
@@ -84,6 +93,7 @@ function Waste() {
 
   const handleGoalCancel = () => {
     setGoalInput(goal.target_grams_per_cover);
+    setPriorYearInput(goal.prior_year_final || '');
     setEditingGoal(false);
   };
 
@@ -149,19 +159,37 @@ function Waste() {
               <div className="summary-label">Year-End Goal</div>
               <div className="summary-value">
                 {editingGoal ? (
-                  <div className="goal-edit">
-                    <input
-                      type="number"
-                      value={goalInput}
-                      onChange={(e) => setGoalInput(e.target.value)}
-                      min="0"
-                      step="0.01"
-                      className="goal-input"
-                      autoFocus
-                    />
-                    <span className="goal-unit">g/cover</span>
-                    <button onClick={handleGoalSave} className="btn-save">Save</button>
-                    <button onClick={handleGoalCancel} className="btn-cancel">Cancel</button>
+                  <div className="goal-edit-section">
+                    <div className="goal-edit">
+                      <label className="goal-edit-label">This Year Goal:</label>
+                      <input
+                        type="number"
+                        value={goalInput}
+                        onChange={(e) => setGoalInput(e.target.value)}
+                        min="0"
+                        step="0.01"
+                        className="goal-input"
+                        autoFocus
+                      />
+                      <span className="goal-unit">g/cover</span>
+                    </div>
+                    <div className="goal-edit">
+                      <label className="goal-edit-label">Prior Year Final:</label>
+                      <input
+                        type="number"
+                        value={priorYearInput}
+                        onChange={(e) => setPriorYearInput(e.target.value)}
+                        min="0"
+                        step="0.01"
+                        className="goal-input"
+                        placeholder="Optional"
+                      />
+                      <span className="goal-unit">g/cover</span>
+                    </div>
+                    <div className="goal-edit-buttons">
+                      <button onClick={handleGoalSave} className="btn-save">Save</button>
+                      <button onClick={handleGoalCancel} className="btn-cancel">Cancel</button>
+                    </div>
                   </div>
                 ) : (
                   <div className="goal-display">
@@ -205,6 +233,31 @@ function Waste() {
                   {formatNumber(Math.round(summary?.total_diversion_grams))}
                 </span>
                 <span className="value-unit">grams</span>
+              </div>
+            </div>
+
+            <div className="summary-card">
+              <div className="summary-label">Last Year Final</div>
+              <div className="summary-value">
+                <span className="value-number">
+                  {formatDecimal(summary?.last_year_final)}
+                </span>
+                <span className="value-unit">g/cover</span>
+              </div>
+            </div>
+
+            <div className="summary-card">
+              <div className="summary-label">YTD vs LY</div>
+              <div className={`summary-value ${getVarianceColor(summary?.ly_variance)}`}>
+                <span className="value-number">
+                  {summary?.ly_variance > 0 ? '+' : ''}{formatDecimal(summary?.ly_variance)}
+                </span>
+                <span className="value-unit">g/cover</span>
+                {summary?.ly_variance_pct !== 0 && summary?.last_year_final > 0 && (
+                  <span className="variance-pct">
+                    ({summary?.ly_variance_pct > 0 ? '+' : ''}{formatDecimal(summary?.ly_variance_pct, 1)}%)
+                  </span>
+                )}
               </div>
             </div>
           </div>
