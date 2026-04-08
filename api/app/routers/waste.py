@@ -10,7 +10,7 @@ from typing import Optional, List, Dict, Any
 from datetime import date, datetime
 from decimal import Decimal
 import psycopg2.extras
-from ..database import get_db_connection
+from ..database import get_db
 from ..auth import get_current_user
 
 router = APIRouter(prefix="/api/waste", tags=["waste"])
@@ -72,7 +72,7 @@ async def get_goal(
     """
     org_id = current_user["organization_id"]
 
-    with get_db_connection() as conn:
+    with get_db() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             # Try to fetch existing goal
             cur.execute("""
@@ -113,7 +113,7 @@ async def upsert_goal(
     if target_grams_per_cover < 0:
         raise HTTPException(400, "Target grams per cover must be non-negative")
 
-    with get_db_connection() as conn:
+    with get_db() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute("""
                 INSERT INTO waste_goals (organization_id, year, target_grams_per_cover)
@@ -148,7 +148,7 @@ async def get_all_metrics(
     """
     org_id = current_user["organization_id"]
 
-    with get_db_connection() as conn:
+    with get_db() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             # Fetch existing monthly metrics
             cur.execute("""
@@ -250,7 +250,7 @@ async def get_month_metrics(
     if month < 1 or month > 12:
         raise HTTPException(400, "Month must be between 1 and 12")
 
-    with get_db_connection() as conn:
+    with get_db() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             # Fetch monthly metric
             cur.execute("""
@@ -377,7 +377,7 @@ async def upsert_month_metrics(
     if compost_lbs is not None and compost_lbs < 0:
         raise HTTPException(400, "Compost weight must be non-negative")
 
-    with get_db_connection() as conn:
+    with get_db() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute("""
                 INSERT INTO waste_monthly_metrics
@@ -425,7 +425,7 @@ async def get_summary(
     """
     org_id = current_user["organization_id"]
 
-    with get_db_connection() as conn:
+    with get_db() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             # Fetch goal
             cur.execute("""
