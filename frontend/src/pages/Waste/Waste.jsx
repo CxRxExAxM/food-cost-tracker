@@ -29,9 +29,9 @@ function Waste() {
     try {
       // Fetch goal, summary, and metrics in parallel
       const [goalRes, summaryRes, metricsRes] = await Promise.all([
-        axios.get(`/api/waste/goals?year=${selectedYear}`),
-        axios.get(`/api/waste/summary?year=${selectedYear}`),
-        axios.get(`/api/waste/metrics?year=${selectedYear}`)
+        axios.get(`/waste/goals?year=${selectedYear}`),
+        axios.get(`/waste/summary?year=${selectedYear}`),
+        axios.get(`/waste/metrics?year=${selectedYear}`)
       ]);
 
       console.log('Goal response:', goalRes.data);
@@ -67,7 +67,7 @@ function Waste() {
         return;
       }
 
-      await axios.put('/api/waste/goals', null, {
+      await axios.put('/waste/goals', null, {
         params: {
           year: selectedYear,
           target_grams_per_cover: target

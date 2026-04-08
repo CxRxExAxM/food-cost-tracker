@@ -28,7 +28,7 @@ function MonthDetailModal({ year, month, goalTarget, onClose }) {
   const fetchMonthData = async () => {
     setLoading(true);
     try {
-      const response = await axios.get(`/api/waste/metrics/${year}/${month}`);
+      const response = await axios.get(`/waste/metrics/${year}/${month}`);
       const data = response.data;
       setMetric(data);
 
@@ -60,7 +60,7 @@ function MonthDetailModal({ year, month, goalTarget, onClose }) {
         notes: notes || null
       };
 
-      await axios.put(`/api/waste/metrics/${year}/${month}`, null, { params });
+      await axios.put(`/waste/metrics/${year}/${month}`, null, { params });
       onClose(); // Close modal and refresh parent
     } catch (error) {
       console.error('Error saving month data:', error);
