@@ -45,7 +45,7 @@ app.include_router(chat.router, prefix="/api")
 app.include_router(taxonomy.router, prefix="/api")
 app.include_router(ehc.router, prefix="/api")
 app.include_router(ehc_forms.router, prefix="/api")
-app.include_router(waste.router)
+app.include_router(waste.router, prefix="/api")
 app.include_router(ai_parse.router)
 
 

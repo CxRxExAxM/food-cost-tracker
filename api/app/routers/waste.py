@@ -13,7 +13,7 @@ import psycopg2.extras
 from ..database import get_db
 from ..auth import get_current_user
 
-router = APIRouter(prefix="/api/waste", tags=["waste"])
+router = APIRouter(prefix="/waste", tags=["waste"])
 
 # Constants
 GRAMS_PER_LB = 453.592
