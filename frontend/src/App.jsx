@@ -21,6 +21,7 @@ import Vessels from './pages/Settings/Vessels';
 import BaseConversions from './pages/Settings/BaseConversions';
 import Potentials from './pages/Potentials/Potentials';
 import EHC from './pages/EHC/EHC';
+import Waste from './pages/Waste/Waste';
 import FormPage from './pages/EHC/forms/FormPage';
 import ImpersonationBanner from './components/ImpersonationBanner';
 import './App.css';
@@ -144,6 +145,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <EHC />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/waste"
+        element={
+          <ProtectedRoute>
+            <Waste />
           </ProtectedRoute>
         }
       />

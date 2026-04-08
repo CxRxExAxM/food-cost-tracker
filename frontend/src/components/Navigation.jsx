@@ -14,6 +14,7 @@ function Navigation({ showModuleNav = true }) {
   // Determine current module based on path
   const isPotentialsModule = location.pathname.startsWith('/potentials');
   const isEHCModule = location.pathname.startsWith('/ehc');
+  const isWasteModule = location.pathname.startsWith('/waste');
   const isCostingModule = location.pathname.startsWith('/costing') ||
     location.pathname.startsWith('/products') ||
     location.pathname.startsWith('/recipes') ||
@@ -57,6 +58,7 @@ function Navigation({ showModuleNav = true }) {
   const getModuleName = () => {
     if (isPotentialsModule) return 'Potentials';
     if (isEHCModule) return 'EHC Compliance';
+    if (isWasteModule) return 'Waste Tracking';
     if (isCostingModule) return 'Food Costing';
     return null;
   };

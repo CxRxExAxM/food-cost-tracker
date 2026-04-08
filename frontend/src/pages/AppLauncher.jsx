@@ -35,6 +35,15 @@ function AppLauncher() {
       color: 'purple'
     },
     {
+      id: 'waste',
+      name: 'Waste Tracking',
+      description: 'Food waste diversion tracking with QR-based weigh-ins and monthly KPI reporting',
+      icon: '♻️',
+      path: '/waste',
+      enabled: true,
+      color: 'green'
+    },
+    {
       id: 'haccp',
       name: 'HACCP',
       description: 'Food safety management and compliance tracking',
