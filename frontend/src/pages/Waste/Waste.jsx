@@ -229,7 +229,14 @@ function Waste() {
               </tr>
             </thead>
             <tbody>
-              {metrics.map((metric) => (
+              {metrics.length === 0 ? (
+                <tr>
+                  <td colSpan="11" style={{ textAlign: 'center', padding: 'var(--space-8)', color: 'var(--text-tertiary)' }}>
+                    No data available. API returned empty results. Check console for errors.
+                  </td>
+                </tr>
+              ) : (
+                metrics.map((metric) => (
                 <tr
                   key={metric.month}
                   onClick={() => handleMonthClick(metric)}
@@ -268,7 +275,8 @@ function Waste() {
                     }
                   </td>
                 </tr>
-              ))}
+                ))
+              )}
             </tbody>
           </table>
         </div>
