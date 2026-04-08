@@ -21,7 +21,7 @@ def upgrade():
     op.create_table(
         'waste_goals',
         sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True, server_default=sa.text('gen_random_uuid()')),
-        sa.Column('organization_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('organizations.id', ondelete='CASCADE'), nullable=False),
+        sa.Column('organization_id', sa.Integer, sa.ForeignKey('organizations.id', ondelete='CASCADE'), nullable=False),
         sa.Column('year', sa.Integer, nullable=False),
         sa.Column('target_grams_per_cover', sa.Numeric(10, 2), nullable=False),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('CURRENT_TIMESTAMP'), nullable=False),
@@ -34,7 +34,7 @@ def upgrade():
     op.create_table(
         'waste_monthly_metrics',
         sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True, server_default=sa.text('gen_random_uuid()')),
-        sa.Column('organization_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('organizations.id', ondelete='CASCADE'), nullable=False),
+        sa.Column('organization_id', sa.Integer, sa.ForeignKey('organizations.id', ondelete='CASCADE'), nullable=False),
         sa.Column('year', sa.Integer, nullable=False),
         sa.Column('month', sa.Integer, nullable=False),
         sa.Column('fb_covers', sa.Integer, nullable=True),
@@ -54,7 +54,7 @@ def upgrade():
     op.create_table(
         'waste_qr_tokens',
         sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True, server_default=sa.text('gen_random_uuid()')),
-        sa.Column('organization_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('organizations.id', ondelete='CASCADE'), nullable=False),
+        sa.Column('organization_id', sa.Integer, sa.ForeignKey('organizations.id', ondelete='CASCADE'), nullable=False),
         sa.Column('category', sa.String(20), nullable=False),
         sa.Column('label', sa.String(255), nullable=False),
         sa.Column('is_active', sa.Boolean, server_default='true', nullable=False),
@@ -67,7 +67,7 @@ def upgrade():
     op.create_table(
         'waste_weigh_ins',
         sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True, server_default=sa.text('gen_random_uuid()')),
-        sa.Column('organization_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('organizations.id', ondelete='CASCADE'), nullable=False),
+        sa.Column('organization_id', sa.Integer, sa.ForeignKey('organizations.id', ondelete='CASCADE'), nullable=False),
         sa.Column('token_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('waste_qr_tokens.id', ondelete='CASCADE'), nullable=False),
         sa.Column('category', sa.String(20), nullable=False),
         sa.Column('weight_lbs', sa.Numeric(10, 2), nullable=False),
