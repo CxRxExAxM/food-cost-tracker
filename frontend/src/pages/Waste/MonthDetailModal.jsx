@@ -174,7 +174,7 @@ function MonthDetailModal({ year, month, goalTarget, onClose }) {
               <div className="input-field calculated">
                 <label>Cafeteria Covers</label>
                 <div className="calculated-value">{formatNumber(cafeCovers)}</div>
-                <div className="field-hint">Calculated: (FTE + Temp) × Capture %</div>
+                <div className="field-hint">Calculated: (FTE + Temp) × Capture % × Days in Month</div>
               </div>
 
               <div className="input-field">

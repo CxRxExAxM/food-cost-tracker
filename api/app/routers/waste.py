@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from typing import Optional, List, Dict, Any
 from datetime import date, datetime
 from decimal import Decimal
+import calendar
 import psycopg2.extras
 from ..database import get_db
 from ..auth import get_current_user
@@ -38,11 +39,17 @@ def calculate_metrics(row: Dict[str, Any]) -> Dict[str, Any]:
     """
     result = dict(row)
 
-    # Calculate cafe covers
+    # Calculate cafe covers (multiply by days in month)
     fte = row.get('fte_count') or 0
     temp = row.get('temp_count') or 0
     capture_pct = row.get('theoretic_capture_pct') or 0
-    cafe_covers = round((fte + temp) * (float(capture_pct) / 100.0))
+    year = row.get('year')
+    month = row.get('month')
+
+    # Get days in month
+    days_in_month = calendar.monthrange(year, month)[1] if year and month else 30
+
+    cafe_covers = round((fte + temp) * (float(capture_pct) / 100.0) * days_in_month)
     result['cafe_covers'] = cafe_covers
 
     # Calculate total covers
