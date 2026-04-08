@@ -34,12 +34,22 @@ function Waste() {
         axios.get(`/api/waste/metrics?year=${selectedYear}`)
       ]);
 
+      console.log('Goal response:', goalRes.data);
+      console.log('Summary response:', summaryRes.data);
+      console.log('Metrics response:', metricsRes.data);
+
       setGoal(goalRes.data);
       setGoalInput(goalRes.data.target_grams_per_cover);
       setSummary(summaryRes.data);
-      setMetrics(metricsRes.data);
+      setMetrics(Array.isArray(metricsRes.data) ? metricsRes.data : []);
     } catch (error) {
       console.error('Error fetching waste data:', error);
+      console.error('Error details:', error.response?.data);
+      // Set safe defaults on error
+      setGoal({ target_grams_per_cover: 0 });
+      setGoalInput(0);
+      setSummary({ ytd_actual_grams_per_cover: 0, variance: 0, variance_pct: 0, total_diversion_grams: 0, total_covers: 0 });
+      setMetrics([]);
     } finally {
       setLoading(false);
     }

@@ -20,6 +20,17 @@ GRAMS_PER_LB = 453.592
 MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
 
+def convert_decimals(obj):
+    """Convert Decimal objects to float for JSON serialization."""
+    if isinstance(obj, Decimal):
+        return float(obj)
+    elif isinstance(obj, dict):
+        return {k: convert_decimals(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [convert_decimals(item) for item in obj]
+    return obj
+
+
 def calculate_metrics(row: Dict[str, Any]) -> Dict[str, Any]:
     """
     Calculate derived metrics for a monthly metrics row.
@@ -95,7 +106,7 @@ async def get_goal(
                 goal = cur.fetchone()
                 conn.commit()
 
-            return dict(goal)
+            return convert_decimals(dict(goal))
 
 
 @router.put("/goals")
@@ -129,7 +140,7 @@ async def upsert_goal(
             goal = cur.fetchone()
             conn.commit()
 
-            return dict(goal)
+            return convert_decimals(dict(goal))
 
 
 # ============================================================================
@@ -232,7 +243,7 @@ async def get_all_metrics(
                 metric['month_name'] = MONTHS[month_num - 1]
                 result.append(metric)
 
-            return result
+            return convert_decimals(result)
 
 
 @router.get("/metrics/{year}/{month}")
@@ -333,7 +344,7 @@ async def get_month_metrics(
             result['month_name'] = MONTHS[month - 1]
             result['weigh_ins'] = weigh_ins
 
-            return result
+            return convert_decimals(result)
 
 
 @router.put("/metrics/{year}/{month}")
@@ -408,7 +419,7 @@ async def upsert_month_metrics(
             metric = calculate_metrics(metric)
             metric['month_name'] = MONTHS[month - 1]
 
-            return metric
+            return convert_decimals(metric)
 
 
 # ============================================================================
@@ -467,7 +478,7 @@ async def get_summary(
             variance = ytd_actual - target
             variance_pct = (variance / target * 100) if target > 0 else 0
 
-            return {
+            return convert_decimals({
                 'year': year,
                 'target_grams_per_cover': target,
                 'ytd_actual_grams_per_cover': ytd_actual,
@@ -475,4 +486,4 @@ async def get_summary(
                 'variance_pct': round(variance_pct, 2),
                 'total_diversion_grams': round(total_diversion_grams, 2),
                 'total_covers': total_covers
-            }
+            })
