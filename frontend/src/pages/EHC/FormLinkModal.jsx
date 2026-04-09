@@ -40,6 +40,15 @@ export default function FormLinkModal({
   // Show responses toggle (useful for equipment registration, not for employee privacy)
   const [showResponses, setShowResponses] = useState(false);
 
+  // Table form state (columns + rows)
+  const [tableColumns, setTableColumns] = useState([
+    { key: 'location', label: 'Location', editable: false, required: false },
+    { key: 'name', label: 'Name', editable: true, required: true }
+  ]);
+  const [tableRows, setTableRows] = useState([
+    { location: '' }
+  ]);
+
   // Load existing links when modal opens
   useEffect(() => {
     if (isOpen && submission?.id) {
@@ -77,6 +86,25 @@ export default function FormLinkModal({
       }
     }
 
+    // Validate table_form
+    if (formType === 'table_form') {
+      const validColumns = tableColumns.filter(c => c.label.trim());
+      if (validColumns.length === 0) {
+        alert('Please add at least one column with a name');
+        return;
+      }
+      const prefillCols = tableColumns.filter(c => !c.editable);
+      if (prefillCols.length > 0) {
+        const validRows = tableRows.filter(r =>
+          prefillCols.some(col => r[col.key]?.trim())
+        );
+        if (validRows.length === 0) {
+          alert('Please add at least one pre-filled row');
+          return;
+        }
+      }
+    }
+
     try {
       setLoading(true);
 
@@ -98,6 +126,39 @@ export default function FormLinkModal({
           }));
       }
 
+      if (formType === 'table_form') {
+        // Build columns config (always include signature column)
+        config.columns = [
+          ...tableColumns.filter(c => c.label.trim()).map(c => ({
+            key: c.key,
+            label: c.label.trim(),
+            editable: c.editable,
+            required: c.required
+          })),
+          { key: 'signature', label: 'Signature', type: 'signature' }
+        ];
+
+        // Build rows config (only pre-fill columns)
+        const prefillCols = tableColumns.filter(c => !c.editable && c.label.trim());
+        config.rows = tableRows
+          .filter(r => prefillCols.some(col => r[col.key]?.trim()))
+          .map(r => {
+            const row = {};
+            prefillCols.forEach(col => {
+              row[col.key] = r[col.key]?.trim() || '';
+            });
+            return row;
+          });
+      }
+
+      // Calculate expected responses
+      let expResp = expectedResponses;
+      if (formType === 'team_roster') {
+        expResp = teamMembers.filter(m => m.name.trim()).length;
+      } else if (formType === 'table_form') {
+        expResp = config.rows?.length || expectedResponses;
+      }
+
       const response = await fetch(
         `${API_BASE}/submissions/${submission.id}/generate-form-link`,
         {
@@ -105,9 +166,7 @@ export default function FormLinkModal({
           headers: getAuthHeaders(),
           body: JSON.stringify({
             form_type: formType,
-            expected_responses: formType === 'team_roster'
-              ? teamMembers.filter(m => m.name.trim()).length
-              : expectedResponses,
+            expected_responses: expResp,
             config
           })
         }
@@ -250,11 +309,72 @@ export default function FormLinkModal({
     setTeamMembers(updated);
   }
 
+  // Table form column management
+  function addTableColumn() {
+    const newKey = `col_${Date.now()}`;
+    setTableColumns([...tableColumns, { key: newKey, label: '', editable: true, required: false }]);
+  }
+
+  function removeTableColumn(index) {
+    if (tableColumns.length > 1) {
+      const removed = tableColumns[index];
+      setTableColumns(tableColumns.filter((_, i) => i !== index));
+      // Also remove this column's data from all rows
+      setTableRows(tableRows.map(row => {
+        const { [removed.key]: _, ...rest } = row;
+        return rest;
+      }));
+    }
+  }
+
+  function updateTableColumn(index, field, value) {
+    const updated = [...tableColumns];
+    if (field === 'label') {
+      // Auto-generate key from label if it's a new column
+      const col = updated[index];
+      if (col.key.startsWith('col_')) {
+        const newKey = value.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+        if (newKey) {
+          // Update row data keys
+          setTableRows(tableRows.map(row => {
+            const { [col.key]: val, ...rest } = row;
+            return { ...rest, [newKey]: val || '' };
+          }));
+          col.key = newKey;
+        }
+      }
+    }
+    updated[index] = { ...updated[index], [field]: value };
+    setTableColumns(updated);
+  }
+
+  // Table form row management
+  function addTableRow() {
+    const newRow = {};
+    tableColumns.filter(c => !c.editable).forEach(c => {
+      newRow[c.key] = '';
+    });
+    setTableRows([...tableRows, newRow]);
+  }
+
+  function removeTableRow(index) {
+    if (tableRows.length > 1) {
+      setTableRows(tableRows.filter((_, i) => i !== index));
+    }
+  }
+
+  function updateTableRow(index, key, value) {
+    const updated = [...tableRows];
+    updated[index] = { ...updated[index], [key]: value };
+    setTableRows(updated);
+  }
+
   if (!isOpen) return null;
 
   const formTypeOptions = [
-    { value: 'staff_declaration', label: 'Staff Declaration (Record 11)', desc: 'Mass signature collection with scroll-to-sign' },
-    { value: 'team_roster', label: 'Team Roster (Record 35)', desc: 'Pre-configured team member signing' }
+    { value: 'staff_declaration', label: 'Staff Declaration', desc: 'Self-fill form — users enter all their info' },
+    { value: 'team_roster', label: 'Team Roster', desc: 'Pre-filled names — each person finds and signs' },
+    { value: 'table_form', label: 'Table Form (Custom)', desc: 'Define columns & rows — partial pre-fill supported' }
   ];
 
   return (
@@ -362,7 +482,9 @@ export default function FormLinkModal({
                 <div key={link.id} className={`link-card ${!link.is_active ? 'inactive' : ''}`}>
                   <div className="link-card-header">
                     <span className="link-type-badge">
-                      {link.form_type === 'staff_declaration' ? 'Declaration' : 'Team Roster'}
+                      {link.form_type === 'staff_declaration' && 'Declaration'}
+                      {link.form_type === 'team_roster' && 'Team Roster'}
+                      {link.form_type === 'table_form' && 'Table Form'}
                     </span>
                     <button
                       className="link-responses-btn"
@@ -549,6 +671,111 @@ export default function FormLinkModal({
                   <span className="field-hint" style={{ marginTop: 'var(--space-2)' }}>
                     {teamMembers.filter(m => m.name.trim()).length} team member(s) configured
                   </span>
+                </div>
+              )}
+
+              {/* Table Form Editor */}
+              {formType === 'table_form' && (
+                <div className="form-field">
+                  <label>Define Columns</label>
+                  <span className="field-hint" style={{ marginBottom: 'var(--space-2)' }}>
+                    Non-editable columns = you pre-fill. Editable = user fills when signing.
+                  </span>
+
+                  <div className="table-columns-editor">
+                    {tableColumns.map((col, idx) => (
+                      <div key={idx} className="table-column-row">
+                        <input
+                          type="text"
+                          placeholder="Column name"
+                          value={col.label}
+                          onChange={e => updateTableColumn(idx, 'label', e.target.value)}
+                          className="input table-col-input"
+                        />
+                        <label className="col-toggle">
+                          <input
+                            type="checkbox"
+                            checked={!col.editable}
+                            onChange={e => updateTableColumn(idx, 'editable', !e.target.checked)}
+                          />
+                          <span>Pre-fill</span>
+                        </label>
+                        <label className="col-toggle">
+                          <input
+                            type="checkbox"
+                            checked={col.required}
+                            onChange={e => updateTableColumn(idx, 'required', e.target.checked)}
+                          />
+                          <span>Required</span>
+                        </label>
+                        <button
+                          type="button"
+                          className="btn-icon btn-remove"
+                          onClick={() => removeTableColumn(idx)}
+                          disabled={tableColumns.length === 1}
+                          title="Remove column"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      className="btn-add-member"
+                      onClick={addTableColumn}
+                    >
+                      <Plus size={14} />
+                      Add Column
+                    </button>
+                  </div>
+
+                  {/* Pre-filled rows (only for non-editable columns) */}
+                  {tableColumns.some(c => !c.editable) && (
+                    <>
+                      <label style={{ marginTop: 'var(--space-4)' }}>Pre-fill Rows</label>
+                      <span className="field-hint" style={{ marginBottom: 'var(--space-2)' }}>
+                        Add one row per item (e.g., each location). Users will find their row and complete it.
+                      </span>
+
+                      <div className="table-rows-editor">
+                        {tableRows.map((row, rowIdx) => (
+                          <div key={rowIdx} className="table-row-entry">
+                            {tableColumns.filter(c => !c.editable).map(col => (
+                              <input
+                                key={col.key}
+                                type="text"
+                                placeholder={col.label || col.key}
+                                value={row[col.key] || ''}
+                                onChange={e => updateTableRow(rowIdx, col.key, e.target.value)}
+                                className="input table-row-input"
+                              />
+                            ))}
+                            <button
+                              type="button"
+                              className="btn-icon btn-remove"
+                              onClick={() => removeTableRow(rowIdx)}
+                              disabled={tableRows.length === 1}
+                              title="Remove row"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        ))}
+                        <button
+                          type="button"
+                          className="btn-add-member"
+                          onClick={addTableRow}
+                        >
+                          <Plus size={14} />
+                          Add Row
+                        </button>
+                      </div>
+
+                      <span className="field-hint" style={{ marginTop: 'var(--space-2)' }}>
+                        {tableRows.filter(r => Object.values(r).some(v => v?.trim())).length} row(s) configured
+                      </span>
+                    </>
+                  )}
                 </div>
               )}
 

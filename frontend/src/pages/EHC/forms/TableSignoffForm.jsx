@@ -25,6 +25,8 @@ export default function TableSignoffForm({
   const [activeSigningIndex, setActiveSigningIndex] = useState(null);
   const [signature, setSignature] = useState(null);
   const [newRowData, setNewRowData] = useState({});
+  // Track user edits for editable columns in pre-filled rows
+  const [rowEdits, setRowEdits] = useState({});
 
   const columns = config?.columns || [];
   const rows = config?.rows || [];
@@ -36,6 +38,10 @@ export default function TableSignoffForm({
   const dataColumns = columns.filter(c => c.type !== 'signature');
   const signatureColumn = columns.find(c => c.type === 'signature');
   const showResponses = config?.show_responses || false;
+
+  // Separate editable vs read-only columns for pre-filled rows
+  const editableColumns = dataColumns.filter(c => c.editable);
+  const readOnlyColumns = dataColumns.filter(c => !c.editable);
 
   // Map existing responses to row indices
   const signedIndices = useMemo(() => {
@@ -49,29 +55,57 @@ export default function TableSignoffForm({
   }, [existingResponses]);
 
   const handleSignClick = (index) => {
-    setActiveSigningIndex(activeSigningIndex === index ? null : index);
-    setSignature(null);
+    if (activeSigningIndex === index) {
+      // Closing - clear state
+      setActiveSigningIndex(null);
+      setSignature(null);
+      setRowEdits({});
+    } else {
+      // Opening - initialize edits for this row
+      setActiveSigningIndex(index);
+      setSignature(null);
+      // Pre-populate with any existing values from the row
+      const row = rows[index] || {};
+      const initialEdits = {};
+      editableColumns.forEach(col => {
+        initialEdits[col.key] = row[col.key] || '';
+      });
+      setRowEdits(initialEdits);
+    }
   };
 
   const handleSubmit = (rowIndex) => {
     if (!signature || submitting) return;
 
+    // Check required editable fields are filled
+    const missingRequired = editableColumns
+      .filter(c => c.required && !rowEdits[c.key]?.trim())
+      .map(c => c.label);
+    if (missingRequired.length > 0) {
+      alert(`Please fill in: ${missingRequired.join(', ')}`);
+      return;
+    }
+
     const row = rows[rowIndex];
-    // Get the name from the first text column, or use a generic identifier
+    // Merge original row data with user edits
+    const mergedRowData = { ...row, ...rowEdits };
+
+    // Get the name from edits first (if name is editable), then fall back to row data
     const nameColumn = dataColumns.find(c => c.key === 'name') || dataColumns[0];
-    const respondentName = row?.[nameColumn?.key] || `Row ${rowIndex + 1}`;
+    const respondentName = rowEdits[nameColumn?.key]?.trim() || row?.[nameColumn?.key] || `Row ${rowIndex + 1}`;
 
     onSubmit({
       respondent_name: respondentName,
       response_data: {
         row_index: rowIndex,
-        row_data: row
+        row_data: mergedRowData
       },
       signature_data: signature
     });
 
     setActiveSigningIndex(null);
     setSignature(null);
+    setRowEdits({});
   };
 
   // For self-fill mode (no pre-filled rows)
@@ -205,7 +239,7 @@ export default function TableSignoffForm({
     <div className="table-signoff-form">
       {/* Header */}
       <div className="form-header">
-        <h1 className="form-title">Sign-off Form</h1>
+        <h1 className="form-title">{title || 'Sign-off Form'}</h1>
         <div className="form-meta">
           <span>{propertyName}</span>
         </div>
@@ -316,10 +350,37 @@ export default function TableSignoffForm({
         <div className="inline-signature-area">
           <div className="signing-for">
             Signing row: <strong>{activeSigningIndex + 1}</strong>
-            {rows[activeSigningIndex]?.name && (
-              <> — {rows[activeSigningIndex].name}</>
-            )}
+            {/* Show read-only values for context */}
+            {readOnlyColumns.map(col => {
+              const value = rows[activeSigningIndex]?.[col.key];
+              return value ? <span key={col.key}> — {value}</span> : null;
+            })}
           </div>
+
+          {/* Editable Fields */}
+          {editableColumns.length > 0 && (
+            <div className="editable-fields">
+              {editableColumns.map(col => (
+                <div key={col.key} className="editable-field">
+                  <label>{col.label}{col.required && ' *'}</label>
+                  {col.type === 'date' ? (
+                    <input
+                      type="date"
+                      value={rowEdits[col.key] || ''}
+                      onChange={e => setRowEdits({ ...rowEdits, [col.key]: e.target.value })}
+                    />
+                  ) : (
+                    <input
+                      type="text"
+                      value={rowEdits[col.key] || ''}
+                      onChange={e => setRowEdits({ ...rowEdits, [col.key]: e.target.value })}
+                      placeholder={`Enter ${col.label.toLowerCase()}`}
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
 
           <SignaturePad onSignatureChange={setSignature} />
 
