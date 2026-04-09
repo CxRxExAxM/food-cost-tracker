@@ -595,6 +595,22 @@ export default function FormLinkModal({
                 </div>
               </div>
 
+              {/* Show Responses Toggle - visible for all form types */}
+              <div className="form-field">
+                <label className="toggle-label">
+                  <input
+                    type="checkbox"
+                    checked={showResponses}
+                    onChange={e => setShowResponses(e.target.checked)}
+                    className="toggle-checkbox"
+                  />
+                  <span className="toggle-text">Show existing responses on public form</span>
+                </label>
+                <span className="field-hint">
+                  Useful for equipment registration. Disable for employee privacy.
+                </span>
+              </div>
+
               {/* Expected Responses - only for staff_declaration */}
               {formType === 'staff_declaration' && (
                 <div className="form-field">
@@ -778,23 +794,6 @@ export default function FormLinkModal({
                   )}
                 </div>
               )}
-
-              {/* Show Responses Toggle */}
-              <div className="form-field">
-                <label className="toggle-label">
-                  <input
-                    type="checkbox"
-                    checked={showResponses}
-                    onChange={e => setShowResponses(e.target.checked)}
-                    className="toggle-checkbox"
-                  />
-                  <span className="toggle-text">Show existing responses on form</span>
-                </label>
-                <span className="field-hint">
-                  Enable for equipment registration (see what's already registered).
-                  Disable for employee sign-offs (privacy).
-                </span>
-              </div>
 
               <div className="form-actions">
                 {existingLinks.length > 0 && (
