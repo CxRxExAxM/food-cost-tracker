@@ -167,11 +167,12 @@ export default function FormPage() {
 
   // Render form
   const renderForm = () => {
-    const { config, responses } = formData;
+    const { config, responses, title } = formData;
 
     return (
       <TableSignoffForm
         config={config}
+        title={title}
         existingResponses={responses}
         onSubmit={handleSubmit}
         submitting={submitting}

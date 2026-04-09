@@ -16,6 +16,7 @@ import './TableSignoffForm.css';
  */
 export default function TableSignoffForm({
   config,
+  title,
   existingResponses = [],
   onSubmit,
   submitting = false
@@ -101,7 +102,7 @@ export default function TableSignoffForm({
       <div className="table-signoff-form">
         {/* Header */}
         <div className="form-header">
-          <h1 className="form-title">Sign-off Form</h1>
+          <h1 className="form-title">{title || 'Sign-off Form'}</h1>
           <div className="form-meta">
             <span>{propertyName}</span>
           </div>
