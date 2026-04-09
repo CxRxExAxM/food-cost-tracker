@@ -37,6 +37,9 @@ export default function FormLinkModal({
     { name: '', position: '', department: '', date_approved: '' }
   ]);
 
+  // Show responses toggle (useful for equipment registration, not for employee privacy)
+  const [showResponses, setShowResponses] = useState(false);
+
   // Load existing links when modal opens
   useEffect(() => {
     if (isOpen && submission?.id) {
@@ -79,7 +82,8 @@ export default function FormLinkModal({
 
       // Build config based on form type
       const config = {
-        property_name: 'Fairmont Scottsdale Princess'
+        property_name: 'Fairmont Scottsdale Princess',
+        show_responses: showResponses
       };
 
       if (formType === 'team_roster') {
@@ -547,6 +551,23 @@ export default function FormLinkModal({
                   </span>
                 </div>
               )}
+
+              {/* Show Responses Toggle */}
+              <div className="form-field">
+                <label className="toggle-label">
+                  <input
+                    type="checkbox"
+                    checked={showResponses}
+                    onChange={e => setShowResponses(e.target.checked)}
+                    className="toggle-checkbox"
+                  />
+                  <span className="toggle-text">Show existing responses on form</span>
+                </label>
+                <span className="field-hint">
+                  Enable for equipment registration (see what's already registered).
+                  Disable for employee sign-offs (privacy).
+                </span>
+              </div>
 
               <div className="form-actions">
                 {existingLinks.length > 0 && (

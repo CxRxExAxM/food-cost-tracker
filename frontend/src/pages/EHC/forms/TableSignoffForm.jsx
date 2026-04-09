@@ -35,6 +35,7 @@ export default function TableSignoffForm({
   // Get non-signature columns for data entry
   const dataColumns = columns.filter(c => c.type !== 'signature');
   const signatureColumn = columns.find(c => c.type === 'signature');
+  const showResponses = config?.show_responses || false;
 
   // Map existing responses to row indices
   const signedIndices = useMemo(() => {
@@ -133,6 +134,30 @@ export default function TableSignoffForm({
         <div className="response-count">
           {existingResponses.length} response{existingResponses.length !== 1 ? 's' : ''} collected
         </div>
+
+        {/* Existing Responses List (if enabled) */}
+        {showResponses && existingResponses.length > 0 && (
+          <div className="responses-list">
+            <h4>Registered Items</h4>
+            <ul>
+              {existingResponses.map((resp, idx) => {
+                const rowData = resp.response_data?.row_data || {};
+                // Display first few data columns
+                const displayValues = dataColumns
+                  .slice(0, 3)
+                  .map(col => rowData[col.key])
+                  .filter(Boolean)
+                  .join(' — ');
+                return (
+                  <li key={idx}>
+                    <Check size={14} />
+                    <span>{resp.respondent_name || displayValues || `Entry ${idx + 1}`}</span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
 
         {/* Self-fill form */}
         <div className="self-fill-form">
