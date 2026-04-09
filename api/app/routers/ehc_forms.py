@@ -939,7 +939,7 @@ def delete_form_link(
     link_id: int,
     current_user: dict = Depends(get_current_user)
 ):
-    """Delete a form link and all its responses.
+    """Delete a form link, its responses, and orphaned submission.
 
     This is a destructive action - all response data will be permanently deleted.
     Consider deactivating instead if you want to preserve response history.
@@ -949,9 +949,10 @@ def delete_form_link(
     with get_db() as conn:
         cursor = conn.cursor()
 
-        # Verify ownership and get info for response
+        # Verify ownership and get info including submission_id
         cursor.execute("""
-            SELECT fl.id, fl.title, fl.form_type, COUNT(fr.id) as response_count
+            SELECT fl.id, fl.title, fl.form_type, fl.submission_id,
+                   COUNT(fr.id) as response_count
             FROM ehc_form_link fl
             LEFT JOIN ehc_form_response fr ON fr.form_link_id = fl.id
             WHERE fl.id = %s AND fl.organization_id = %s
@@ -962,7 +963,9 @@ def delete_form_link(
         if not form_link:
             raise HTTPException(status_code=404, detail="Form link not found")
 
-        # Delete responses first (cascade should handle this, but be explicit)
+        submission_id = form_link.get('submission_id')
+
+        # Delete responses first
         cursor.execute("""
             DELETE FROM ehc_form_response WHERE form_link_id = %s
         """, (link_id,))
@@ -972,13 +975,29 @@ def delete_form_link(
             DELETE FROM ehc_form_link WHERE id = %s
         """, (link_id,))
 
+        # Clean up orphaned submission if no other form links reference it
+        deleted_submission = False
+        if submission_id:
+            cursor.execute("""
+                SELECT COUNT(*) as count FROM ehc_form_link
+                WHERE submission_id = %s
+            """, (submission_id,))
+            remaining = cursor.fetchone()['count']
+
+            if remaining == 0:
+                cursor.execute("""
+                    DELETE FROM ehc_record_submission WHERE id = %s
+                """, (submission_id,))
+                deleted_submission = True
+
         conn.commit()
 
         return {
             "status": "ok",
             "deleted_link_id": link_id,
             "deleted_title": form_link['title'],
-            "deleted_responses": form_link['response_count']
+            "deleted_responses": form_link['response_count'],
+            "deleted_submission": deleted_submission
         }
 
 
