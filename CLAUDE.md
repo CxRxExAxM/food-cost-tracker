@@ -788,35 +788,53 @@ END
 
 ### EHC Digital Forms (April 2026)
 
-Tokenized public signature collection for staff declarations and team rosters.
+Tokenized public signature collection for staff declarations, team rosters, and equipment registration.
 
 **Key Files:**
 - `api/app/routers/ehc_forms.py` - Public + admin endpoints
 - `api/app/utils/qr_generator.py` - QR code generation
-- `frontend/src/pages/EHC/forms/` - Public form UI
-- `frontend/src/pages/EHC/FormLinkModal.jsx` - Admin link management
+- `frontend/src/pages/EHC/forms/` - Public form UI (TableSignoffForm.jsx)
+- `frontend/src/pages/EHC/modals/TableSignoffModal.jsx` - **Primary form builder modal** (used by Forms tab)
+- `frontend/src/pages/EHC/tabs/Forms.jsx` - Forms tab with form link management
 - `frontend/src/pages/EHC/ResponseTrackerModal.jsx` - Response viewing
+- `frontend/src/pages/EHC/FormLinkModal.jsx` - Legacy modal (Records tab entry point, may be deprecated)
+
+**IMPORTANT:** The consolidated form builder is `TableSignoffModal.jsx`, NOT `FormLinkModal.jsx`. The Forms tab uses TableSignoffModal for all form creation/editing.
 
 **Database Tables:**
 ```sql
-ehc_form_link      -- Tokenized links with QR codes
-ehc_form_response  -- Individual signatures with audit trail
+ehc_form_link      -- Tokenized links with QR codes, config JSON stores columns/rows
+ehc_form_response  -- Individual signatures with audit trail, response_data JSON
 ```
+
+**Column Configuration:**
+Each column in `config.columns` supports:
+- `key` - Unique identifier
+- `label` - Display name
+- `type` - 'text', 'date', or 'signature'
+- `editable` - `true` = user fills when signing, `false` = admin pre-fills
+- `required` - Validation flag
+
+**Form Config Options:**
+- `show_responses` - Show existing submissions on public form (for equipment registration)
+- `intro_text` - Instructions shown at top of form
+- `document_path` - Attached reference PDF
+- `rows` - Pre-filled row data (for partial pre-fill workflows)
 
 **Key Patterns:**
 - **Tokenized access** - 43-char URL-safe tokens via `secrets.token_urlsafe(32)`
-- **Scroll-to-sign gate** - Users must scroll declaration before signing
+- **Editable columns** - Admin pre-fills some columns, users complete others when signing
+- **Add New Entry** - Users can add items not in pre-filled list (row_index: -1)
 - **Duplicate detection** - Warns if name exists, allows force override
-- **Link reuse** - Same submission+form_type returns existing link
+- **Auto-increment expected** - When user adds new entry, expected_responses increments
 - **JSON serialization** - Use `json.dumps()` for JSON columns with psycopg2
 
 **Public Routes (no auth):**
-- `GET /api/ehc/forms/{token}` - Fetch form data
+- `GET /api/ehc/forms/{token}` - Fetch form data (includes response_data for row tracking)
 - `POST /api/ehc/forms/{token}/respond` - Submit signature
+- `GET /api/ehc/forms/{token}/document` - Serve attached PDF
 
 **Future: Module Restructure**
-Planning doc: `docs/EHC_MODULE_RESTRUCTURE_PLAN.md`
-- Add Forms tab (central form link management)
 - Add Settings tab (outlets, cycle config, responsibility codes)
 - Monthly outlet checks with email distribution
 
