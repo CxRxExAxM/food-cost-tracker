@@ -16,6 +16,10 @@ depends_on = None
 
 
 def upgrade():
+    # Drop existing tables if they exist (handles partial migration)
+    op.execute("DROP TABLE IF EXISTS waste_weigh_ins CASCADE")
+    op.execute("DROP TABLE IF EXISTS waste_weigh_in_tokens CASCADE")
+
     # Create waste_weigh_in_tokens table
     op.create_table(
         'waste_weigh_in_tokens',
