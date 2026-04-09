@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
+import { useParams } from 'react-router-dom';
 import SignaturePad from './SignaturePad';
-import { Check } from 'lucide-react';
+import { Check, FileText, ChevronDown, ChevronUp } from 'lucide-react';
 import './TableSignoffForm.css';
 
 /**
@@ -11,6 +12,7 @@ import './TableSignoffForm.css';
  * - Pre-filled rows OR self-fill mode
  * - Each row has sign button that expands signature pad inline
  * - Shows completion status (signed/awaiting)
+ * - Optional PDF document display
  */
 export default function TableSignoffForm({
   config,
@@ -18,14 +20,17 @@ export default function TableSignoffForm({
   onSubmit,
   submitting = false
 }) {
+  const { token } = useParams();
   const [activeSigningIndex, setActiveSigningIndex] = useState(null);
   const [signature, setSignature] = useState(null);
   const [newRowData, setNewRowData] = useState({});
+  const [pdfExpanded, setPdfExpanded] = useState(true);
 
   const columns = config?.columns || [];
   const rows = config?.rows || [];
   const introText = config?.intro_text || '';
   const propertyName = config?.property_name || 'Property';
+  const documentPath = config?.document_path;
 
   // Get non-signature columns for data entry
   const dataColumns = columns.filter(c => c.type !== 'signature');
@@ -110,6 +115,28 @@ export default function TableSignoffForm({
           </div>
         )}
 
+        {/* PDF Document */}
+        {documentPath && (
+          <div className="pdf-section">
+            <button
+              type="button"
+              className="pdf-toggle"
+              onClick={() => setPdfExpanded(!pdfExpanded)}
+            >
+              <FileText size={18} />
+              <span>Reference Document</span>
+              {pdfExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+            </button>
+            {pdfExpanded && (
+              <iframe
+                src={`/api/ehc/forms/${token}/document`}
+                className="pdf-frame"
+                title="Reference Document"
+              />
+            )}
+          </div>
+        )}
+
         {/* Response count */}
         <div className="response-count">
           {existingResponses.length} response{existingResponses.length !== 1 ? 's' : ''} collected
@@ -171,6 +198,28 @@ export default function TableSignoffForm({
       {introText && (
         <div className="form-intro">
           <p>{introText}</p>
+        </div>
+      )}
+
+      {/* PDF Document */}
+      {documentPath && (
+        <div className="pdf-section">
+          <button
+            type="button"
+            className="pdf-toggle"
+            onClick={() => setPdfExpanded(!pdfExpanded)}
+          >
+            <FileText size={18} />
+            <span>Reference Document</span>
+            {pdfExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+          </button>
+          {pdfExpanded && (
+            <iframe
+              src={`/api/ehc/forms/${token}/document`}
+              className="pdf-frame"
+              title="Reference Document"
+            />
+          )}
         </div>
       )}
 

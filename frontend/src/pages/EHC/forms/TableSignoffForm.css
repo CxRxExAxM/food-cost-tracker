@@ -286,6 +286,46 @@
   margin-bottom: var(--space-2);
 }
 
+/* PDF Section */
+.pdf-section {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.pdf-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-4);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-family: var(--font-primary);
+  font-size: var(--text-base);
+  font-weight: var(--font-weight-medium);
+  color: var(--text-primary);
+  transition: background 0.15s ease;
+}
+
+.pdf-toggle:hover {
+  background: var(--bg-tertiary);
+}
+
+.pdf-toggle span {
+  flex: 1;
+  text-align: left;
+}
+
+.pdf-frame {
+  width: 100%;
+  height: 500px;
+  border: none;
+  border-top: 1px solid var(--border-subtle);
+}
+
 /* Mobile responsive */
 @media (max-width: 600px) {
   .signoff-table th,
