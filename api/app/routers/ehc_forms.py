@@ -601,20 +601,27 @@ def create_standalone_form_link(
         if not record:
             raise HTTPException(status_code=404, detail="Record not found")
 
-        # Auto-create a submission for this form link
-        # Status: 'collecting' (form-linked, awaiting signatures)
+        # Check for existing submission first (unique constraint on cycle+record+outlet+period)
+        period_label = f"EHC {cycle['year']}"
         cursor.execute("""
-            INSERT INTO ehc_record_submission (
-                audit_cycle_id, record_id, period_label, status
-            )
-            VALUES (%s, %s, %s, 'collecting')
-            RETURNING id
-        """, (
-            cycle_id,
-            data.record_id,
-            f"EHC {cycle['year']}"  # Default period label
-        ))
-        submission_id = cursor.fetchone()['id']
+            SELECT id FROM ehc_record_submission
+            WHERE audit_cycle_id = %s AND record_id = %s AND period_label = %s
+              AND (outlet_name IS NULL OR outlet_name = '')
+        """, (cycle_id, data.record_id, period_label))
+
+        existing_sub = cursor.fetchone()
+        if existing_sub:
+            submission_id = existing_sub['id']
+        else:
+            # Create new submission
+            cursor.execute("""
+                INSERT INTO ehc_record_submission (
+                    audit_cycle_id, record_id, period_label, status
+                )
+                VALUES (%s, %s, %s, 'collecting')
+                RETURNING id
+            """, (cycle_id, data.record_id, period_label))
+            submission_id = cursor.fetchone()['id']
 
         # Generate unique token
         token = secrets.token_urlsafe(32)
