@@ -113,6 +113,23 @@ function Waste() {
     return value < 0 ? 'variance-positive' : 'variance-negative';
   };
 
+  const getVarianceArrow = (value) => {
+    if (!value || value === 0) return '';
+    return value < 0 ? '↓' : '↑';
+  };
+
+  const calculateGoalProgress = () => {
+    if (!summary || !goal) return 0;
+    const target = goal.target_grams_per_cover;
+    const actual = summary.ytd_actual_grams_per_cover;
+    if (target === 0) return 0;
+
+    // Progress bar: 0% at double target, 100% at zero
+    // Example: target = 100, actual = 50 → 50% progress
+    const progress = Math.max(0, Math.min(100, ((target - actual) / target) * 100));
+    return progress;
+  };
+
   const formatNumber = (value) => {
     if (value === null || value === undefined) return '—';
     return typeof value === 'number' ? value.toLocaleString() : value;
@@ -224,6 +241,7 @@ function Waste() {
             <div className="summary-card">
               <div className="summary-label">Variance</div>
               <div className={`summary-value ${getVarianceColor(summary?.variance)}`}>
+                <span className="variance-arrow">{getVarianceArrow(summary?.variance)}</span>
                 <span className="value-number">
                   {summary?.variance > 0 ? '+' : ''}{formatDecimal(summary?.variance)}
                 </span>
@@ -234,6 +252,14 @@ function Waste() {
                   </span>
                 )}
               </div>
+              {goal?.target_grams_per_cover > 0 && (
+                <div className="progress-bar-container">
+                  <div
+                    className="progress-bar-fill"
+                    style={{ width: `${calculateGoalProgress()}%` }}
+                  />
+                </div>
+              )}
             </div>
 
             <div className="summary-card">
@@ -259,6 +285,7 @@ function Waste() {
             <div className="summary-card">
               <div className="summary-label">YTD vs LY</div>
               <div className={`summary-value ${getVarianceColor(summary?.ly_variance)}`}>
+                <span className="variance-arrow">{getVarianceArrow(summary?.ly_variance)}</span>
                 <span className="value-number">
                   {summary?.ly_variance > 0 ? '+' : ''}{formatDecimal(summary?.ly_variance)}
                 </span>
@@ -333,7 +360,14 @@ function Waste() {
                   </td>
                   <td className={`data-cell ${getVarianceColor(metric.grams_per_cover - (goal?.target_grams_per_cover || 0))}`}>
                     {metric.grams_per_cover !== null
-                      ? `${metric.grams_per_cover > (goal?.target_grams_per_cover || 0) ? '+' : ''}${formatDecimal(metric.grams_per_cover - (goal?.target_grams_per_cover || 0))}`
+                      ? (
+                        <>
+                          <span className="table-variance-arrow">
+                            {getVarianceArrow(metric.grams_per_cover - (goal?.target_grams_per_cover || 0))}
+                          </span>
+                          {metric.grams_per_cover > (goal?.target_grams_per_cover || 0) ? '+' : ''}{formatDecimal(metric.grams_per_cover - (goal?.target_grams_per_cover || 0))}
+                        </>
+                      )
                       : '—'
                     }
                   </td>
