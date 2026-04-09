@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import SignaturePad from './SignaturePad';
-import { Check, FileText, ExternalLink } from 'lucide-react';
+import { Check, FileText, ExternalLink, Plus } from 'lucide-react';
 import './TableSignoffForm.css';
 
 /**
@@ -27,6 +27,9 @@ export default function TableSignoffForm({
   const [newRowData, setNewRowData] = useState({});
   // Track user edits for editable columns in pre-filled rows
   const [rowEdits, setRowEdits] = useState({});
+  // For "Add New Entry" in pre-filled mode
+  const [showAddNew, setShowAddNew] = useState(false);
+  const [newEntrySignature, setNewEntrySignature] = useState(null);
 
   const columns = config?.columns || [];
   const rows = config?.rows || [];
@@ -126,6 +129,36 @@ export default function TableSignoffForm({
 
     setNewRowData({});
     setSignature(null);
+  };
+
+  // For "Add New Entry" in pre-filled mode
+  const handleAddNewSubmit = () => {
+    if (!newEntrySignature || submitting) return;
+
+    // Check required fields
+    const missingRequired = dataColumns
+      .filter(c => c.required && !newRowData[c.key]?.trim())
+      .map(c => c.label);
+    if (missingRequired.length > 0) {
+      alert(`Please fill in: ${missingRequired.join(', ')}`);
+      return;
+    }
+
+    const nameColumn = dataColumns.find(c => c.key === 'name') || dataColumns[0];
+    const respondentName = newRowData[nameColumn?.key] || 'New Entry';
+
+    onSubmit({
+      respondent_name: respondentName,
+      response_data: {
+        row_index: -1, // Indicates user-added entry
+        row_data: newRowData
+      },
+      signature_data: newEntrySignature
+    });
+
+    setNewRowData({});
+    setNewEntrySignature(null);
+    setShowAddNew(false);
   };
 
   const allSigned = rows.length > 0 &&
@@ -392,6 +425,79 @@ export default function TableSignoffForm({
           >
             {submitting ? 'Submitting...' : 'Submit Signature'}
           </button>
+        </div>
+      )}
+
+      {/* Add New Entry Section */}
+      {activeSigningIndex === null && (
+        <div className="add-new-entry-section">
+          {!showAddNew ? (
+            <button
+              type="button"
+              className="btn-add-new-entry"
+              onClick={() => setShowAddNew(true)}
+            >
+              <Plus size={18} />
+              <span>Location not listed? Add new entry</span>
+            </button>
+          ) : (
+            <div className="add-new-entry-form">
+              <div className="add-new-header">
+                <h4>Add New Entry</h4>
+                <button
+                  type="button"
+                  className="btn-cancel-add"
+                  onClick={() => {
+                    setShowAddNew(false);
+                    setNewRowData({});
+                    setNewEntrySignature(null);
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+
+              <p className="add-new-hint">
+                Fill in all fields below to register an item not in the list above.
+              </p>
+
+              <div className="add-new-fields">
+                {dataColumns.map(col => (
+                  <div key={col.key} className="form-field">
+                    <label>{col.label}{col.required && ' *'}</label>
+                    {col.type === 'date' ? (
+                      <input
+                        type="date"
+                        value={newRowData[col.key] || ''}
+                        onChange={e => setNewRowData({ ...newRowData, [col.key]: e.target.value })}
+                      />
+                    ) : (
+                      <input
+                        type="text"
+                        value={newRowData[col.key] || ''}
+                        onChange={e => setNewRowData({ ...newRowData, [col.key]: e.target.value })}
+                        placeholder={`Enter ${col.label.toLowerCase()}`}
+                      />
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              <div className="signature-section">
+                <label>{signatureColumn?.label || 'Signature'}</label>
+                <SignaturePad onSignatureChange={setNewEntrySignature} />
+              </div>
+
+              <button
+                type="button"
+                className="btn-submit-signature"
+                disabled={!newEntrySignature || submitting}
+                onClick={handleAddNewSubmit}
+              >
+                {submitting ? 'Submitting...' : 'Submit New Entry'}
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
