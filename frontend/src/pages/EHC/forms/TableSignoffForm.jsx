@@ -194,24 +194,16 @@ export default function TableSignoffForm({
 
       {/* PDF Document */}
       {documentPath && (
-        <div className="pdf-section">
-          <button
-            type="button"
-            className="pdf-toggle"
-            onClick={() => setPdfExpanded(!pdfExpanded)}
-          >
-            <FileText size={18} />
-            <span>Reference Document</span>
-            {pdfExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-          </button>
-          {pdfExpanded && (
-            <iframe
-              src={`/api/ehc/forms/${token}/document`}
-              className="pdf-frame"
-              title="Reference Document"
-            />
-          )}
-        </div>
+        <a
+          href={`/api/ehc/forms/${token}/document`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="view-document-btn"
+        >
+          <FileText size={18} />
+          <span>View Reference Document</span>
+          <ExternalLink size={16} />
+        </a>
       )}
 
       {/* Completion Banner */}
