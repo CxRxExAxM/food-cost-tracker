@@ -14,7 +14,7 @@ import { useState, useEffect } from 'react';
 import { API_BASE, fetchWithAuth } from '../tabs/shared';
 
 const DEFAULT_COLUMNS = [
-  { key: 'name', label: 'Name', type: 'text', required: true },
+  { key: 'name', label: 'Name', type: 'text', required: true, editable: true },
   { key: 'signature', label: 'Signature', type: 'signature', required: true }
 ];
 
@@ -50,6 +50,9 @@ export default function TableSignoffModal({
   const [uploadedPdfPath, setUploadedPdfPath] = useState(null);
   const [existingPdfName, setExistingPdfName] = useState(null);
 
+  // Show responses on public form (useful for equipment registration)
+  const [showResponses, setShowResponses] = useState(false);
+
   // Reset/populate state when modal opens
   useEffect(() => {
     if (isOpen) {
@@ -78,6 +81,7 @@ export default function TableSignoffModal({
           setExistingPdfName(null);
         }
         setPdfFile(null);
+        setShowResponses(editingLink.config?.show_responses || false);
       } else {
         // Create mode: reset to defaults
         setStep(1);
@@ -90,13 +94,14 @@ export default function TableSignoffModal({
         setPdfFile(null);
         setUploadedPdfPath(null);
         setExistingPdfName(null);
+        setShowResponses(false);
       }
     }
   }, [isOpen, editingLink]);
 
   function addColumn() {
     const newKey = `col_${columns.length}`;
-    setColumns([...columns, { key: newKey, label: '', type: 'text', required: false }]);
+    setColumns([...columns, { key: newKey, label: '', type: 'text', required: false, editable: true }]);
   }
 
   function removeColumn(index) {
@@ -215,7 +220,8 @@ export default function TableSignoffModal({
         rows: rows,
         intro_text: introText,
         document_path: uploadedPdfPath,
-        property_name: 'Fairmont Scottsdale Princess' // TODO: Get from org settings
+        property_name: 'Fairmont Scottsdale Princess', // TODO: Get from org settings
+        show_responses: showResponses
       };
 
       // Determine expected responses: use explicit value, fall back to row count, or null
@@ -389,11 +395,15 @@ export default function TableSignoffModal({
 
             <div className="form-field">
               <label>Table Columns</label>
+              <p className="field-hint">
+                "Pre-fill" columns are filled by you. Unchecked columns are filled by staff when signing.
+              </p>
               <div className="columns-editor">
                 <div className="columns-header">
                   <span></span>
                   <span>Column Label</span>
                   <span>Type</span>
+                  <span>Pre-fill</span>
                   <span></span>
                 </div>
                 {columns.map((col, index) => (
@@ -430,6 +440,16 @@ export default function TableSignoffModal({
                         <option key={t.value} value={t.value}>{t.label}</option>
                       ))}
                     </select>
+                    {col.type !== 'signature' && (
+                      <label className="prefill-toggle" title="Check to pre-fill this column yourself">
+                        <input
+                          type="checkbox"
+                          checked={col.editable === false}
+                          onChange={e => updateColumn(index, 'editable', !e.target.checked)}
+                        />
+                      </label>
+                    )}
+                    {col.type === 'signature' && <span></span>}
                     <button
                       className="btn-icon danger"
                       onClick={() => removeColumn(index)}
@@ -444,6 +464,21 @@ export default function TableSignoffModal({
                   + Add Column
                 </button>
               </div>
+            </div>
+
+            {/* Show Responses Toggle */}
+            <div className="form-field">
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={showResponses}
+                  onChange={e => setShowResponses(e.target.checked)}
+                />
+                <span>Show existing responses on public form</span>
+              </label>
+              <p className="field-hint">
+                Enable for equipment registration (see what's already registered). Disable for employee sign-offs (privacy).
+              </p>
             </div>
 
             <div className="modal-actions">

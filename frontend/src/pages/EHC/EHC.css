@@ -3268,6 +3268,47 @@
   cursor: not-allowed;
 }
 
+/* Pre-fill toggle in column editor */
+.prefill-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 60px;
+  flex: none;
+  cursor: pointer;
+}
+
+.prefill-toggle input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--color-green);
+  cursor: pointer;
+}
+
+/* Checkbox label for settings */
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--color-green);
+  cursor: pointer;
+}
+
+/* Update columns header for new Pre-fill column */
+.columns-header span:nth-child(4) {
+  width: 60px;
+  flex: none;
+  text-align: center;
+}
+
 /* ==============================================
    Rows Editor (Table Sign-off Pre-fill)
    ============================================== */
