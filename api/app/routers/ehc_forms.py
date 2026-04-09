@@ -36,7 +36,7 @@ router = APIRouter(prefix="/ehc", tags=["ehc-forms"])
 # Pydantic Models
 # ============================================
 
-ALLOWED_FORM_TYPES = ['staff_declaration', 'team_roster', 'simple_signoff', 'table_signoff', 'checklist']
+ALLOWED_FORM_TYPES = ['staff_declaration', 'team_roster', 'simple_signoff', 'table_signoff', 'table_form', 'checklist']
 
 
 class FormLinkCreate(BaseModel):
@@ -159,9 +159,9 @@ def get_public_form(token: str):
         if not form_link.get('is_active'):
             raise HTTPException(status_code=410, detail="This form is no longer accepting responses")
 
-        # Get existing responses (names and dates only, no signature data)
+        # Get existing responses (names, dates, and response_data - no signature data for privacy)
         cursor.execute("""
-            SELECT respondent_name, respondent_role, respondent_dept, submitted_at
+            SELECT respondent_name, respondent_role, respondent_dept, response_data, submitted_at
             FROM ehc_form_response
             WHERE form_link_id = %s
             ORDER BY submitted_at DESC
@@ -173,6 +173,9 @@ def get_public_form(token: str):
         for resp in responses:
             if resp.get('submitted_at'):
                 resp['submitted_at'] = resp['submitted_at'].isoformat()
+            # Parse response_data JSON if needed
+            if resp.get('response_data') and isinstance(resp['response_data'], str):
+                resp['response_data'] = json.loads(resp['response_data'])
 
         # Parse config if it's a string (stored via json.dumps)
         config = form_link.get('config') or {}
@@ -347,6 +350,17 @@ def submit_form_response(
         ))
 
         result = cursor.fetchone()
+
+        # If this is a user-added entry (row_index == -1), increment expected_responses
+        if response.response_data and response.response_data.get('row_index') == -1:
+            cursor.execute("""
+                UPDATE ehc_form_link
+                SET expected_responses = COALESCE(expected_responses, 0) + 1
+                WHERE id = %s
+            """, (form_link_id,))
+            # Update our local copy for the check below
+            if form_link.get('expected_responses'):
+                form_link['expected_responses'] += 1
 
         # Check if all expected signatures are collected - if so, update submission status
         if form_link.get('expected_responses'):
