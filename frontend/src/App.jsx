@@ -22,6 +22,7 @@ import BaseConversions from './pages/Settings/BaseConversions';
 import Potentials from './pages/Potentials/Potentials';
 import EHC from './pages/EHC/EHC';
 import Waste from './pages/Waste/Waste';
+import WeighInForm from './pages/Waste/WeighInForm';
 import FormPage from './pages/EHC/forms/FormPage';
 import ImpersonationBanner from './components/ImpersonationBanner';
 import './App.css';
@@ -114,8 +115,9 @@ function AppRoutes() {
           </PublicRoute>
         }
       />
-      {/* Public form route - no auth required, token provides access */}
+      {/* Public form routes - no auth required, token provides access */}
       <Route path="/form/:token" element={<FormPage />} />
+      <Route path="/waste/weigh-in/:token" element={<WeighInForm />} />
       <Route
         path="/"
         element={

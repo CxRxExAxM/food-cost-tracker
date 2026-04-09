@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import Navigation from '../../components/Navigation';
 import MonthDetailModal from './MonthDetailModal';
+import TokenManagerModal from './TokenManagerModal';
 import axios from '../../lib/axios';
 import './Waste.css';
 
@@ -20,6 +21,7 @@ function Waste() {
   const [goalInput, setGoalInput] = useState('');
   const [priorYearInput, setPriorYearInput] = useState('');
   const [selectedMonth, setSelectedMonth] = useState(null);
+  const [showTokenManager, setShowTokenManager] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -140,16 +142,24 @@ function Waste() {
         <header className="waste-header">
           <div className="header-top">
             <h1>Waste Tracking</h1>
-            <div className="year-selector">
-              <label>Year:</label>
-              <select
-                value={selectedYear}
-                onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+            <div className="header-controls">
+              <button
+                className="btn-manage-qr"
+                onClick={() => setShowTokenManager(true)}
               >
-                {Array.from({ length: 5 }, (_, i) => currentYear - 2 + i).map(year => (
-                  <option key={year} value={year}>{year}</option>
-                ))}
-              </select>
+                📱 Manage QR Codes
+              </button>
+              <div className="year-selector">
+                <label>Year:</label>
+                <select
+                  value={selectedYear}
+                  onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                >
+                  {Array.from({ length: 5 }, (_, i) => currentYear - 2 + i).map(year => (
+                    <option key={year} value={year}>{year}</option>
+                  ))}
+                </select>
+              </div>
             </div>
           </div>
 
@@ -357,6 +367,13 @@ function Waste() {
           month={selectedMonth.month}
           goalTarget={goal?.target_grams_per_cover || 0}
           onClose={handleMonthClose}
+        />
+      )}
+
+      {/* Token Manager Modal */}
+      {showTokenManager && (
+        <TokenManagerModal
+          onClose={() => setShowTokenManager(false)}
         />
       )}
     </div>

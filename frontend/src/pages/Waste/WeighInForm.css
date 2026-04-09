@@ -1,0 +1,248 @@
+/* Public Weigh-In Form Styles */
+
+.weighin-page {
+  min-height: 100vh;
+  background: var(--bg-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+}
+
+.weighin-container {
+  max-width: 500px;
+  width: 100%;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--space-8);
+}
+
+/* Header */
+.weighin-header {
+  text-align: center;
+  margin-bottom: var(--space-8);
+  padding-bottom: var(--space-6);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.weighin-header h1 {
+  font-family: var(--font-primary);
+  font-size: var(--text-3xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--text-primary);
+  margin: 0 0 var(--space-3) 0;
+}
+
+.station-label {
+  font-family: var(--font-primary);
+  font-size: var(--text-lg);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-green-bright);
+  margin: 0;
+}
+
+/* Form */
+.weighin-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.form-field label {
+  font-family: var(--font-primary);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+}
+
+.form-field input[type="date"],
+.form-field input[type="number"],
+.form-field input[type="text"] {
+  font-family: var(--font-primary);
+  font-size: var(--text-lg);
+  padding: var(--space-3) var(--space-4);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  outline: none;
+  transition: all 0.15s ease;
+}
+
+.form-field input:focus {
+  border-color: var(--color-focus);
+  box-shadow: 0 0 0 3px rgba(212, 167, 44, 0.1);
+}
+
+/* Radio Group */
+.radio-group {
+  display: flex;
+  gap: var(--space-4);
+}
+
+.radio-option {
+  flex: 1;
+  cursor: pointer;
+}
+
+.radio-option input[type="radio"] {
+  display: none;
+}
+
+.radio-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  background: var(--bg-tertiary);
+  border: 2px solid var(--border-default);
+  border-radius: var(--radius-md);
+  transition: all 0.15s ease;
+  font-family: var(--font-primary);
+  font-size: var(--text-base);
+  font-weight: var(--font-weight-medium);
+  color: var(--text-secondary);
+}
+
+.radio-option input:checked + .radio-label {
+  background: var(--color-green-dim);
+  border-color: var(--color-green);
+  color: var(--text-primary);
+}
+
+.radio-icon {
+  font-size: var(--text-2xl);
+}
+
+/* Submit Button */
+.btn-submit {
+  font-family: var(--font-primary);
+  font-size: var(--text-lg);
+  font-weight: var(--font-weight-semibold);
+  padding: var(--space-4) var(--space-6);
+  background: var(--color-green);
+  color: var(--text-inverse);
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  margin-top: var(--space-2);
+}
+
+.btn-submit:hover:not(:disabled) {
+  background: var(--color-green-bright);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.btn-submit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Success Message */
+.success-message {
+  text-align: center;
+  padding: var(--space-8) 0;
+}
+
+.success-icon {
+  font-size: 64px;
+  color: var(--color-green-bright);
+  margin-bottom: var(--space-4);
+  animation: scaleIn 0.3s ease;
+}
+
+@keyframes scaleIn {
+  from {
+    transform: scale(0);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+.success-message h2 {
+  font-family: var(--font-primary);
+  font-size: var(--text-2xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--text-primary);
+  margin: 0 0 var(--space-2) 0;
+}
+
+.success-message p {
+  font-family: var(--font-primary);
+  font-size: var(--text-base);
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+/* Error Message */
+.error-message {
+  text-align: center;
+  padding: var(--space-8) 0;
+}
+
+.error-message h2 {
+  font-family: var(--font-primary);
+  font-size: var(--text-2xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-red);
+  margin: 0 0 var(--space-3) 0;
+}
+
+.error-message p {
+  font-family: var(--font-primary);
+  font-size: var(--text-base);
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+/* Footer */
+.weighin-footer {
+  text-align: center;
+  margin-top: var(--space-8);
+  padding-top: var(--space-6);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.weighin-footer p {
+  font-family: var(--font-primary);
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+  margin: 0;
+}
+
+/* Loading */
+.loading {
+  text-align: center;
+  padding: var(--space-8);
+  font-family: var(--font-primary);
+  font-size: var(--text-lg);
+  color: var(--text-secondary);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .weighin-container {
+    padding: var(--space-6);
+  }
+
+  .weighin-header h1 {
+    font-size: var(--text-2xl);
+  }
+
+  .radio-group {
+    flex-direction: column;
+  }
+}

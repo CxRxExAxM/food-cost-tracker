@@ -10,9 +10,12 @@ from typing import Optional, List, Dict, Any
 from datetime import date, datetime
 from decimal import Decimal
 import calendar
+import secrets
+import os
 import psycopg2.extras
 from ..database import get_db
 from ..auth import get_current_user
+from ..utils.qr_generator import generate_qr_code
 
 router = APIRouter(prefix="/waste", tags=["waste"])
 
@@ -304,9 +307,9 @@ async def get_month_metrics(
             # Fetch individual weigh-ins
             cur.execute("""
                 SELECT wi.id, wi.category, wi.weight_lbs, wi.recorded_date,
-                       wi.submitted_at, wt.label as token_label
+                       wi.submitted_at, wi.submitted_by_name, wt.label as token_label
                 FROM waste_weigh_ins wi
-                JOIN waste_qr_tokens wt ON wi.token_id = wt.id
+                JOIN waste_weigh_in_tokens wt ON wi.token_id = wt.id
                 WHERE wi.organization_id = %s
                   AND EXTRACT(YEAR FROM wi.recorded_date) = %s
                   AND EXTRACT(MONTH FROM wi.recorded_date) = %s
@@ -507,3 +510,237 @@ async def get_summary(
                 'ly_variance': round(ly_variance, 2),
                 'ly_variance_pct': round(ly_variance_pct, 2)
             })
+
+
+# ============================================================================
+# QR CODE TOKEN MANAGEMENT (Admin Only)
+# ============================================================================
+
+@router.get("/tokens")
+async def get_tokens(
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Get all QR tokens for this organization.
+    """
+    org_id = current_user["organization_id"]
+
+    with get_db() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("""
+                SELECT id, organization_id, token, label, qr_code_base64,
+                       active, created_at, created_by
+                FROM waste_weigh_in_tokens
+                WHERE organization_id = %s
+                ORDER BY created_at DESC
+            """, (org_id,))
+
+            tokens = [dict(row) for row in cur.fetchall()]
+            return convert_decimals(tokens)
+
+
+@router.post("/tokens")
+async def create_token(
+    label: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Create a new QR token for weigh-in submissions.
+    """
+    org_id = current_user["organization_id"]
+    user_id = current_user["id"]
+
+    # Generate secure token
+    token = secrets.token_urlsafe(32)
+
+    # Generate QR code URL and image
+    frontend_url = os.environ.get("FRONTEND_URL", "https://food-cost-tracker.onrender.com")
+    weighin_url = f"{frontend_url.rstrip('/')}/waste/weigh-in/{token}"
+    qr_code_base64 = generate_qr_code(weighin_url, box_size=10)
+
+    with get_db() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("""
+                INSERT INTO waste_weigh_in_tokens
+                    (organization_id, token, label, qr_code_base64, active, created_by)
+                VALUES (%s, %s, %s, %s, true, %s)
+                RETURNING id, organization_id, token, label, qr_code_base64,
+                          active, created_at, created_by
+            """, (org_id, token, label, qr_code_base64, user_id))
+
+            new_token = dict(cur.fetchone())
+            conn.commit()
+
+            return convert_decimals(new_token)
+
+
+@router.put("/tokens/{token_id}")
+async def update_token(
+    token_id: int,
+    label: Optional[str] = None,
+    active: Optional[bool] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Update token label or active status.
+    """
+    org_id = current_user["organization_id"]
+
+    with get_db() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            # Verify token belongs to org
+            cur.execute("""
+                SELECT id FROM waste_weigh_in_tokens
+                WHERE id = %s AND organization_id = %s
+            """, (token_id, org_id))
+
+            if not cur.fetchone():
+                raise HTTPException(404, "Token not found")
+
+            # Build update query
+            updates = []
+            params = []
+
+            if label is not None:
+                updates.append("label = %s")
+                params.append(label)
+
+            if active is not None:
+                updates.append("active = %s")
+                params.append(active)
+
+            if not updates:
+                raise HTTPException(400, "No updates provided")
+
+            params.extend([token_id, org_id])
+
+            cur.execute(f"""
+                UPDATE waste_weigh_in_tokens
+                SET {', '.join(updates)}
+                WHERE id = %s AND organization_id = %s
+                RETURNING id, organization_id, token, label, qr_code_base64,
+                          active, created_at, created_by
+            """, params)
+
+            updated = dict(cur.fetchone())
+            conn.commit()
+
+            return convert_decimals(updated)
+
+
+@router.delete("/tokens/{token_id}")
+async def delete_token(
+    token_id: int,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Delete a token (also cascades to delete associated weigh-ins).
+    """
+    org_id = current_user["organization_id"]
+
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            # Verify and delete
+            cur.execute("""
+                DELETE FROM waste_weigh_in_tokens
+                WHERE id = %s AND organization_id = %s
+            """, (token_id, org_id))
+
+            if cur.rowcount == 0:
+                raise HTTPException(404, "Token not found")
+
+            conn.commit()
+
+            return {"message": "Token deleted successfully"}
+
+
+# ============================================================================
+# PUBLIC WEIGH-IN ENDPOINT (No Auth Required)
+# ============================================================================
+
+@router.post("/weigh-in/{token}")
+async def submit_weighin(
+    token: str,
+    recorded_date: str,  # ISO format YYYY-MM-DD
+    category: str,
+    weight_lbs: float,
+    submitted_by_name: Optional[str] = None,
+    request: Request = None
+):
+    """
+    Public endpoint for kitchen staff to submit weigh-in via QR code.
+    No authentication required - token validates access.
+    """
+    # Validate category
+    if category not in ['donation', 'compost']:
+        raise HTTPException(400, "Category must be 'donation' or 'compost'")
+
+    # Validate weight
+    if weight_lbs <= 0:
+        raise HTTPException(400, "Weight must be positive")
+
+    # Parse date
+    try:
+        parsed_date = datetime.strptime(recorded_date, "%Y-%m-%d").date()
+    except ValueError:
+        raise HTTPException(400, "Invalid date format. Use YYYY-MM-DD")
+
+    with get_db() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            # Verify token exists and is active
+            cur.execute("""
+                SELECT id, organization_id, label, active
+                FROM waste_weigh_in_tokens
+                WHERE token = %s
+            """, (token,))
+
+            token_row = cur.fetchone()
+
+            if not token_row:
+                raise HTTPException(404, "Invalid token")
+
+            if not token_row['active']:
+                raise HTTPException(403, "This QR code is no longer active")
+
+            # Insert weigh-in
+            cur.execute("""
+                INSERT INTO waste_weigh_ins
+                    (organization_id, token_id, recorded_date, category, weight_lbs, submitted_by_name)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                RETURNING id, organization_id, token_id, recorded_date, category,
+                          weight_lbs, submitted_at, submitted_by_name
+            """, (token_row['organization_id'], token_row['id'], parsed_date,
+                  category, weight_lbs, submitted_by_name))
+
+            weighin = dict(cur.fetchone())
+            conn.commit()
+
+            return {
+                "message": "Weigh-in submitted successfully",
+                "token_label": token_row['label'],
+                "weighin": convert_decimals(weighin)
+            }
+
+
+@router.get("/weigh-in/{token}/info")
+async def get_token_info(token: str):
+    """
+    Public endpoint to fetch token info (for displaying form context).
+    """
+    with get_db() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("""
+                SELECT label, active
+                FROM waste_weigh_in_tokens
+                WHERE token = %s
+            """, (token,))
+
+            token_row = cur.fetchone()
+
+            if not token_row:
+                raise HTTPException(404, "Invalid token")
+
+            if not token_row['active']:
+                raise HTTPException(403, "This QR code is no longer active")
+
+            return {"label": token_row['label'], "active": token_row['active']}
