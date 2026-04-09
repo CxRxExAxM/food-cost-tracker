@@ -194,55 +194,6 @@ def get_public_form(token: str):
         }
 
 
-@router.get("/forms/{token}/document")
-def get_public_form_document(token: str):
-    """Get the attached PDF document for a form. No authentication required.
-
-    Uses token for access control instead of authentication.
-    Returns 404 if no document is attached to this form.
-    """
-    with get_db() as conn:
-        cursor = conn.cursor()
-
-        # Look up form link and get document path from config
-        cursor.execute("""
-            SELECT
-                fl.id, fl.organization_id, fl.config, fl.is_active,
-                o.id as org_id
-            FROM ehc_form_link fl
-            JOIN organizations o ON o.id = fl.organization_id
-            WHERE fl.token = %s
-        """, (token,))
-
-        form_link = dict_from_row(cursor.fetchone())
-
-        if not form_link:
-            raise HTTPException(status_code=404, detail="Form not found")
-
-        # Parse config to get document path
-        config = form_link.get('config') or {}
-        if isinstance(config, str):
-            config = json.loads(config)
-
-        document_path = config.get('document_path')
-
-        if not document_path:
-            raise HTTPException(status_code=404, detail="No document attached to this form")
-
-        # Verify file exists
-        if not os.path.exists(document_path):
-            raise HTTPException(status_code=404, detail="Document file not found")
-
-        # Extract filename from path
-        filename = os.path.basename(document_path)
-
-        return FileResponse(
-            document_path,
-            media_type="application/pdf",
-            filename=filename
-        )
-
-
 @router.post("/forms/{token}/respond")
 def submit_form_response(
     token: str,
