@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import SignaturePad from './SignaturePad';
-import { Check, FileText, ChevronDown, ChevronUp } from 'lucide-react';
+import { Check, FileText, ExternalLink } from 'lucide-react';
 import './TableSignoffForm.css';
 
 /**
@@ -24,7 +24,6 @@ export default function TableSignoffForm({
   const [activeSigningIndex, setActiveSigningIndex] = useState(null);
   const [signature, setSignature] = useState(null);
   const [newRowData, setNewRowData] = useState({});
-  const [pdfExpanded, setPdfExpanded] = useState(true);
 
   const columns = config?.columns || [];
   const rows = config?.rows || [];
@@ -117,24 +116,16 @@ export default function TableSignoffForm({
 
         {/* PDF Document */}
         {documentPath && (
-          <div className="pdf-section">
-            <button
-              type="button"
-              className="pdf-toggle"
-              onClick={() => setPdfExpanded(!pdfExpanded)}
-            >
-              <FileText size={18} />
-              <span>Reference Document</span>
-              {pdfExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-            </button>
-            {pdfExpanded && (
-              <iframe
-                src={`/api/ehc/forms/${token}/document`}
-                className="pdf-frame"
-                title="Reference Document"
-              />
-            )}
-          </div>
+          <a
+            href={`/api/ehc/forms/${token}/document`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="view-document-btn"
+          >
+            <FileText size={18} />
+            <span>View Reference Document</span>
+            <ExternalLink size={16} />
+          </a>
         )}
 
         {/* Response count */}
