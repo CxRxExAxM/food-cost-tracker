@@ -136,6 +136,24 @@ This document outlines the technical roadmap for RestauranTek, covering both nea
 
 ## Medium-Term Enhancements
 
+### EHC Module
+
+**Outlet-Aware Forms:**
+- [ ] Outlet-specific QR codes with `?outlet=id` param
+- [ ] Auto-filter form to relevant outlet's row(s)
+- [ ] Post unique QR at each outlet location
+
+**Outlet Compliance Dashboard:**
+- [ ] "Compliance by Outlet" widget showing completion % per location
+- [ ] Visual indicators for outlets behind on submissions
+- [ ] Drill-down to outlet-specific record status
+
+**Form Template Library:**
+- [ ] "Save as Template" when creating a form
+- [ ] Template library with reusable form configs
+- [ ] "Deploy to Outlets" - one-click create form links for multiple outlets
+- [ ] Bulk form creation from template
+
 ### Food Cost Module
 
 **Recipe Features:**
@@ -311,6 +329,6 @@ api/app/routers/
 
 ---
 
-**Document Version:** 2.2
-**Last Updated:** April 3, 2026
+**Document Version:** 2.3
+**Last Updated:** April 9, 2026
 **Next Review:** After EHC Settings Tab completion

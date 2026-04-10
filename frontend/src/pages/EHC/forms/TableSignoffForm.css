@@ -180,12 +180,37 @@
   border-bottom: none;
 }
 
-.signoff-table tbody tr:hover {
+.signoff-table tbody tr.unsigned-row {
+  cursor: pointer;
+}
+
+.signoff-table tbody tr.unsigned-row:hover {
   background: var(--bg-tertiary);
+}
+
+.signoff-table tbody tr.signed-row {
+  opacity: 0.7;
+}
+
+.signoff-table tbody tr.selected-row {
+  background: var(--color-blue-dim, rgba(59, 130, 246, 0.1));
+  outline: 2px solid var(--color-blue);
+  outline-offset: -2px;
 }
 
 .signoff-table tbody tr.active-row {
   background: var(--color-yellow-dim);
+}
+
+/* Status indicator for unsigned rows */
+.table-signoff-form .status-indicator {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  font-weight: var(--font-weight-medium);
+}
+
+.table-signoff-form .selected-row .status-indicator {
+  color: var(--color-blue);
 }
 
 .signoff-table .signature-cell {
@@ -508,6 +533,118 @@
   text-align: center;
 }
 
+/* Floating Sign Bar - Sticky bottom bar */
+.floating-sign-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--bg-elevated);
+  border-top: 1px solid var(--border-default);
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
+  padding: var(--space-3) var(--space-4);
+  z-index: 100;
+  animation: slideUp 0.2s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.floating-bar-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.selected-row-info {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.selected-row-info .row-number {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-blue);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.selected-row-info .row-preview {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Separator between preview items */
+.selected-row-info .row-preview:not(:last-child)::after {
+  content: '•';
+  margin-left: var(--space-3);
+  color: var(--text-tertiary);
+}
+
+.floating-bar-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.btn-cancel-select {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  background: transparent;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-cancel-select:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+
+.btn-sign-now {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-5);
+  background: var(--color-blue);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  font-family: var(--font-primary);
+  font-size: var(--text-base);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-sign-now:hover {
+  background: var(--color-blue-bright, #2563eb);
+}
+
 /* Mobile responsive */
 @media (max-width: 600px) {
   .signoff-table th,
@@ -522,4 +659,34 @@
   .self-fill-form {
     padding: var(--space-4);
   }
+
+  /* Floating bar mobile adjustments */
+  .floating-sign-bar {
+    padding: var(--space-3);
+  }
+
+  .floating-bar-content {
+    gap: var(--space-3);
+  }
+
+  .selected-row-info .row-preview {
+    display: none;
+  }
+
+  .btn-sign-now {
+    padding: var(--space-3) var(--space-4);
+  }
+
+  .btn-sign-now span {
+    display: none;
+  }
+
+  .btn-sign-now::after {
+    content: 'Sign';
+  }
+}
+
+/* Add bottom padding to main form to prevent content being hidden behind floating bar */
+.table-signoff-form:has(.floating-sign-bar) .add-new-entry-section {
+  padding-bottom: 80px;
 }

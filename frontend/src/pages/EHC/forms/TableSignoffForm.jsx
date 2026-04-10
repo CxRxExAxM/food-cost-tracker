@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import SignaturePad from './SignaturePad';
-import { Check, FileText, ExternalLink, Plus } from 'lucide-react';
+import { Check, FileText, ExternalLink, Plus, X, Pencil } from 'lucide-react';
 import './TableSignoffForm.css';
 
 /**
@@ -23,6 +23,7 @@ export default function TableSignoffForm({
 }) {
   const { token } = useParams();
   const [activeSigningIndex, setActiveSigningIndex] = useState(null);
+  const [selectedRowIndex, setSelectedRowIndex] = useState(null); // Row selected but not yet signing
   const [signature, setSignature] = useState(null);
   const [newRowData, setNewRowData] = useState({});
   // Track user edits for editable columns in pre-filled rows
@@ -57,17 +58,56 @@ export default function TableSignoffForm({
     return map;
   }, [existingResponses]);
 
+  // Handle row tap/click - select row and show floating bar
+  const handleRowSelect = (index) => {
+    const isSigned = signedIndices.has(index);
+    if (isSigned) return; // Can't select signed rows
+
+    if (selectedRowIndex === index) {
+      // Tapping same row deselects
+      setSelectedRowIndex(null);
+    } else {
+      setSelectedRowIndex(index);
+      // Close signing area if open for different row
+      if (activeSigningIndex !== null && activeSigningIndex !== index) {
+        setActiveSigningIndex(null);
+        setSignature(null);
+        setRowEdits({});
+      }
+    }
+  };
+
+  // Start signing the selected row
+  const handleStartSigning = () => {
+    if (selectedRowIndex === null) return;
+
+    setActiveSigningIndex(selectedRowIndex);
+    setSignature(null);
+    // Pre-populate with any existing values from the row
+    const row = rows[selectedRowIndex] || {};
+    const initialEdits = {};
+    editableColumns.forEach(col => {
+      initialEdits[col.key] = row[col.key] || '';
+    });
+    setRowEdits(initialEdits);
+  };
+
+  // Cancel signing
+  const handleCancelSigning = () => {
+    setActiveSigningIndex(null);
+    setSelectedRowIndex(null);
+    setSignature(null);
+    setRowEdits({});
+  };
+
+  // Legacy handler for backwards compatibility
   const handleSignClick = (index) => {
     if (activeSigningIndex === index) {
-      // Closing - clear state
-      setActiveSigningIndex(null);
-      setSignature(null);
-      setRowEdits({});
+      handleCancelSigning();
     } else {
-      // Opening - initialize edits for this row
+      setSelectedRowIndex(index);
       setActiveSigningIndex(index);
       setSignature(null);
-      // Pre-populate with any existing values from the row
       const row = rows[index] || {};
       const initialEdits = {};
       editableColumns.forEach(col => {
@@ -334,10 +374,15 @@ export default function TableSignoffForm({
             {rows.map((row, idx) => {
               const existingResponse = signedIndices.get(idx);
               const isSigned = !!existingResponse;
+              const isSelected = selectedRowIndex === idx;
               const isActive = activeSigningIndex === idx;
 
               return (
-                <tr key={idx} className={isActive ? 'active-row' : ''}>
+                <tr
+                  key={idx}
+                  className={`${isSelected ? 'selected-row' : ''} ${isActive ? 'active-row' : ''} ${isSigned ? 'signed-row' : 'unsigned-row'}`}
+                  onClick={() => !isSigned && handleRowSelect(idx)}
+                >
                   {columns.map(col => {
                     if (col.type === 'signature') {
                       return (
@@ -348,13 +393,9 @@ export default function TableSignoffForm({
                               <span>Signed</span>
                             </div>
                           ) : (
-                            <button
-                              type="button"
-                              className={`btn-sign ${isActive ? 'active' : ''}`}
-                              onClick={() => handleSignClick(idx)}
-                            >
-                              {isActive ? 'Cancel' : 'Sign'}
-                            </button>
+                            <div className="status-indicator">
+                              <span>{isSelected ? 'Selected' : 'Tap row'}</span>
+                            </div>
                           )}
                         </td>
                       );
@@ -377,6 +418,41 @@ export default function TableSignoffForm({
           </tbody>
         </table>
       </div>
+
+      {/* Floating Sign Bar - appears when row is selected but not yet signing */}
+      {selectedRowIndex !== null && activeSigningIndex === null && (
+        <div className="floating-sign-bar">
+          <div className="floating-bar-content">
+            <div className="selected-row-info">
+              <span className="row-number">Row {selectedRowIndex + 1}</span>
+              {/* Show first few column values for context */}
+              {readOnlyColumns.slice(0, 2).map(col => {
+                const value = rows[selectedRowIndex]?.[col.key];
+                return value ? (
+                  <span key={col.key} className="row-preview">{value}</span>
+                ) : null;
+              })}
+            </div>
+            <div className="floating-bar-actions">
+              <button
+                type="button"
+                className="btn-cancel-select"
+                onClick={() => setSelectedRowIndex(null)}
+              >
+                <X size={18} />
+              </button>
+              <button
+                type="button"
+                className="btn-sign-now"
+                onClick={handleStartSigning}
+              >
+                <Pencil size={16} />
+                <span>Sign Now</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Inline Signature Area */}
       {activeSigningIndex !== null && (
@@ -426,6 +502,11 @@ export default function TableSignoffForm({
             {submitting ? 'Submitting...' : 'Submit Signature'}
           </button>
         </div>
+      )}
+
+      {/* Spacer when floating bar is visible to prevent content overlap */}
+      {selectedRowIndex !== null && activeSigningIndex === null && (
+        <div className="floating-bar-spacer" style={{ height: '80px' }} />
       )}
 
       {/* Add New Entry Section */}
