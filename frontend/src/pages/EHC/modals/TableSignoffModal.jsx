@@ -8,6 +8,7 @@
  * - Staff view form and sign
  *
  * Edit mode: Pass editingLink prop with existing form data
+ * Duplicate mode: Pass duplicateFrom prop to copy config into a new form
  */
 
 import { useState, useEffect } from 'react';
@@ -30,10 +31,12 @@ export default function TableSignoffModal({
   activeCycle,
   records,
   onFormCreated,
-  editingLink,  // Optional: existing form link data for edit mode
+  editingLink,     // Optional: existing form link data for edit mode
+  duplicateFrom,   // Optional: form link to copy config from (creates new form)
   toast
 }) {
   const isEditMode = !!editingLink;
+  const isDuplicateMode = !!duplicateFrom && !editingLink;
 
   const [step, setStep] = useState(1); // 1: Select record, 2: Configure form, 3: Add rows
   const [selectedRecord, setSelectedRecord] = useState(null);
@@ -82,6 +85,35 @@ export default function TableSignoffModal({
         }
         setPdfFile(null);
         setShowResponses(editingLink.config?.show_responses || false);
+      } else if (duplicateFrom) {
+        // Duplicate mode: copy config but create new form
+        setStep(1); // Start at record selection (can change or keep same)
+        // Pre-select the same record
+        setSelectedRecord({
+          id: duplicateFrom.record_id,
+          record_number: duplicateFrom.record_number,
+          name: duplicateFrom.record_name
+        });
+        // Pre-fill title with "(Copy)" suffix
+        const originalTitle = duplicateFrom.title || `${duplicateFrom.record_name} - EHC ${activeCycle?.year}`;
+        setTitle(`${originalTitle} (Copy)`);
+        // Copy all config
+        setIntroText(duplicateFrom.config?.intro_text || '');
+        setColumns(duplicateFrom.config?.columns || [...DEFAULT_COLUMNS]);
+        setRows(duplicateFrom.config?.rows || []);
+        setExpectedResponses(''); // Reset expected responses for new form
+
+        // Copy PDF reference if exists
+        if (duplicateFrom.config?.document_path) {
+          setUploadedPdfPath(duplicateFrom.config.document_path);
+          const pathParts = duplicateFrom.config.document_path.split('/');
+          setExistingPdfName(pathParts[pathParts.length - 1]);
+        } else {
+          setUploadedPdfPath(null);
+          setExistingPdfName(null);
+        }
+        setPdfFile(null);
+        setShowResponses(duplicateFrom.config?.show_responses || false);
       } else {
         // Create mode: reset to defaults
         setStep(1);
@@ -97,7 +129,7 @@ export default function TableSignoffModal({
         setShowResponses(false);
       }
     }
-  }, [isOpen, editingLink]);
+  }, [isOpen, editingLink, duplicateFrom]);
 
   function addColumn() {
     const newKey = `col_${columns.length}`;
@@ -276,7 +308,9 @@ export default function TableSignoffModal({
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content form-create-modal extra-wide" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
-          <h3>{isEditMode ? 'Edit Sign-off Form' : 'Create Sign-off Form'}</h3>
+          <h3>
+            {isEditMode ? 'Edit Sign-off Form' : isDuplicateMode ? 'Duplicate Sign-off Form' : 'Create Sign-off Form'}
+          </h3>
           <button className="modal-close" onClick={onClose}>&times;</button>
         </div>
 

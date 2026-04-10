@@ -29,6 +29,7 @@ export default function Forms({ activeCycle, toast }) {
   // Modal state
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [editingFormLink, setEditingFormLink] = useState(null); // Full link object for edit mode
+  const [duplicatingFormLink, setDuplicatingFormLink] = useState(null); // Form link to duplicate
 
   // Load form links and records when cycle changes
   useEffect(() => {
@@ -460,13 +461,20 @@ export default function Forms({ activeCycle, toast }) {
                           )}
                         </div>
 
-                        {/* Edit Section */}
+                        {/* Edit & Duplicate Section */}
                         <div className="edit-section">
                           <button
                             className="btn-link"
                             onClick={() => setEditingFormLink(link)}
                           >
                             Edit form (columns, rows, settings)
+                          </button>
+                          <span className="edit-separator">•</span>
+                          <button
+                            className="btn-link"
+                            onClick={() => setDuplicatingFormLink(link)}
+                          >
+                            Duplicate as template
                           </button>
                         </div>
 
@@ -518,19 +526,22 @@ export default function Forms({ activeCycle, toast }) {
         </div>
       )}
 
-      {/* Create/Edit Form Modal */}
+      {/* Create/Edit/Duplicate Form Modal */}
       <TableSignoffModal
-        isOpen={showCreateForm || !!editingFormLink}
+        isOpen={showCreateForm || !!editingFormLink || !!duplicatingFormLink}
         onClose={() => {
           setShowCreateForm(false);
           setEditingFormLink(null);
+          setDuplicatingFormLink(null);
         }}
         activeCycle={activeCycle}
         records={records}
         editingLink={editingFormLink}
+        duplicateFrom={duplicatingFormLink}
         onFormCreated={() => {
           setShowCreateForm(false);
           setEditingFormLink(null);
+          setDuplicatingFormLink(null);
           loadFormLinks();
         }}
         toast={toast}

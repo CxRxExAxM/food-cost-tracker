@@ -3489,6 +3489,11 @@
   text-decoration: none;
 }
 
+.edit-section .edit-separator {
+  margin: 0 var(--space-2);
+  color: var(--text-tertiary);
+}
+
 .edit-form {
   display: flex;
   flex-direction: column;
