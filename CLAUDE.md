@@ -828,13 +828,21 @@ Each column in `config.columns` supports:
 - **Duplicate detection** - Warns if name exists, allows force override
 - **Auto-increment expected** - When user adds new entry, expected_responses increments
 - **JSON serialization** - Use `json.dumps()` for JSON columns with psycopg2
+- **Floating sign bar** - Mobile/desktop UX: tap row to select, sticky bar appears at bottom with "Sign Now"
+- **Form duplication** - "Duplicate as template" copies config to new form (for monthly forms like April→May)
 
 **Public Routes (no auth):**
 - `GET /api/ehc/forms/{token}` - Fetch form data (includes response_data for row tracking)
 - `POST /api/ehc/forms/{token}/respond` - Submit signature
 - `GET /api/ehc/forms/{token}/document` - Serve attached PDF
 
+**Utilities:**
+- `scripts/delete_ehc_responses.py` - Bulk cleanup script for deleting submissions/form links/responses by record ID. Run with `--list` to see all records with data counts.
+
 **Future: Module Restructure**
+- Outlet-aware QR codes with `?outlet=id` param
+- Outlet compliance dashboard (completion % per location)
+- Form template library with bulk deploy
 - Add Settings tab (outlets, cycle config, responsibility codes)
 - Monthly outlet checks with email distribution
 
@@ -911,5 +919,5 @@ At the end of each session, provide:
 
 ---
 
-**Last Updated:** April 2, 2026
+**Last Updated:** April 9, 2026
 **Next Review:** After next major feature completion
