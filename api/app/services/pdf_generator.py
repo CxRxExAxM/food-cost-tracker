@@ -639,3 +639,247 @@ def generate_flyer_pdf(
 
     doc.build(elements)
     return buffer.getvalue()
+
+
+# ============================================
+# Checklist Form PDF (Kitchen Audit, etc.)
+# ============================================
+
+def generate_checklist_pdf(
+    title: str,
+    property_name: str,
+    cycle_year: int,
+    outlet_name: str,
+    period_label: str,
+    items: List[Dict[str, Any]],
+    response: Dict[str, Any],
+    intro_text: Optional[str] = None
+) -> bytes:
+    """
+    Generate PDF for completed checklist form (e.g., Kitchen Audit Checklist).
+
+    Shows all questions with Y/N answers, corrective actions table for any "N"
+    answers, and the signature.
+
+    Args:
+        title: Form title (e.g., "Kitchen Audit Checklist")
+        property_name: Property/organization name
+        cycle_year: EHC audit cycle year
+        outlet_name: Specific outlet this checklist is for
+        period_label: Period (e.g., "April 2026")
+        items: List of checklist items from config
+        response: Single response dict with answers, signature, name, submitted_at
+        intro_text: Optional intro text to display
+    """
+    buffer = BytesIO()
+    styles = get_styles()
+
+    # Add checklist-specific styles
+    styles.add(ParagraphStyle(
+        name='ChecklistQuestion',
+        parent=styles['Normal'],
+        fontSize=9,
+        leading=12,
+        textColor=colors.HexColor('#333333')
+    ))
+
+    styles.add(ParagraphStyle(
+        name='ChecklistAnswer',
+        parent=styles['Normal'],
+        fontSize=10,
+        alignment=TA_CENTER,
+        fontName='Helvetica-Bold'
+    ))
+
+    styles.add(ParagraphStyle(
+        name='SectionHeader',
+        parent=styles['Heading2'],
+        fontSize=12,
+        spaceBefore=16,
+        spaceAfter=8,
+        textColor=colors.HexColor('#333333')
+    ))
+
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=letter,
+        rightMargin=0.5*inch,
+        leftMargin=0.5*inch,
+        topMargin=0.6*inch,
+        bottomMargin=0.6*inch
+    )
+
+    elements = []
+
+    # ---- Header ----
+    elements.append(Paragraph(property_name, styles['EHCSubtitle']))
+    elements.append(Paragraph(title, styles['EHCTitle']))
+    elements.append(Spacer(1, 0.1*inch))
+
+    # Outlet and period info
+    header_info = f"<b>Outlet:</b> {outlet_name} &nbsp;&nbsp;|&nbsp;&nbsp; <b>Period:</b> {period_label}"
+    elements.append(Paragraph(header_info, styles['EHCBody']))
+    elements.append(Spacer(1, 0.15*inch))
+
+    # Intro text if provided
+    if intro_text:
+        elements.append(Paragraph(intro_text, styles['EHCBody']))
+        elements.append(Spacer(1, 0.15*inch))
+
+    # ---- Parse response data ----
+    answers = response.get('response_data', {}).get('answers', {})
+    respondent_name = response.get('respondent_name', '')
+    signature_data = response.get('signature_data', '')
+    submitted_at = response.get('submitted_at', '')
+
+    # ---- Questions Table ----
+    # Build compact question table: # | Question | Answer
+    elements.append(Paragraph("Checklist Questions", styles['SectionHeader']))
+
+    table_data = [['#', 'Question', 'Answer']]
+    yes_count = 0
+    no_count = 0
+    corrective_actions = []
+
+    for item in items:
+        num = item.get('number', '')
+        question = item.get('question', '')
+        answer_data = answers.get(str(num), {})
+        answer = answer_data.get('answer', '-')
+
+        # Count Y/N
+        if answer == 'Y':
+            yes_count += 1
+            answer_display = Paragraph('<font color="#2d8653"><b>Y</b></font>', styles['ChecklistAnswer'])
+        elif answer == 'N':
+            no_count += 1
+            answer_display = Paragraph('<font color="#d32f2f"><b>N</b></font>', styles['ChecklistAnswer'])
+            # Collect corrective action
+            if answer_data.get('action') or answer_data.get('when_by') or answer_data.get('who_by'):
+                corrective_actions.append({
+                    'number': num,
+                    'question': question,
+                    'action': answer_data.get('action', ''),
+                    'when_by': answer_data.get('when_by', ''),
+                    'who_by': answer_data.get('who_by', '')
+                })
+        else:
+            answer_display = Paragraph('-', styles['ChecklistAnswer'])
+
+        table_data.append([
+            Paragraph(str(num), styles['EHCSmall']),
+            Paragraph(question, styles['ChecklistQuestion']),
+            answer_display
+        ])
+
+    # Create questions table
+    col_widths = [0.4*inch, 5.6*inch, 0.6*inch]
+    questions_table = Table(table_data, colWidths=col_widths, repeatRows=1)
+
+    questions_table.setStyle(TableStyle([
+        # Header
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#f0f0f0')),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 9),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+        ('TOPPADDING', (0, 0), (-1, 0), 6),
+
+        # Body
+        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 1), (-1, -1), 8),
+        ('TOPPADDING', (0, 1), (-1, -1), 4),
+        ('BOTTOMPADDING', (0, 1), (-1, -1), 4),
+
+        # Grid
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#dddddd')),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('ALIGN', (0, 0), (0, -1), 'CENTER'),  # Number column centered
+        ('ALIGN', (2, 0), (2, -1), 'CENTER'),  # Answer column centered
+
+        # Alternating row colors
+        *[('BACKGROUND', (0, i), (-1, i), colors.HexColor('#fafafa'))
+          for i in range(2, len(table_data), 2)]
+    ]))
+
+    elements.append(questions_table)
+    elements.append(Spacer(1, 0.2*inch))
+
+    # ---- Summary Stats ----
+    total_questions = len(items)
+    summary_text = f"<b>Results:</b> {yes_count} Yes &nbsp;|&nbsp; {no_count} No &nbsp;|&nbsp; {total_questions} Total"
+    elements.append(Paragraph(summary_text, styles['EHCBody']))
+    elements.append(Spacer(1, 0.2*inch))
+
+    # ---- Corrective Actions Section ----
+    if corrective_actions:
+        elements.append(Paragraph("Corrective Actions Required", styles['SectionHeader']))
+
+        action_data = [['#', 'Issue', 'Action Required', 'When By', 'Who By']]
+
+        for ca in corrective_actions:
+            action_data.append([
+                Paragraph(str(ca['number']), styles['EHCSmall']),
+                Paragraph(ca['question'][:80] + ('...' if len(ca['question']) > 80 else ''), styles['EHCSmall']),
+                Paragraph(ca['action'] or '-', styles['EHCSmall']),
+                Paragraph(ca['when_by'] or '-', styles['EHCSmall']),
+                Paragraph(ca['who_by'] or '-', styles['EHCSmall'])
+            ])
+
+        action_col_widths = [0.35*inch, 2.5*inch, 2.2*inch, 0.9*inch, 0.9*inch]
+        action_table = Table(action_data, colWidths=action_col_widths, repeatRows=1)
+
+        action_table.setStyle(TableStyle([
+            # Header
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#fff3e0')),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 8),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+            ('TOPPADDING', (0, 0), (-1, 0), 6),
+
+            # Body
+            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 1), (-1, -1), 8),
+            ('TOPPADDING', (0, 1), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 1), (-1, -1), 4),
+
+            # Grid
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#dddddd')),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('ALIGN', (0, 0), (0, -1), 'CENTER'),
+        ]))
+
+        elements.append(action_table)
+        elements.append(Spacer(1, 0.2*inch))
+
+    # ---- Signature Section ----
+    elements.append(Paragraph("Verification", styles['SectionHeader']))
+
+    sig_img = decode_signature_image(signature_data, max_width=2*inch, max_height=0.6*inch)
+
+    sig_data = [
+        ['Completed By:', Paragraph(f"<b>{respondent_name}</b>", styles['EHCBody'])],
+        ['Date:', Paragraph(format_date(submitted_at), styles['EHCBody'])],
+        ['Signature:', sig_img if sig_img else Paragraph('-', styles['EHCSmall'])]
+    ]
+
+    sig_table = Table(sig_data, colWidths=[1.2*inch, 4*inch])
+    sig_table.setStyle(TableStyle([
+        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 10),
+        ('TOPPADDING', (0, 0), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+    ]))
+
+    elements.append(sig_table)
+    elements.append(Spacer(1, 0.3*inch))
+
+    # ---- Footer ----
+    generated_at = datetime.now().strftime('%B %d, %Y at %H:%M')
+    elements.append(Paragraph(
+        f"Generated: {generated_at} | EHC {cycle_year} | Record 20 — Kitchen Audit Checklist",
+        styles['EHCFooter']
+    ))
+
+    doc.build(elements)
+    return buffer.getvalue()

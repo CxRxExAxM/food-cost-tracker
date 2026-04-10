@@ -21,7 +21,8 @@ from ..services.pdf_generator import (
     generate_record_11_pdf,
     generate_record_35_pdf,
     generate_table_signoff_pdf,
-    generate_flyer_pdf
+    generate_flyer_pdf,
+    generate_checklist_pdf
 )
 from fastapi import Depends
 
@@ -1348,6 +1349,45 @@ def generate_form_pdf(
             # Create safe filename from title
             safe_title = "".join(c for c in title if c.isalnum() or c in ' -_')[:50]
             filename = f"{safe_title}_{cycle_year}.pdf"
+
+        elif form_type == 'checklist_form':
+            # Checklist forms have one response per form link
+            if not responses:
+                raise HTTPException(
+                    status_code=400,
+                    detail="No response found for this checklist"
+                )
+
+            # Get additional form link fields for checklist
+            cursor.execute("""
+                SELECT outlet_name, period_label
+                FROM ehc_form_link
+                WHERE id = %s
+            """, (link_id,))
+            link_extra = dict_from_row(cursor.fetchone()) or {}
+
+            items = config.get('items', [])
+            intro_text = config.get('intro_text', '')
+            outlet_name = link_extra.get('outlet_name') or config.get('outlet_name', 'Unknown Outlet')
+            period_label = link_extra.get('period_label') or config.get('period_label', str(cycle_year))
+
+            # Use the first (and typically only) response
+            response = responses[0]
+
+            pdf_bytes = generate_checklist_pdf(
+                title=title,
+                property_name=property_name,
+                cycle_year=cycle_year,
+                outlet_name=outlet_name,
+                period_label=period_label,
+                items=items,
+                response=response,
+                intro_text=intro_text
+            )
+            # Create safe filename
+            safe_outlet = "".join(c for c in outlet_name if c.isalnum() or c in ' -_')[:30]
+            safe_period = "".join(c for c in period_label if c.isalnum() or c in ' -_')[:20]
+            filename = f"Kitchen_Audit_{safe_outlet}_{safe_period}.pdf"
 
         else:
             raise HTTPException(

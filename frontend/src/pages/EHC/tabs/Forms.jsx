@@ -149,17 +149,23 @@ export default function Forms({ activeCycle, toast }) {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
       });
-      if (!response.ok) throw new Error('Failed to generate PDF');
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || 'Failed to generate PDF');
+      }
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${link.record_number}_${link.form_type}_${activeCycle.year}.pdf`;
+      // Use outlet_name for checklist forms, record_number for others
+      const identifier = link.outlet_name || link.record_number || 'form';
+      a.download = `${identifier}_${link.form_type}_${activeCycle.year}.pdf`;
       a.click();
       URL.revokeObjectURL(url);
       toast?.success?.('PDF generated successfully');
     } catch (error) {
-      toast?.error?.('Failed to generate PDF');
+      console.error('PDF generation error:', error);
+      toast?.error?.(error.message || 'Failed to generate PDF');
     }
   }
 
