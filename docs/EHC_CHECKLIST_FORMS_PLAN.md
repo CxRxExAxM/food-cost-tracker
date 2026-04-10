@@ -406,36 +406,38 @@ REF_CODE_MAP = {
 
 ## 7. Phased Build
 
-### Phase 1: Foundation (Backend)
-- [ ] Alembic migration: `ehc_form_template` table
-- [ ] Alembic migration: Add `form_type`, `template_id`, `outlet_name`, `period_label` to `ehc_form_link`
-- [ ] Alembic migration: Add `ref_code` to `ehc_record`, populate mapping
-- [ ] Template CRUD endpoints
-- [ ] Seed Kitchen Audit Checklist template for fairmont-scp org
-- [ ] Deploy endpoint (`POST /api/ehc/templates/{id}/deploy`)
-- [ ] Extend public form GET to return `form_type`
-- [ ] Extend public form POST to accept checklist response data
-- [ ] Checklist response validation (all questions answered)
+### Phase 1: Foundation (Backend) ✅ Completed April 10, 2026
+- [x] Alembic migration: `ehc_form_template` table
+- [x] Alembic migration: Add `template_id`, `outlet_name`, `period_label` to `ehc_form_link`
+- [x] ~~Alembic migration: Add `ref_code` to `ehc_record`~~ (not needed - `record_number` already stores EHC numbers)
+- [x] Template CRUD endpoints
+- [x] Seed script created (`scripts/seed_kitchen_audit_template.py`) — run after deploy
+- [x] Deploy endpoint (`POST /api/ehc/templates/{id}/deploy`)
+- [x] Extend public form GET to return `form_type`
+- [x] Extend public form POST to accept checklist response data
+- [x] Checklist response validation (all questions answered, N requires action)
 
-### Phase 2: Public Checklist Form (Frontend)
-- [ ] `ChecklistForm.jsx` — mobile-first Y/N checklist UI
-- [ ] Inline corrective action expansion on "N" answer
-- [ ] Progress indicator
-- [ ] Reuse existing scroll-to-sign and signature canvas
-- [ ] Form type router on public form page
-- [ ] Test on phone/tablet for kitchen walkability
+### Phase 2: Public Checklist Form (Frontend) ✅ Completed April 10, 2026
+- [x] `ChecklistForm.jsx` — mobile-first Y/N checklist UI
+- [x] Inline corrective action expansion on "N" answer
+- [x] Progress indicator (X/58 answered)
+- [x] Scroll-to-sign gate at bottom
+- [x] Form type router on public form page (`FormPage.jsx`)
+- [ ] Test on phone/tablet for kitchen walkability (pending deploy)
 
-### Phase 3: Admin UI (Frontend)
-- [ ] "Create from Template" button in Forms tab
-- [ ] `CreateFromTemplateModal.jsx` — template select, outlet picker, period label
-- [ ] Forms tab grouping by template + period
-- [ ] Per-outlet completion badges
-- [ ] Response viewer for checklist forms (similar to existing ResponseTrackerModal but showing Q&A + actions)
+### Phase 3: Admin UI (Frontend) ✅ Completed April 10, 2026
+- [x] "Create from Template" button in Forms tab
+- [x] `CreateFromTemplateModal.jsx` — template select, outlet picker, period label
+- [x] Forms tab grouping by template + period
+- [x] Outlet name display on form cards
+- [ ] Response viewer for checklist forms (deferred — using PDF export instead)
 
-### Phase 4: PDF Export
-- [ ] PDF generation endpoint for completed checklists
-- [ ] Clean formatted output: header, questions with Y/N, corrective actions table, signature
-- [ ] Download button in response viewer
+### Phase 4: PDF Export ✅ Completed April 10, 2026
+- [x] `generate_checklist_pdf()` in pdf_generator.py
+- [x] Compact question table with Y/N color coding
+- [x] Corrective actions table for "N" answers
+- [x] Signature section with respondent info
+- [x] Download button in Forms tab (existing button now works for checklists)
 
 ### Phase 5: Template Management UI (Later — with Settings Tab)
 - [ ] Template list view
