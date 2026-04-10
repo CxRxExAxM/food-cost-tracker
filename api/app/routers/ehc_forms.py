@@ -36,7 +36,7 @@ router = APIRouter(prefix="/ehc", tags=["ehc-forms"])
 # Pydantic Models
 # ============================================
 
-ALLOWED_FORM_TYPES = ['staff_declaration', 'team_roster', 'simple_signoff', 'table_signoff', 'table_form', 'checklist']
+ALLOWED_FORM_TYPES = ['staff_declaration', 'team_roster', 'simple_signoff', 'table_signoff', 'table_form', 'checklist', 'checklist_form']
 
 
 class FormLinkCreate(BaseModel):
@@ -114,6 +114,64 @@ class FormResponse(BaseModel):
         return v
 
 
+class ChecklistFormResponse(BaseModel):
+    """Submit a checklist form response (for checklist_form type)."""
+    respondent_name: str
+    response_data: Dict[str, Any]  # {answers: {1: {answer: "Y"}, 2: {answer: "N", action: "...", when_by: "...", who_by: "..."}}}
+    signature_data: str  # Base64 PNG
+
+    @field_validator('respondent_name')
+    @classmethod
+    def validate_name(cls, v):
+        v = v.strip()
+        if len(v) < 2:
+            raise ValueError("Name must be at least 2 characters")
+        return v
+
+    @field_validator('response_data')
+    @classmethod
+    def validate_checklist_response(cls, v):
+        if not v.get('answers'):
+            raise ValueError("Checklist answers are required")
+        return v
+
+
+class TemplateCreate(BaseModel):
+    """Create a new form template."""
+    name: str
+    form_type: str = 'checklist_form'
+    ehc_record_id: Optional[int] = None
+    config: Dict[str, Any]
+
+    @field_validator('form_type')
+    @classmethod
+    def validate_form_type(cls, v):
+        if v not in ALLOWED_FORM_TYPES:
+            raise ValueError(f"form_type must be one of: {', '.join(ALLOWED_FORM_TYPES)}")
+        return v
+
+
+class TemplateUpdate(BaseModel):
+    """Update a form template."""
+    name: Optional[str] = None
+    config: Optional[Dict[str, Any]] = None
+    is_active: Optional[bool] = None
+
+
+class TemplateDeploy(BaseModel):
+    """Deploy a template to create forms for multiple outlets."""
+    outlets: List[str]  # ["Main Kitchen", "Toro", "La Hacienda"]
+    period_label: str  # "April 2026"
+    record_id: Optional[int] = None  # Override template's default record
+
+    @field_validator('outlets')
+    @classmethod
+    def validate_outlets(cls, v):
+        if not v:
+            raise ValueError("At least one outlet is required")
+        return v
+
+
 # ============================================
 # Public Endpoints (No Authentication)
 # ============================================
@@ -134,11 +192,14 @@ def get_public_form(token: str):
                 fl.record_id, fl.form_type, fl.title, fl.config,
                 fl.is_active, fl.expires_at, fl.expected_responses,
                 fl.created_at,
+                fl.template_id, fl.outlet_name, fl.period_label,
                 c.year as cycle_year,
-                r.record_number, r.name as record_name
+                r.record_number, r.name as record_name,
+                t.name as template_name
             FROM ehc_form_link fl
             JOIN ehc_audit_cycle c ON c.id = fl.audit_cycle_id
             JOIN ehc_record r ON r.id = fl.record_id
+            LEFT JOIN ehc_form_template t ON t.id = fl.template_id
             WHERE fl.token = %s
         """, (token,))
 
@@ -194,6 +255,11 @@ def get_public_form(token: str):
             "expected_responses": form_link.get('expected_responses'),
             "is_active": form_link.get('is_active', True),
             "expires_at": form_link['expires_at'].isoformat() if form_link.get('expires_at') else None,
+            # Template-based form fields
+            "template_id": form_link.get('template_id'),
+            "template_name": form_link.get('template_name'),
+            "outlet_name": form_link.get('outlet_name'),
+            "period_label": form_link.get('period_label'),
         }
 
 
@@ -258,7 +324,7 @@ def submit_form_response(
 
         # Look up form link
         cursor.execute("""
-            SELECT id, is_active, expires_at, expected_responses, form_type
+            SELECT id, is_active, expires_at, expected_responses, form_type, config
             FROM ehc_form_link
             WHERE token = %s
         """, (token,))
@@ -281,6 +347,57 @@ def submit_form_response(
             raise HTTPException(status_code=410, detail="This form is no longer accepting responses")
 
         form_link_id = form_link['id']
+        form_type = form_link.get('form_type')
+
+        # Validate checklist_form responses
+        if form_type == 'checklist_form':
+            config = form_link.get('config') or {}
+            if isinstance(config, str):
+                config = json.loads(config)
+
+            items = config.get('items', [])
+            if items and response.response_data:
+                answers = response.response_data.get('answers', {})
+
+                # Check all questions are answered
+                missing = []
+                for item in items:
+                    question_num = str(item.get('number'))
+                    if question_num not in answers:
+                        missing.append(question_num)
+                    elif not answers[question_num].get('answer'):
+                        missing.append(question_num)
+
+                if missing:
+                    raise HTTPException(
+                        status_code=400,
+                        detail={
+                            "message": f"Missing answers for {len(missing)} questions",
+                            "missing_questions": missing[:10],  # Limit to first 10
+                            "total_missing": len(missing)
+                        }
+                    )
+
+                # Validate corrective actions for "N" answers (if required)
+                if config.get('corrective_actions'):
+                    incomplete_actions = []
+                    for item in items:
+                        question_num = str(item.get('number'))
+                        answer_data = answers.get(question_num, {})
+                        if answer_data.get('answer') == 'N':
+                            # N answer requires action, when_by, who_by
+                            if not answer_data.get('action'):
+                                incomplete_actions.append(question_num)
+
+                    if incomplete_actions:
+                        raise HTTPException(
+                            status_code=400,
+                            detail={
+                                "message": f"'N' answers require corrective action details",
+                                "questions_needing_action": incomplete_actions[:10],
+                                "total_incomplete": len(incomplete_actions)
+                            }
+                        )
 
         # Check for duplicate name (case-insensitive)
         cursor.execute("""
@@ -591,15 +708,18 @@ def get_cycle_form_links(
                 fl.id, fl.token, fl.form_type, fl.title, fl.config,
                 fl.is_active, fl.expires_at, fl.expected_responses,
                 fl.submission_id, fl.record_id,
+                fl.template_id, fl.outlet_name, fl.period_label,
                 fl.created_at, fl.updated_at,
                 r.record_number, r.name as record_name,
+                t.name as template_name,
                 COUNT(fr.id) as response_count
             FROM ehc_form_link fl
             JOIN ehc_record r ON r.id = fl.record_id
+            LEFT JOIN ehc_form_template t ON t.id = fl.template_id
             LEFT JOIN ehc_form_response fr ON fr.form_link_id = fl.id
             WHERE fl.audit_cycle_id = %s AND fl.organization_id = %s
-            GROUP BY fl.id, r.id
-            ORDER BY r.record_number, fl.created_at DESC
+            GROUP BY fl.id, r.id, t.id
+            ORDER BY t.name NULLS LAST, fl.period_label, fl.outlet_name, fl.created_at DESC
         """, (cycle_id, org_id))
 
         links = dicts_from_rows(cursor.fetchall())
@@ -1299,3 +1419,399 @@ def get_form_flyer(
             media_type="application/pdf",
             headers={"Content-Disposition": f"attachment; filename={filename}"}
         )
+
+
+# ============================================
+# Form Template Endpoints
+# ============================================
+
+@router.get("/templates")
+def list_templates(
+    current_user: dict = Depends(get_current_user)
+):
+    """List all form templates for the organization."""
+    org_id = current_user["organization_id"]
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT
+                t.id, t.name, t.form_type, t.ehc_record_id, t.config,
+                t.is_active, t.created_at, t.updated_at,
+                r.record_number, r.name as record_name,
+                COUNT(fl.id) as form_count
+            FROM ehc_form_template t
+            LEFT JOIN ehc_record r ON r.id = t.ehc_record_id
+            LEFT JOIN ehc_form_link fl ON fl.template_id = t.id
+            WHERE t.organization_id = %s AND t.is_active = true
+            GROUP BY t.id, r.id
+            ORDER BY t.name
+        """, (org_id,))
+
+        templates = dicts_from_rows(cursor.fetchall())
+
+        for tmpl in templates:
+            if tmpl.get('created_at'):
+                tmpl['created_at'] = tmpl['created_at'].isoformat()
+            if tmpl.get('updated_at'):
+                tmpl['updated_at'] = tmpl['updated_at'].isoformat()
+            # Parse config to get item count
+            config = tmpl.get('config') or {}
+            if isinstance(config, str):
+                config = json.loads(config)
+            tmpl['item_count'] = len(config.get('items', []))
+
+        return {"data": templates, "count": len(templates)}
+
+
+@router.post("/templates")
+def create_template(
+    data: TemplateCreate,
+    current_user: dict = Depends(get_current_user)
+):
+    """Create a new form template."""
+    org_id = current_user["organization_id"]
+    user_id = current_user["id"]
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Verify record exists if provided
+        if data.ehc_record_id:
+            cursor.execute("""
+                SELECT id FROM ehc_record WHERE id = %s AND organization_id = %s
+            """, (data.ehc_record_id, org_id))
+            if not cursor.fetchone():
+                raise HTTPException(status_code=404, detail="Record not found")
+
+        cursor.execute("""
+            INSERT INTO ehc_form_template (
+                organization_id, name, form_type, ehc_record_id, config, created_by
+            )
+            VALUES (%s, %s, %s, %s, %s, %s)
+            RETURNING id, created_at
+        """, (
+            org_id,
+            data.name,
+            data.form_type,
+            data.ehc_record_id,
+            json.dumps(data.config),
+            user_id
+        ))
+
+        result = cursor.fetchone()
+        conn.commit()
+
+        return {
+            "status": "ok",
+            "template_id": result['id'],
+            "name": data.name,
+            "created_at": result['created_at'].isoformat()
+        }
+
+
+@router.get("/templates/{template_id}")
+def get_template(
+    template_id: int,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get a form template by ID."""
+    org_id = current_user["organization_id"]
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT
+                t.id, t.name, t.form_type, t.ehc_record_id, t.config,
+                t.is_active, t.created_at, t.updated_at,
+                r.record_number, r.name as record_name
+            FROM ehc_form_template t
+            LEFT JOIN ehc_record r ON r.id = t.ehc_record_id
+            WHERE t.id = %s AND t.organization_id = %s
+        """, (template_id, org_id))
+
+        template = dict_from_row(cursor.fetchone())
+        if not template:
+            raise HTTPException(status_code=404, detail="Template not found")
+
+        # Format dates
+        if template.get('created_at'):
+            template['created_at'] = template['created_at'].isoformat()
+        if template.get('updated_at'):
+            template['updated_at'] = template['updated_at'].isoformat()
+
+        # Parse config
+        config = template.get('config') or {}
+        if isinstance(config, str):
+            template['config'] = json.loads(config)
+
+        return template
+
+
+@router.put("/templates/{template_id}")
+def update_template(
+    template_id: int,
+    data: TemplateUpdate,
+    current_user: dict = Depends(get_current_user)
+):
+    """Update a form template."""
+    from psycopg2.extras import Json
+
+    org_id = current_user["organization_id"]
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Verify ownership
+        cursor.execute("""
+            SELECT id FROM ehc_form_template WHERE id = %s AND organization_id = %s
+        """, (template_id, org_id))
+
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Template not found")
+
+        update_dict = data.model_dump(exclude_unset=True)
+        if not update_dict:
+            return {"status": "ok", "message": "No fields to update"}
+
+        update_fields = []
+        params = []
+        for field, value in update_dict.items():
+            update_fields.append(f"{field} = %s")
+            if isinstance(value, (dict, list)):
+                params.append(Json(value))
+            else:
+                params.append(value)
+
+        update_fields.append("updated_at = NOW()")
+        params.append(template_id)
+
+        cursor.execute(f"""
+            UPDATE ehc_form_template
+            SET {', '.join(update_fields)}
+            WHERE id = %s
+        """, params)
+
+        conn.commit()
+        return {"status": "ok", "template_id": template_id, "updated_fields": list(update_dict.keys())}
+
+
+@router.delete("/templates/{template_id}")
+def delete_template(
+    template_id: int,
+    current_user: dict = Depends(get_current_user)
+):
+    """Soft-delete a form template (sets is_active = false)."""
+    org_id = current_user["organization_id"]
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            UPDATE ehc_form_template
+            SET is_active = false, updated_at = NOW()
+            WHERE id = %s AND organization_id = %s
+            RETURNING id, name
+        """, (template_id, org_id))
+
+        result = cursor.fetchone()
+        if not result:
+            raise HTTPException(status_code=404, detail="Template not found")
+
+        conn.commit()
+        return {
+            "status": "ok",
+            "deleted_template_id": result['id'],
+            "deleted_name": result['name']
+        }
+
+
+@router.post("/templates/{template_id}/deploy")
+def deploy_template(
+    template_id: int,
+    data: TemplateDeploy,
+    current_user: dict = Depends(get_current_user)
+):
+    """Deploy a template to create form links for multiple outlets.
+
+    Creates one form link per outlet, each with its own QR code.
+    Also creates linked submissions for tracking.
+    """
+    org_id = current_user["organization_id"]
+    user_id = current_user["id"]
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Get template
+        cursor.execute("""
+            SELECT
+                t.id, t.name, t.form_type, t.ehc_record_id, t.config,
+                r.record_number, r.name as record_name
+            FROM ehc_form_template t
+            LEFT JOIN ehc_record r ON r.id = t.ehc_record_id
+            WHERE t.id = %s AND t.organization_id = %s AND t.is_active = true
+        """, (template_id, org_id))
+
+        template = dict_from_row(cursor.fetchone())
+        if not template:
+            raise HTTPException(status_code=404, detail="Template not found")
+
+        # Get active audit cycle
+        cursor.execute("""
+            SELECT id, year FROM ehc_audit_cycle
+            WHERE organization_id = %s AND status != 'archived'
+            ORDER BY year DESC LIMIT 1
+        """, (org_id,))
+
+        cycle = dict_from_row(cursor.fetchone())
+        if not cycle:
+            raise HTTPException(status_code=400, detail="No active audit cycle found")
+
+        # Determine record_id (from deploy request or template)
+        record_id = data.record_id or template.get('ehc_record_id')
+        if not record_id:
+            raise HTTPException(
+                status_code=400,
+                detail="No record specified. Either template or deploy request must include a record_id."
+            )
+
+        # Parse template config
+        template_config = template.get('config') or {}
+        if isinstance(template_config, str):
+            template_config = json.loads(template_config)
+
+        created_forms = []
+
+        for outlet_name in data.outlets:
+            # Create submission for this outlet/period
+            cursor.execute("""
+                INSERT INTO ehc_record_submission (
+                    audit_cycle_id, record_id, outlet_name, period_label, status
+                )
+                VALUES (%s, %s, %s, %s, 'pending')
+                ON CONFLICT DO NOTHING
+                RETURNING id
+            """, (cycle['id'], record_id, outlet_name, data.period_label))
+
+            result = cursor.fetchone()
+            if result:
+                submission_id = result['id']
+            else:
+                # Submission already exists, find it
+                cursor.execute("""
+                    SELECT id FROM ehc_record_submission
+                    WHERE audit_cycle_id = %s AND record_id = %s
+                      AND outlet_name = %s AND period_label = %s
+                """, (cycle['id'], record_id, outlet_name, data.period_label))
+                submission_id = cursor.fetchone()['id']
+
+            # Generate unique token
+            token = secrets.token_urlsafe(32)
+
+            # Build form config (copy from template)
+            form_config = template_config.copy()
+            form_config['outlet_name'] = outlet_name
+            form_config['period_label'] = data.period_label
+            form_config['cycle_year'] = cycle['year']
+
+            # Create form link
+            title = f"{template['name']} - {outlet_name} ({data.period_label})"
+
+            cursor.execute("""
+                INSERT INTO ehc_form_link (
+                    organization_id, audit_cycle_id, submission_id, record_id,
+                    template_id, outlet_name, period_label,
+                    token, form_type, title, config,
+                    expected_responses, created_by
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id, created_at
+            """, (
+                org_id,
+                cycle['id'],
+                submission_id,
+                record_id,
+                template_id,
+                outlet_name,
+                data.period_label,
+                token,
+                template['form_type'],
+                title,
+                json.dumps(form_config),
+                1,  # expected_responses = 1 for checklist (one completion per outlet)
+                user_id
+            ))
+
+            form_result = cursor.fetchone()
+
+            # Generate QR code
+            form_url = generate_form_url(token)
+            qr_code = generate_form_qr(token)
+
+            created_forms.append({
+                "form_link_id": form_result['id'],
+                "outlet_name": outlet_name,
+                "token": token,
+                "url": form_url,
+                "qr_code": qr_code,
+                "title": title,
+                "created_at": form_result['created_at'].isoformat()
+            })
+
+        conn.commit()
+
+        return {
+            "status": "ok",
+            "template_id": template_id,
+            "template_name": template['name'],
+            "period_label": data.period_label,
+            "forms_created": len(created_forms),
+            "forms": created_forms
+        }
+
+
+@router.get("/cycles/{cycle_id}/templates")
+def get_cycle_templates(
+    cycle_id: int,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get templates available for deployment in this cycle."""
+    org_id = current_user["organization_id"]
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Verify cycle ownership
+        cursor.execute("""
+            SELECT id, year FROM ehc_audit_cycle WHERE id = %s AND organization_id = %s
+        """, (cycle_id, org_id))
+
+        cycle = dict_from_row(cursor.fetchone())
+        if not cycle:
+            raise HTTPException(status_code=404, detail="Cycle not found")
+
+        # Get active templates
+        cursor.execute("""
+            SELECT
+                t.id, t.name, t.form_type, t.ehc_record_id, t.config,
+                r.record_number, r.name as record_name
+            FROM ehc_form_template t
+            LEFT JOIN ehc_record r ON r.id = t.ehc_record_id
+            WHERE t.organization_id = %s AND t.is_active = true
+            ORDER BY t.name
+        """, (org_id,))
+
+        templates = dicts_from_rows(cursor.fetchall())
+
+        for tmpl in templates:
+            config = tmpl.get('config') or {}
+            if isinstance(config, str):
+                config = json.loads(config)
+            tmpl['item_count'] = len(config.get('items', []))
+            # Don't expose full config in list view
+            del tmpl['config']
+
+        return {"data": templates, "count": len(templates), "cycle_year": cycle['year']}
