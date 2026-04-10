@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import axios from '../../../lib/axios';
 import TableSignoffForm from './TableSignoffForm';
+import ChecklistForm from './ChecklistForm';
 import { CheckCircle, AlertTriangle, Clock } from 'lucide-react';
 import './FormPage.css';
 
@@ -165,10 +166,24 @@ export default function FormPage() {
     );
   }
 
-  // Render form
+  // Render form based on form_type
   const renderForm = () => {
-    const { config, responses, title } = formData;
+    const { config, responses, title, form_type } = formData;
 
+    // Route to appropriate form component based on form_type
+    if (form_type === 'checklist_form') {
+      return (
+        <ChecklistForm
+          config={config}
+          title={title}
+          existingResponses={responses}
+          onSubmit={handleSubmit}
+          submitting={submitting}
+        />
+      );
+    }
+
+    // Default: table_signoff and other types
     return (
       <TableSignoffForm
         config={config}

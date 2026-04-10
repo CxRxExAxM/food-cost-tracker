@@ -2057,6 +2057,11 @@
   color: var(--text-primary);
 }
 
+.forms-header .header-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
 .forms-stats {
   display: flex;
   gap: var(--space-6);
@@ -2567,6 +2572,29 @@
   color: var(--text-tertiary);
 }
 
+/* Template-based form groups */
+.forms-record-group.template-group {
+  border-color: var(--color-purple-dim);
+}
+
+.template-badge {
+  font-size: var(--text-xs);
+  padding: var(--space-1) var(--space-2);
+  background: var(--color-purple-dim);
+  color: var(--color-purple);
+  border-radius: var(--radius-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.period-badge {
+  font-size: var(--text-xs);
+  padding: var(--space-1) var(--space-2);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border-radius: var(--radius-sm);
+  margin-left: auto;
+}
+
 /* Form link card */
 .form-link-card {
   border-bottom: 1px solid var(--border-subtle);
@@ -2619,12 +2647,27 @@
   color: var(--color-green-bright);
 }
 
+.form-type-badge.table_signoff {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+}
+
+.form-type-badge.checklist_form {
+  background: var(--color-yellow-dim);
+  color: var(--color-yellow);
+}
+
 .form-link-title {
   font-size: var(--text-sm);
   color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.form-link-title.outlet-name {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-blue);
 }
 
 .inactive-badge {

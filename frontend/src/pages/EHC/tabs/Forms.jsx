@@ -14,6 +14,7 @@ import {
   fetchWithAuth,
 } from './shared';
 import TableSignoffModal from '../modals/TableSignoffModal';
+import CreateFromTemplateModal from '../modals/CreateFromTemplateModal';
 
 export default function Forms({ activeCycle, toast }) {
   const [formLinks, setFormLinks] = useState([]);
@@ -28,6 +29,7 @@ export default function Forms({ activeCycle, toast }) {
 
   // Modal state
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [showCreateFromTemplate, setShowCreateFromTemplate] = useState(false);
   const [editingFormLink, setEditingFormLink] = useState(null); // Full link object for edit mode
   const [duplicatingFormLink, setDuplicatingFormLink] = useState(null); // Form link to duplicate
 
@@ -186,18 +188,51 @@ export default function Forms({ activeCycle, toast }) {
     return true;
   });
 
-  // Group by record for better organization
+  // Group by template+period (for template-based) or record (for regular forms)
   const groupedLinks = filteredLinks.reduce((acc, link) => {
-    const key = link.record_number;
+    let key, groupName, groupType;
+
+    if (link.template_id && link.template_name) {
+      // Template-based: group by template + period
+      key = `template_${link.template_id}_${link.period_label || 'no-period'}`;
+      groupName = `${link.template_name} - ${link.period_label || ''}`;
+      groupType = 'template';
+    } else {
+      // Regular: group by record
+      key = `record_${link.record_number}`;
+      groupName = `${link.record_number} - ${link.record_name}`;
+      groupType = 'record';
+    }
+
     if (!acc[key]) {
-      acc[key] = { record_number: link.record_number, record_name: link.record_name, links: [] };
+      acc[key] = {
+        key,
+        group_name: groupName,
+        group_type: groupType,
+        record_number: link.record_number,
+        record_name: link.record_name,
+        template_name: link.template_name,
+        period_label: link.period_label,
+        links: []
+      };
     }
     acc[key].links.push(link);
     return acc;
   }, {});
 
   const formTypeLabel = (type) => {
-    return 'Sign-off Form';
+    switch (type) {
+      case 'checklist_form':
+        return 'Checklist';
+      case 'table_signoff':
+        return 'Sign-off Form';
+      case 'staff_declaration':
+        return 'Staff Declaration';
+      case 'team_roster':
+        return 'Team Roster';
+      default:
+        return 'Form';
+    }
   };
 
   const formatDate = (dateStr) => {
@@ -333,9 +368,14 @@ export default function Forms({ activeCycle, toast }) {
       {/* Create Form Header */}
       <div className="forms-header">
         <h3>Sign-off Forms</h3>
-        <button className="btn-primary" onClick={() => setShowCreateForm(true)}>
-          + Create Form
-        </button>
+        <div className="header-actions">
+          <button className="btn-secondary" onClick={() => setShowCreateFromTemplate(true)}>
+            From Template
+          </button>
+          <button className="btn-primary" onClick={() => setShowCreateForm(true)}>
+            + Create Form
+          </button>
+        </div>
       </div>
 
       {/* Existing Form Links */}
@@ -364,13 +404,23 @@ export default function Forms({ activeCycle, toast }) {
             </div>
           </div>
 
-          {/* Form Links by Record */}
+          {/* Form Links by Group */}
           <div className="forms-list">
             {Object.values(groupedLinks).map(group => (
-              <div key={group.record_number} className="forms-record-group">
+              <div key={group.key} className={`forms-record-group ${group.group_type === 'template' ? 'template-group' : ''}`}>
                 <div className="record-group-header">
-                  <span className="record-number">{group.record_number}</span>
-                  <span className="record-name">{group.record_name}</span>
+                  {group.group_type === 'template' ? (
+                    <>
+                      <span className="template-badge">Template</span>
+                      <span className="record-name">{group.template_name}</span>
+                      {group.period_label && <span className="period-badge">{group.period_label}</span>}
+                    </>
+                  ) : (
+                    <>
+                      <span className="record-number">{group.record_number}</span>
+                      <span className="record-name">{group.record_name}</span>
+                    </>
+                  )}
                   <span className="link-count">{group.links.length} link{group.links.length !== 1 ? 's' : ''}</span>
                 </div>
 
@@ -381,7 +431,11 @@ export default function Forms({ activeCycle, toast }) {
                         <span className={`form-type-badge ${link.form_type}`}>
                           {formTypeLabel(link.form_type)}
                         </span>
-                        <span className="form-link-title">{link.title}</span>
+                        {link.outlet_name ? (
+                          <span className="form-link-title outlet-name">{link.outlet_name}</span>
+                        ) : (
+                          <span className="form-link-title">{link.title}</span>
+                        )}
                         {!link.is_active && <span className="inactive-badge">Inactive</span>}
                       </div>
 
@@ -542,6 +596,18 @@ export default function Forms({ activeCycle, toast }) {
           setShowCreateForm(false);
           setEditingFormLink(null);
           setDuplicatingFormLink(null);
+          loadFormLinks();
+        }}
+        toast={toast}
+      />
+
+      {/* Create from Template Modal */}
+      <CreateFromTemplateModal
+        isOpen={showCreateFromTemplate}
+        onClose={() => setShowCreateFromTemplate(false)}
+        activeCycle={activeCycle}
+        onFormsCreated={() => {
+          setShowCreateFromTemplate(false);
           loadFormLinks();
         }}
         toast={toast}
