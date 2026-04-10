@@ -7,8 +7,8 @@ with all 58 Y/N questions. Run after migration 039.
 Usage:
     python scripts/seed_kitchen_audit_template.py --org-id <organization_id>
 
-    # Or using organization name:
-    python scripts/seed_kitchen_audit_template.py --org-name "Fairmont Scottsdale Princess"
+    # Or using organization name (partial match, case-insensitive):
+    python scripts/seed_kitchen_audit_template.py --org-name "fairmont"
 
 Requires DATABASE_URL environment variable.
 """
