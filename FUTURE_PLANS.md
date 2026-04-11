@@ -21,12 +21,14 @@ This document outlines the technical roadmap for RestauranTek, covering both nea
 
 ### EHC Digital Forms ✅ (April 2026)
 - **Flexible Form Builder:** Configurable table sign-off forms with dynamic columns
+- **Checklist Forms:** Y/N question checklists with inline corrective actions (Record 20 Kitchen Audit)
+- **Template System:** Reusable form definitions, deploy to multiple outlets at once
 - **Form→Submission Lifecycle:** Auto-creates submission, tracks progress, auto-updates status
 - **Public Form Page:** Token-based access, no authentication required
 - **Signature Collection:** Touch-friendly canvas with scroll-to-sign gate
-- **PDF Generation:** Dynamic table rendering from form config
+- **PDF Generation:** Dynamic rendering for table forms and checklists
 - **Deep Edit Mode:** Modify columns, rows, intro text, PDF attachment after creation
-- **Admin Workbench:** Forms tab with progress tracking, QR codes, flyers
+- **Admin Workbench:** Forms tab with progress tracking, QR codes, flyers, template deployment
 
 ### EHC Module ✅ (March-April 2026)
 - Full audit cycle management with 6-section hierarchy (144 audit points)
@@ -149,10 +151,11 @@ This document outlines the technical roadmap for RestauranTek, covering both nea
 - [ ] Drill-down to outlet-specific record status
 
 **Form Template Library:**
-- [ ] "Save as Template" when creating a form
-- [ ] Template library with reusable form configs
-- [ ] "Deploy to Outlets" - one-click create form links for multiple outlets
-- [ ] Bulk form creation from template
+- [x] Template system with reusable form definitions ✅
+- [x] "Deploy to Outlets" - create form links for multiple outlets at once ✅
+- [x] Checklist forms (Y/N with corrective actions) ✅
+- [ ] "Save as Template" from existing form
+- [ ] Template editor UI (add/edit/reorder questions)
 
 ### Food Cost Module
 
@@ -313,6 +316,7 @@ api/app/routers/
 
 ### This Month (April 2026)
 - [x] EHC Digital Forms implementation ✅
+- [x] EHC Checklist Forms & Template System ✅
 - [ ] EHC Settings Tab (outlets, contacts, responsibility coding)
 - [ ] Method step parsing for AI parser
 - [ ] Group resume ingestion planning
@@ -329,6 +333,6 @@ api/app/routers/
 
 ---
 
-**Document Version:** 2.3
-**Last Updated:** April 9, 2026
+**Document Version:** 2.4
+**Last Updated:** April 11, 2026
 **Next Review:** After EHC Settings Tab completion

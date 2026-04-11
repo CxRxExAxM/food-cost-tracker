@@ -788,23 +788,30 @@ END
 
 ### EHC Digital Forms (April 2026)
 
-Tokenized public signature collection for staff declarations, team rosters, and equipment registration.
+Tokenized public signature collection for staff declarations, team rosters, equipment registration, and **checklist audits**.
+
+**Form Types:**
+- `table_signoff` - Generic sign-off with configurable columns (equipment, declarations)
+- `staff_declaration` - Record 11 staff acknowledgment
+- `team_roster` - Record 35 Food Safety Team
+- `checklist_form` - Y/N question checklists with corrective actions (Record 20 Kitchen Audit)
 
 **Key Files:**
-- `api/app/routers/ehc_forms.py` - Public + admin endpoints
+- `api/app/routers/ehc_forms.py` - Public + admin endpoints, template CRUD
+- `api/app/services/pdf_generator.py` - PDF export for all form types
 - `api/app/utils/qr_generator.py` - QR code generation
-- `frontend/src/pages/EHC/forms/` - Public form UI (TableSignoffForm.jsx)
-- `frontend/src/pages/EHC/modals/TableSignoffModal.jsx` - **Primary form builder modal** (used by Forms tab)
-- `frontend/src/pages/EHC/tabs/Forms.jsx` - Forms tab with form link management
-- `frontend/src/pages/EHC/ResponseTrackerModal.jsx` - Response viewing
-- `frontend/src/pages/EHC/FormLinkModal.jsx` - Legacy modal (Records tab entry point, may be deprecated)
-
-**IMPORTANT:** The consolidated form builder is `TableSignoffModal.jsx`, NOT `FormLinkModal.jsx`. The Forms tab uses TableSignoffModal for all form creation/editing.
+- `frontend/src/pages/EHC/forms/FormPage.jsx` - Routes to correct form component by type
+- `frontend/src/pages/EHC/forms/TableSignoffForm.jsx` - Table sign-off UI
+- `frontend/src/pages/EHC/forms/ChecklistForm.jsx` - Y/N checklist UI with corrective actions
+- `frontend/src/pages/EHC/modals/TableSignoffModal.jsx` - Form builder for table_signoff
+- `frontend/src/pages/EHC/modals/CreateFromTemplateModal.jsx` - Deploy templates to multiple outlets
+- `frontend/src/pages/EHC/tabs/Forms.jsx` - Admin workbench for form link management
 
 **Database Tables:**
 ```sql
-ehc_form_link      -- Tokenized links with QR codes, config JSON stores columns/rows
-ehc_form_response  -- Individual signatures with audit trail, response_data JSON
+ehc_form_template  -- Reusable form definitions (e.g., Kitchen Audit 58 questions)
+ehc_form_link      -- Tokenized links with QR codes, config JSON, outlet_name, period_label
+ehc_form_response  -- Individual submissions with signature, response_data JSON
 ```
 
 **Column Configuration:**
@@ -820,30 +827,49 @@ Each column in `config.columns` supports:
 - `intro_text` - Instructions shown at top of form
 - `document_path` - Attached reference PDF
 - `rows` - Pre-filled row data (for partial pre-fill workflows)
+- `items` - Checklist questions array (for checklist_form type)
+
+**Template System:**
+Templates are reusable form definitions stored in `ehc_form_template`. Admins deploy templates to multiple outlets at once via CreateFromTemplateModal.
+
+- `POST /api/ehc/templates/{id}/deploy` - Create form links for selected outlets
+- Each outlet gets its own QR code and form link
+- `outlet_name` and `period_label` stored on ehc_form_link
+- Config copied at creation (template updates don't affect existing forms)
+
+**Checklist Form Response Structure:**
+```json
+{
+  "answers": {
+    "1": {"answer": "Y"},
+    "2": {"answer": "N", "action": "Fix issue", "when_by": "2026-04-15", "who_by": "John"}
+  }
+}
+```
 
 **Key Patterns:**
 - **Tokenized access** - 43-char URL-safe tokens via `secrets.token_urlsafe(32)`
 - **Editable columns** - Admin pre-fills some columns, users complete others when signing
 - **Add New Entry** - Users can add items not in pre-filled list (row_index: -1)
 - **Duplicate detection** - Warns if name exists, allows force override
-- **Auto-increment expected** - When user adds new entry, expected_responses increments
 - **JSON serialization** - Use `json.dumps()` for JSON columns with psycopg2
 - **Floating sign bar** - Mobile/desktop UX: tap row to select, sticky bar appears at bottom with "Sign Now"
-- **Form duplication** - "Duplicate as template" copies config to new form (for monthly forms like April→May)
+- **Form duplication** - "Duplicate as template" copies config to new form (for monthly forms)
+- **Checklist corrective actions** - "N" answers require action, when_by, who_by fields
 
 **Public Routes (no auth):**
 - `GET /api/ehc/forms/{token}` - Fetch form data (includes response_data for row tracking)
-- `POST /api/ehc/forms/{token}/respond` - Submit signature
+- `POST /api/ehc/forms/{token}/respond` - Submit signature (validates checklist completeness)
 - `GET /api/ehc/forms/{token}/document` - Serve attached PDF
 
 **Utilities:**
-- `scripts/delete_ehc_responses.py` - Bulk cleanup script for deleting submissions/form links/responses by record ID. Run with `--list` to see all records with data counts.
+- `scripts/delete_ehc_responses.py` - Bulk cleanup for deleting submissions/form links/responses
+- `scripts/seed_kitchen_audit_template.py` - Seed Record 20 template with 58 questions
 
-**Future: Module Restructure**
-- Outlet-aware QR codes with `?outlet=id` param
+**Future Enhancements:**
 - Outlet compliance dashboard (completion % per location)
-- Form template library with bulk deploy
-- Add Settings tab (outlets, cycle config, responsibility codes)
+- Settings tab (outlets, cycle config, responsibility codes)
+- Template editor UI (add/edit/reorder questions)
 - Monthly outlet checks with email distribution
 
 ---

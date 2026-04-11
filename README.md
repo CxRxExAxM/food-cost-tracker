@@ -23,13 +23,14 @@ A comprehensive multi-tenant SaaS platform for F&B operations to manage food cos
 - Record linking for observational audit points
 - **Digital Forms** - Tokenized public signature collection:
   - Configurable table sign-off forms (dynamic columns, pre-filled rows)
+  - Checklist forms with Y/N questions and inline corrective actions (Record 20 Kitchen Audit)
+  - Template system for reusable form definitions
+  - Multi-outlet deployment (create form links for multiple outlets at once)
   - QR code generation for tablet/phone signing
   - Optional PDF document attachment for review before signing
   - Auto-creates linked submission when form is created
   - Auto-updates submission status when all signatures collected
-  - Duplicate detection with force override
-  - Response tracking with signature previews
-  - PDF export of completed signature sheets
+  - PDF export for table forms and completed checklists
   - Deep edit mode (modify columns, rows, settings after creation)
 
 **Food Cost Tracking** - ✅ Complete
@@ -301,6 +302,7 @@ Clean_Invoices/
 - `ehc_section`, `ehc_subsection`, `ehc_audit_point` - Audit hierarchy
 - `ehc_record`, `ehc_record_submission` - Record tracking
 - `ehc_point_record_link` - Links records to audit points
+- `ehc_form_template` - Reusable form definitions (checklists, sign-offs)
 - `ehc_form_link` - Tokenized public form links with QR codes
 - `ehc_form_response` - Signatures with audit trail (IP, user agent)
 
