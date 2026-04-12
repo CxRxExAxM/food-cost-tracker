@@ -3905,7 +3905,6 @@
 .outlet-type-section {
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
-  /* removed overflow: hidden - was cutting off outlets */
 }
 
 .outlet-type-label {

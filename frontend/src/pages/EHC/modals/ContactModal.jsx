@@ -49,9 +49,7 @@ export default function ContactModal({
     async function loadOutlets() {
       try {
         setLoadingOutlets(true);
-        console.log('[ContactModal] Fetching outlets from:', `${API_BASE}/outlets`);
         const data = await fetchWithAuth(`${API_BASE}/outlets`);
-        console.log('[ContactModal] Received outlets:', data.data?.length, data.data);
         setOutlets(data.data || []);
       } catch (err) {
         console.error('Failed to load outlets:', err);
@@ -140,10 +138,6 @@ export default function ContactModal({
   const typeOrder = ['Production Kitchen', 'Restaurant', 'Bar', 'Lounge', 'Support', 'Franchise', 'Other'];
   const sortedTypes = typeOrder.filter(type => outletsByType[type]);
 
-  console.log('[ContactModal] outletsByType:', outletsByType);
-  console.log('[ContactModal] sortedTypes:', sortedTypes);
-  console.log('[ContactModal] Total outlets to render:', sortedTypes.reduce((sum, t) => sum + outletsByType[t].length, 0));
-
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-container modal-lg" onClick={(e) => e.stopPropagation()}>
@@ -210,7 +204,7 @@ export default function ContactModal({
 
           {/* Outlet Assignments */}
           <div className="form-group">
-            <label>Outlet Assignments ({outlets.length} outlets loaded)</label>
+            <label>Outlet Assignments</label>
             <p className="form-help">
               Select outlets this contact is responsible for. Mark one as "Primary" for automatic email distribution.
             </p>
@@ -225,8 +219,8 @@ export default function ContactModal({
             <div className="outlet-assignment-grid">
               {sortedTypes.map(type => (
                 <div key={type} className="outlet-type-section">
-                  <span className="outlet-type-label">{type} ({outletsByType[type]?.length || 0} outlets)</span>
-                  <div className="outlet-checkboxes" style={{background: 'rgba(255,255,0,0.1)'}}>
+                  <span className="outlet-type-label">{type}</span>
+                  <div className="outlet-checkboxes">
                     {outletsByType[type].map(outlet => (
                       <div key={outlet.id} className="outlet-assignment-row">
                         <label className="checkbox-label">
@@ -278,16 +272,6 @@ export default function ContactModal({
               </label>
             </div>
           )}
-
-          {/* DEBUG: Simple list to verify all outlets */}
-          <div style={{background: '#ffcccc', padding: '10px', marginTop: '10px'}}>
-            <strong>DEBUG - All {outlets.length} outlets:</strong>
-            <ul>
-              {outlets.map(o => (
-                <li key={o.id}>{o.id}: {o.name} ({o.outlet_type})</li>
-              ))}
-            </ul>
-          </div>
         </form>
 
         <div className="modal-footer">
