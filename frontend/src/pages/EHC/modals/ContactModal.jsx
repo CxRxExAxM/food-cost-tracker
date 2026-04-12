@@ -278,6 +278,16 @@ export default function ContactModal({
               </label>
             </div>
           )}
+
+          {/* DEBUG: Simple list to verify all outlets */}
+          <div style={{background: '#ffcccc', padding: '10px', marginTop: '10px'}}>
+            <strong>DEBUG - All {outlets.length} outlets:</strong>
+            <ul>
+              {outlets.map(o => (
+                <li key={o.id}>{o.id}: {o.name} ({o.outlet_type})</li>
+              ))}
+            </ul>
+          </div>
         </form>
 
         <div className="modal-footer">
