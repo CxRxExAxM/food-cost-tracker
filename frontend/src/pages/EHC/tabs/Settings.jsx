@@ -4,6 +4,8 @@
  * Module configuration:
  * - Audit cycle management (status, dates)
  * - EHC Outlets (kitchens, restaurants, bars)
+ * - EHC Contacts (people assigned to outlets for email distribution)
+ * - Email Configuration (Resend integration status)
  * - Responsibility Codes (custom role definitions)
  */
 
@@ -13,7 +15,8 @@ import {
   fetchWithAuth,
 } from './shared';
 import OutletModal from '../modals/OutletModal';
-import { X, Edit2, Plus } from 'lucide-react';
+import ContactModal from '../modals/ContactModal';
+import { X, Edit2, Plus, Mail, Check, Send, CheckCircle, AlertCircle, Clock } from 'lucide-react';
 
 export default function Settings({ activeCycle, onCycleUpdated, toast }) {
   const [updating, setUpdating] = useState(false);
@@ -24,11 +27,23 @@ export default function Settings({ activeCycle, onCycleUpdated, toast }) {
   const [loadingOutlets, setLoadingOutlets] = useState(true);
   const [outletModal, setOutletModal] = useState({ show: false, outlet: null });
 
+  // Contacts state
+  const [contacts, setContacts] = useState([]);
+  const [loadingContacts, setLoadingContacts] = useState(true);
+  const [contactModal, setContactModal] = useState({ show: false, contact: null });
+
   // Responsibility codes state
   const [respCodes, setRespCodes] = useState([]);
   const [loadingCodes, setLoadingCodes] = useState(true);
   const [editingCodeId, setEditingCodeId] = useState(null);
   const [codeEditData, setCodeEditData] = useState({});
+
+  // Email state
+  const [emailStatus, setEmailStatus] = useState(null);
+  const [loadingEmailStatus, setLoadingEmailStatus] = useState(true);
+  const [emailLog, setEmailLog] = useState([]);
+  const [loadingEmailLog, setLoadingEmailLog] = useState(true);
+  const [sendingTestEmail, setSendingTestEmail] = useState(false);
 
   const cycleStatuses = [
     { value: 'preparing', label: 'Preparing', description: 'Setting up records and collecting evidence' },
@@ -52,9 +67,20 @@ export default function Settings({ activeCycle, onCycleUpdated, toast }) {
     loadOutlets();
   }, []);
 
+  // Load contacts
+  useEffect(() => {
+    loadContacts();
+  }, []);
+
   // Load responsibility codes
   useEffect(() => {
     loadRespCodes();
+  }, []);
+
+  // Load email status and log
+  useEffect(() => {
+    loadEmailStatus();
+    loadEmailLog();
   }, []);
 
   async function loadOutlets() {
@@ -69,6 +95,18 @@ export default function Settings({ activeCycle, onCycleUpdated, toast }) {
     }
   }
 
+  async function loadContacts() {
+    try {
+      setLoadingContacts(true);
+      const data = await fetchWithAuth(`${API_BASE}/contacts?active_only=true`);
+      setContacts(data.data || []);
+    } catch (error) {
+      toast?.error?.('Failed to load contacts');
+    } finally {
+      setLoadingContacts(false);
+    }
+  }
+
   async function loadRespCodes() {
     try {
       setLoadingCodes(true);
@@ -78,6 +116,46 @@ export default function Settings({ activeCycle, onCycleUpdated, toast }) {
       toast?.error?.('Failed to load responsibility codes');
     } finally {
       setLoadingCodes(false);
+    }
+  }
+
+  async function loadEmailStatus() {
+    try {
+      setLoadingEmailStatus(true);
+      const data = await fetchWithAuth(`${API_BASE}/email/status`);
+      setEmailStatus(data);
+    } catch (error) {
+      setEmailStatus({ configured: false, error: 'Failed to check status' });
+    } finally {
+      setLoadingEmailStatus(false);
+    }
+  }
+
+  async function loadEmailLog() {
+    try {
+      setLoadingEmailLog(true);
+      const data = await fetchWithAuth(`${API_BASE}/email/log?limit=10`);
+      setEmailLog(data.data || []);
+    } catch (error) {
+      // Email log may not exist yet, that's okay
+      setEmailLog([]);
+    } finally {
+      setLoadingEmailLog(false);
+    }
+  }
+
+  async function handleSendTestEmail() {
+    try {
+      setSendingTestEmail(true);
+      await fetchWithAuth(`${API_BASE}/email/test`, {
+        method: 'POST'
+      });
+      toast?.success?.('Test email sent! Check your inbox.');
+      loadEmailLog(); // Refresh log
+    } catch (error) {
+      toast?.error?.(error.message || 'Failed to send test email');
+    } finally {
+      setSendingTestEmail(false);
     }
   }
 
@@ -137,6 +215,57 @@ export default function Settings({ activeCycle, onCycleUpdated, toast }) {
       setOutletModal({ show: false, outlet: null });
     } catch (error) {
       toast?.error?.('Failed to deactivate outlet');
+    }
+  }
+
+  async function handleSaveContact(contactData, outletAssignments) {
+    try {
+      let savedContact;
+      if (contactData.id) {
+        // Update existing contact
+        savedContact = await fetchWithAuth(`${API_BASE}/contacts/${contactData.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify(contactData)
+        });
+      } else {
+        // Create new contact
+        savedContact = await fetchWithAuth(`${API_BASE}/contacts`, {
+          method: 'POST',
+          body: JSON.stringify(contactData)
+        });
+      }
+
+      // Set outlet assignments
+      if (savedContact?.id) {
+        await fetchWithAuth(`${API_BASE}/contacts/${savedContact.id}/outlets`, {
+          method: 'POST',
+          body: JSON.stringify({ outlets: outletAssignments })
+        });
+      }
+
+      toast?.success?.(contactData.id ? 'Contact updated' : 'Contact created');
+      loadContacts();
+      setContactModal({ show: false, contact: null });
+    } catch (error) {
+      toast?.error?.(error.message || 'Failed to save contact');
+      throw error;
+    }
+  }
+
+  async function handleDeleteContact(contactId) {
+    if (!confirm('Deactivate this contact? They will be hidden from active lists.')) {
+      return;
+    }
+
+    try {
+      await fetchWithAuth(`${API_BASE}/contacts/${contactId}`, {
+        method: 'DELETE'
+      });
+      toast?.success?.('Contact deactivated');
+      loadContacts();
+      setContactModal({ show: false, contact: null });
+    } catch (error) {
+      toast?.error?.('Failed to deactivate contact');
     }
   }
 
@@ -367,6 +496,189 @@ export default function Settings({ activeCycle, onCycleUpdated, toast }) {
         )}
       </section>
 
+      {/* EHC Contacts */}
+      <section className="settings-section">
+        <div className="section-header">
+          <div>
+            <h2>EHC Contacts</h2>
+            <p className="section-description">
+              Manage people responsible for EHC at each outlet. Primary contacts receive automated QR code emails.
+            </p>
+          </div>
+          <button
+            className="btn-primary"
+            onClick={() => setContactModal({ show: true, contact: null })}
+          >
+            <Plus size={16} />
+            Add Contact
+          </button>
+        </div>
+
+        {loadingContacts ? (
+          <div className="loading-state">Loading contacts...</div>
+        ) : contacts.length === 0 ? (
+          <div className="empty-state">
+            <p>No contacts configured. Click "Add Contact" to get started.</p>
+          </div>
+        ) : (
+          <div className="contacts-table">
+            <div className="contacts-table-header">
+              <span className="col-name">Name</span>
+              <span className="col-email">Email</span>
+              <span className="col-title">Title</span>
+              <span className="col-outlets">Outlets</span>
+              <span className="col-actions">Actions</span>
+            </div>
+            {contacts.map(contact => (
+              <div key={contact.id} className="contacts-table-row">
+                <span className="col-name">{contact.name}</span>
+                <span className="col-email">
+                  <a href={`mailto:${contact.email}`}>{contact.email}</a>
+                </span>
+                <span className="col-title">{contact.title || '—'}</span>
+                <span className="col-outlets">
+                  {contact.outlets?.length > 0 ? (
+                    <div className="outlet-pills">
+                      {contact.outlets.map(o => (
+                        <span
+                          key={o.outlet_id}
+                          className={`outlet-pill ${o.is_primary ? 'is-primary' : ''}`}
+                          title={o.is_primary ? `Primary contact for ${o.outlet_name}` : o.outlet_name}
+                        >
+                          {o.outlet_name}
+                          {o.is_primary && <Check size={10} />}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="text-muted">No outlets assigned</span>
+                  )}
+                </span>
+                <span className="col-actions">
+                  <button
+                    className="btn-icon"
+                    onClick={() => setContactModal({ show: true, contact })}
+                    title="Edit contact"
+                  >
+                    <Edit2 size={16} />
+                  </button>
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Email Configuration */}
+      <section className="settings-section">
+        <div className="section-header">
+          <div>
+            <h2>Email Configuration</h2>
+            <p className="section-description">
+              Email integration for sending QR codes and form links to contacts.
+            </p>
+          </div>
+        </div>
+
+        <div className="email-config-card">
+          {/* Status */}
+          <div className="email-status-row">
+            <div className="email-status-indicator">
+              {loadingEmailStatus ? (
+                <span className="status-loading">Checking...</span>
+              ) : emailStatus?.configured ? (
+                <>
+                  <CheckCircle size={20} className="status-icon success" />
+                  <span className="status-text success">Email configured</span>
+                </>
+              ) : (
+                <>
+                  <AlertCircle size={20} className="status-icon warning" />
+                  <span className="status-text warning">Email not configured</span>
+                </>
+              )}
+            </div>
+
+            {emailStatus?.configured && (
+              <button
+                className="btn-secondary"
+                onClick={handleSendTestEmail}
+                disabled={sendingTestEmail}
+              >
+                <Send size={16} />
+                {sendingTestEmail ? 'Sending...' : 'Send Test Email'}
+              </button>
+            )}
+          </div>
+
+          {emailStatus?.sender && (
+            <div className="email-detail">
+              <span className="email-detail-label">Sender:</span>
+              <span className="email-detail-value">{emailStatus.sender}</span>
+            </div>
+          )}
+
+          {emailStatus?.error && !emailStatus?.configured && (
+            <div className="email-detail warning">
+              <span className="email-detail-label">Status:</span>
+              <span className="email-detail-value">{emailStatus.error}</span>
+            </div>
+          )}
+        </div>
+
+        {/* Recent Emails */}
+        {emailStatus?.configured && (
+          <div className="email-log-section">
+            <h3>Recent Emails</h3>
+            {loadingEmailLog ? (
+              <div className="loading-state">Loading email log...</div>
+            ) : emailLog.length === 0 ? (
+              <div className="empty-state small">
+                <p>No emails sent yet.</p>
+              </div>
+            ) : (
+              <div className="email-log-table">
+                <div className="email-log-header">
+                  <span className="col-recipient">Recipient</span>
+                  <span className="col-subject">Subject</span>
+                  <span className="col-type">Type</span>
+                  <span className="col-status">Status</span>
+                  <span className="col-date">Sent</span>
+                </div>
+                {emailLog.map(log => (
+                  <div key={log.id} className="email-log-row">
+                    <span className="col-recipient">
+                      {log.email_to_name || log.email_to}
+                    </span>
+                    <span className="col-subject" title={log.email_subject}>
+                      {log.email_subject?.length > 40
+                        ? log.email_subject.substring(0, 40) + '...'
+                        : log.email_subject}
+                    </span>
+                    <span className="col-type">
+                      <span className={`type-badge ${log.email_type}`}>
+                        {log.email_type === 'form_qr' ? 'Form QR' : log.email_type}
+                      </span>
+                    </span>
+                    <span className="col-status">
+                      <span className={`status-badge-sm ${log.status}`}>
+                        {log.status === 'sent' && <Check size={12} />}
+                        {log.status === 'failed' && <X size={12} />}
+                        {log.status === 'pending' && <Clock size={12} />}
+                        {log.status}
+                      </span>
+                    </span>
+                    <span className="col-date">
+                      {new Date(log.sent_at).toLocaleDateString()}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </section>
+
       {/* Responsibility Codes */}
       <section className="settings-section">
         <div className="section-header">
@@ -469,6 +781,17 @@ export default function Settings({ activeCycle, onCycleUpdated, toast }) {
           onSave={handleSaveOutlet}
           onDelete={handleDeleteOutlet}
           onClose={() => setOutletModal({ show: false, outlet: null })}
+        />
+      )}
+
+      {/* Contact Modal */}
+      {contactModal.show && (
+        <ContactModal
+          contact={contactModal.contact}
+          outlets={outlets}
+          onSave={handleSaveContact}
+          onDelete={handleDeleteContact}
+          onClose={() => setContactModal({ show: false, contact: null })}
         />
       )}
     </div>

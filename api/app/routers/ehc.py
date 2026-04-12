@@ -16,6 +16,12 @@ import uuid
 from ..database import get_db, dicts_from_rows, dict_from_row
 from ..auth import get_current_user, require_admin
 from ..services.ehc_seeder import seed_full_ehc_cycle
+from ..utils.email import (
+    is_email_configured,
+    get_email_status,
+    send_test_email,
+    send_form_qr_email
+)
 
 router = APIRouter(prefix="/ehc", tags=["ehc"])
 
@@ -122,6 +128,33 @@ class ResponsibilityCodeUpdate(BaseModel):
     scope: Optional[str] = None
     is_active: Optional[bool] = None
     sort_order: Optional[int] = None
+
+
+class ContactCreate(BaseModel):
+    """Create a new EHC contact."""
+    name: str
+    email: str
+    title: Optional[str] = None
+
+
+class ContactUpdate(BaseModel):
+    """Update an EHC contact."""
+    name: Optional[str] = None
+    email: Optional[str] = None
+    title: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+class ContactOutletAssignment(BaseModel):
+    """Set outlet assignments for a contact."""
+    outlets: List[dict]  # [{"outlet_id": 1, "is_primary": true}, ...]
+
+
+class SendFormLinksRequest(BaseModel):
+    """Send QR emails for form links."""
+    form_link_ids: List[int]
+    include_qr: Optional[bool] = True
+    custom_message: Optional[str] = None
 
 
 # ============================================
@@ -2016,3 +2049,614 @@ def delete_responsibility_code(
         conn.commit()
 
         return {"status": "ok", "code_id": code_id}
+
+
+# ============================================
+# EHC Settings - Contacts Endpoints
+# ============================================
+
+@router.get("/contacts")
+def get_contacts(
+    active_only: bool = Query(default=True),
+    current_user: dict = Depends(get_current_user)
+):
+    """Get all contacts for the organization with their outlet assignments."""
+    org_id = current_user["organization_id"]
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        query = """
+            SELECT c.id, c.name, c.email, c.title, c.is_active, c.user_id,
+                   c.created_at, c.updated_at
+            FROM ehc_contact c
+            WHERE c.organization_id = %s
+        """
+        params = [org_id]
+
+        if active_only:
+            query += " AND c.is_active = true"
+
+        query += " ORDER BY c.name"
+
+        cursor.execute(query, params)
+        contacts = dicts_from_rows(cursor)
+
+        # Get outlet assignments for each contact
+        for contact in contacts:
+            cursor.execute("""
+                SELECT co.outlet_id, o.name as outlet_name, o.full_name, co.is_primary
+                FROM ehc_contact_outlet co
+                JOIN ehc_outlet o ON o.id = co.outlet_id
+                WHERE co.contact_id = %s AND o.is_active = true
+                ORDER BY o.sort_order, o.name
+            """, (contact['id'],))
+            contact['outlets'] = dicts_from_rows(cursor)
+
+        return {"data": contacts, "count": len(contacts)}
+
+
+@router.get("/contacts/{contact_id}")
+def get_contact(
+    contact_id: int,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get a single contact with outlet assignments."""
+    org_id = current_user["organization_id"]
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT id, name, email, title, is_active, user_id, created_at, updated_at
+            FROM ehc_contact
+            WHERE id = %s AND organization_id = %s
+        """, (contact_id, org_id))
+
+        contact = dict_from_row(cursor.fetchone())
+        if not contact:
+            raise HTTPException(status_code=404, detail="Contact not found")
+
+        # Get outlet assignments
+        cursor.execute("""
+            SELECT co.outlet_id, o.name as outlet_name, o.full_name, co.is_primary
+            FROM ehc_contact_outlet co
+            JOIN ehc_outlet o ON o.id = co.outlet_id
+            WHERE co.contact_id = %s
+            ORDER BY o.sort_order, o.name
+        """, (contact_id,))
+        contact['outlets'] = dicts_from_rows(cursor)
+
+        return contact
+
+
+@router.post("/contacts")
+def create_contact(
+    contact: ContactCreate,
+    current_user: dict = Depends(get_current_user)
+):
+    """Create a new contact."""
+    org_id = current_user["organization_id"]
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Check if email already exists
+        cursor.execute("""
+            SELECT id FROM ehc_contact
+            WHERE organization_id = %s AND LOWER(email) = LOWER(%s)
+        """, (org_id, contact.email))
+
+        if cursor.fetchone():
+            raise HTTPException(status_code=400, detail="Contact with this email already exists")
+
+        cursor.execute("""
+            INSERT INTO ehc_contact (organization_id, name, email, title)
+            VALUES (%s, %s, %s, %s)
+            RETURNING id, name, email, title, is_active, user_id, created_at, updated_at
+        """, (org_id, contact.name, contact.email, contact.title))
+
+        result = dict_from_row(cursor.fetchone())
+        result['outlets'] = []  # New contact has no outlets
+        conn.commit()
+
+        return result
+
+
+@router.patch("/contacts/{contact_id}")
+def update_contact(
+    contact_id: int,
+    contact: ContactUpdate,
+    current_user: dict = Depends(get_current_user)
+):
+    """Update a contact."""
+    org_id = current_user["organization_id"]
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Verify ownership
+        cursor.execute("""
+            SELECT id FROM ehc_contact
+            WHERE id = %s AND organization_id = %s
+        """, (contact_id, org_id))
+
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Contact not found")
+
+        # Check email conflict if changing email
+        if contact.email:
+            cursor.execute("""
+                SELECT id FROM ehc_contact
+                WHERE organization_id = %s AND LOWER(email) = LOWER(%s) AND id != %s
+            """, (org_id, contact.email, contact_id))
+
+            if cursor.fetchone():
+                raise HTTPException(status_code=400, detail="Contact with this email already exists")
+
+        # Build update query
+        updates = []
+        params = []
+
+        if contact.name is not None:
+            updates.append("name = %s")
+            params.append(contact.name)
+        if contact.email is not None:
+            updates.append("email = %s")
+            params.append(contact.email)
+        if contact.title is not None:
+            updates.append("title = %s")
+            params.append(contact.title)
+        if contact.is_active is not None:
+            updates.append("is_active = %s")
+            params.append(contact.is_active)
+
+        if not updates:
+            raise HTTPException(status_code=400, detail="No fields to update")
+
+        updates.append("updated_at = NOW()")
+        params.extend([contact_id, org_id])
+
+        cursor.execute(f"""
+            UPDATE ehc_contact
+            SET {", ".join(updates)}
+            WHERE id = %s AND organization_id = %s
+            RETURNING id, name, email, title, is_active, user_id, created_at, updated_at
+        """, params)
+
+        result = dict_from_row(cursor.fetchone())
+
+        # Get outlet assignments
+        cursor.execute("""
+            SELECT co.outlet_id, o.name as outlet_name, o.full_name, co.is_primary
+            FROM ehc_contact_outlet co
+            JOIN ehc_outlet o ON o.id = co.outlet_id
+            WHERE co.contact_id = %s
+            ORDER BY o.sort_order, o.name
+        """, (contact_id,))
+        result['outlets'] = dicts_from_rows(cursor)
+
+        conn.commit()
+
+        return result
+
+
+@router.delete("/contacts/{contact_id}")
+def delete_contact(
+    contact_id: int,
+    current_user: dict = Depends(get_current_user)
+):
+    """Soft-delete a contact (set is_active = false)."""
+    org_id = current_user["organization_id"]
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Verify ownership
+        cursor.execute("""
+            SELECT id FROM ehc_contact
+            WHERE id = %s AND organization_id = %s
+        """, (contact_id, org_id))
+
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Contact not found")
+
+        cursor.execute("""
+            UPDATE ehc_contact
+            SET is_active = false, updated_at = NOW()
+            WHERE id = %s AND organization_id = %s
+        """, (contact_id, org_id))
+
+        conn.commit()
+
+        return {"status": "ok", "contact_id": contact_id}
+
+
+@router.post("/contacts/{contact_id}/outlets")
+def set_contact_outlets(
+    contact_id: int,
+    assignment: ContactOutletAssignment,
+    current_user: dict = Depends(get_current_user)
+):
+    """Set outlet assignments for a contact (replaces all existing assignments)."""
+    org_id = current_user["organization_id"]
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Verify contact ownership
+        cursor.execute("""
+            SELECT id FROM ehc_contact
+            WHERE id = %s AND organization_id = %s
+        """, (contact_id, org_id))
+
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Contact not found")
+
+        # Verify all outlets belong to this org
+        outlet_ids = [o.get('outlet_id') for o in assignment.outlets if o.get('outlet_id')]
+        if outlet_ids:
+            cursor.execute("""
+                SELECT id FROM ehc_outlet
+                WHERE id = ANY(%s) AND organization_id = %s
+            """, (outlet_ids, org_id))
+            valid_outlets = {row['id'] for row in dicts_from_rows(cursor)}
+            invalid_ids = set(outlet_ids) - valid_outlets
+            if invalid_ids:
+                raise HTTPException(status_code=400, detail=f"Invalid outlet IDs: {invalid_ids}")
+
+        # Clear existing assignments
+        cursor.execute("""
+            DELETE FROM ehc_contact_outlet WHERE contact_id = %s
+        """, (contact_id,))
+
+        # Insert new assignments
+        for outlet_data in assignment.outlets:
+            outlet_id = outlet_data.get('outlet_id')
+            is_primary = outlet_data.get('is_primary', False)
+
+            if outlet_id:
+                # If setting as primary, clear other primary assignments for this outlet
+                if is_primary:
+                    cursor.execute("""
+                        UPDATE ehc_contact_outlet
+                        SET is_primary = false
+                        WHERE outlet_id = %s AND contact_id != %s
+                    """, (outlet_id, contact_id))
+
+                cursor.execute("""
+                    INSERT INTO ehc_contact_outlet (contact_id, outlet_id, is_primary)
+                    VALUES (%s, %s, %s)
+                """, (contact_id, outlet_id, is_primary))
+
+        conn.commit()
+
+        # Return updated contact with outlets
+        cursor.execute("""
+            SELECT id, name, email, title, is_active, user_id, created_at, updated_at
+            FROM ehc_contact
+            WHERE id = %s
+        """, (contact_id,))
+        result = dict_from_row(cursor.fetchone())
+
+        cursor.execute("""
+            SELECT co.outlet_id, o.name as outlet_name, o.full_name, co.is_primary
+            FROM ehc_contact_outlet co
+            JOIN ehc_outlet o ON o.id = co.outlet_id
+            WHERE co.contact_id = %s
+            ORDER BY o.sort_order, o.name
+        """, (contact_id,))
+        result['outlets'] = dicts_from_rows(cursor)
+
+        return result
+
+
+@router.get("/outlets/{outlet_id}/contacts")
+def get_outlet_contacts(
+    outlet_id: int,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get all contacts assigned to an outlet."""
+    org_id = current_user["organization_id"]
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Verify outlet ownership
+        cursor.execute("""
+            SELECT id FROM ehc_outlet
+            WHERE id = %s AND organization_id = %s
+        """, (outlet_id, org_id))
+
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Outlet not found")
+
+        cursor.execute("""
+            SELECT c.id, c.name, c.email, c.title, co.is_primary
+            FROM ehc_contact c
+            JOIN ehc_contact_outlet co ON co.contact_id = c.id
+            WHERE co.outlet_id = %s AND c.is_active = true
+            ORDER BY co.is_primary DESC, c.name
+        """, (outlet_id,))
+
+        contacts = dicts_from_rows(cursor)
+
+        return {"data": contacts, "count": len(contacts)}
+
+
+@router.get("/outlets/{outlet_id}/primary-contact")
+def get_outlet_primary_contact(
+    outlet_id: int,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get the primary contact for an outlet (for email distribution)."""
+    org_id = current_user["organization_id"]
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Verify outlet ownership
+        cursor.execute("""
+            SELECT id, name FROM ehc_outlet
+            WHERE id = %s AND organization_id = %s
+        """, (outlet_id, org_id))
+
+        outlet = dict_from_row(cursor.fetchone())
+        if not outlet:
+            raise HTTPException(status_code=404, detail="Outlet not found")
+
+        cursor.execute("""
+            SELECT c.id, c.name, c.email, c.title
+            FROM ehc_contact c
+            JOIN ehc_contact_outlet co ON co.contact_id = c.id
+            WHERE co.outlet_id = %s AND co.is_primary = true AND c.is_active = true
+            LIMIT 1
+        """, (outlet_id,))
+
+        contact = dict_from_row(cursor.fetchone())
+
+        return {
+            "outlet_id": outlet_id,
+            "outlet_name": outlet['name'],
+            "primary_contact": contact
+        }
+
+
+# ============================================
+# EHC Settings - Email Endpoints
+# ============================================
+
+@router.get("/email/status")
+def get_email_configuration_status(
+    current_user: dict = Depends(get_current_user)
+):
+    """Get email configuration status."""
+    return get_email_status()
+
+
+@router.post("/email/test")
+def send_email_test(
+    current_user: dict = Depends(get_current_user)
+):
+    """Send a test email to the current user."""
+    org_id = current_user["organization_id"]
+    user_email = current_user.get("email")
+    user_name = current_user.get("name", "User")
+
+    if not user_email:
+        raise HTTPException(status_code=400, detail="Current user has no email address")
+
+    if not is_email_configured():
+        raise HTTPException(status_code=503, detail="Email is not configured. Set RESEND_API_KEY.")
+
+    # Send test email
+    result = send_test_email(to_email=user_email, to_name=user_name)
+
+    if not result["success"]:
+        raise HTTPException(status_code=500, detail=f"Failed to send email: {result['error']}")
+
+    # Log the email
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO ehc_email_log
+                (organization_id, email_to, email_to_name, email_subject, email_type,
+                 resend_id, status, sent_by_user_id)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
+        """, (
+            org_id, user_email, user_name, "RestauranTek EHC - Test Email",
+            "test", result["resend_id"], "sent", current_user["id"]
+        ))
+        log_id = cursor.fetchone()['id']
+        conn.commit()
+
+    return {
+        "success": True,
+        "message": f"Test email sent to {user_email}",
+        "resend_id": result["resend_id"],
+        "log_id": log_id
+    }
+
+
+@router.post("/email/send-form-links")
+def send_form_link_emails(
+    request: SendFormLinksRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Send QR code emails for form links to their assigned outlets' primary contacts."""
+    org_id = current_user["organization_id"]
+
+    if not is_email_configured():
+        raise HTTPException(status_code=503, detail="Email is not configured. Set RESEND_API_KEY.")
+
+    if not request.form_link_ids:
+        raise HTTPException(status_code=400, detail="No form link IDs provided")
+
+    results = []
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        for form_link_id in request.form_link_ids:
+            # Get form link details
+            cursor.execute("""
+                SELECT fl.id, fl.token, fl.outlet_name, fl.period_label,
+                       fl.config, t.name as template_name
+                FROM ehc_form_link fl
+                LEFT JOIN ehc_form_template t ON t.id = fl.template_id
+                WHERE fl.id = %s AND fl.organization_id = %s
+            """, (form_link_id, org_id))
+
+            form_link = dict_from_row(cursor.fetchone())
+            if not form_link:
+                results.append({
+                    "form_link_id": form_link_id,
+                    "success": False,
+                    "error": "Form link not found"
+                })
+                continue
+
+            # Find the outlet and its primary contact
+            cursor.execute("""
+                SELECT o.id as outlet_id, o.name, c.id as contact_id, c.name as contact_name, c.email
+                FROM ehc_outlet o
+                JOIN ehc_contact_outlet co ON co.outlet_id = o.id AND co.is_primary = true
+                JOIN ehc_contact c ON c.id = co.contact_id AND c.is_active = true
+                WHERE o.organization_id = %s AND o.name = %s AND o.is_active = true
+            """, (org_id, form_link['outlet_name']))
+
+            contact_row = dict_from_row(cursor.fetchone())
+            if not contact_row:
+                results.append({
+                    "form_link_id": form_link_id,
+                    "outlet_name": form_link['outlet_name'],
+                    "success": False,
+                    "error": f"No primary contact found for outlet '{form_link['outlet_name']}'"
+                })
+                continue
+
+            # Build form URL
+            # Use production URL if available, otherwise dev
+            base_url = os.getenv("FRONTEND_URL", "https://www.restaurantek.io")
+            form_url = f"{base_url}/ehc/form/{form_link['token']}"
+
+            # Get QR code if requested
+            qr_base64 = None
+            if request.include_qr:
+                cursor.execute("""
+                    SELECT qr_code FROM ehc_form_link WHERE id = %s
+                """, (form_link_id,))
+                qr_row = cursor.fetchone()
+                if qr_row and qr_row['qr_code']:
+                    qr_base64 = qr_row['qr_code']
+
+            # Send the email
+            form_name = form_link.get('template_name') or "EHC Form"
+            email_result = send_form_qr_email(
+                to_email=contact_row['email'],
+                to_name=contact_row['contact_name'],
+                outlet_name=form_link['outlet_name'],
+                form_name=form_name,
+                period_label=form_link['period_label'] or "",
+                form_url=form_url,
+                qr_image_base64=qr_base64,
+                custom_message=request.custom_message
+            )
+
+            # Log the email
+            status = "sent" if email_result["success"] else "failed"
+            cursor.execute("""
+                INSERT INTO ehc_email_log
+                    (organization_id, contact_id, email_to, email_to_name, email_subject,
+                     email_type, form_link_id, outlet_id, resend_id, status, error_message,
+                     sent_by_user_id)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id
+            """, (
+                org_id, contact_row['contact_id'], contact_row['email'],
+                contact_row['contact_name'],
+                f"EHC Form: {form_name} - {form_link['outlet_name']} ({form_link['period_label']})",
+                "form_qr", form_link_id, contact_row['outlet_id'],
+                email_result.get("resend_id"), status, email_result.get("error"),
+                current_user["id"]
+            ))
+
+            results.append({
+                "form_link_id": form_link_id,
+                "outlet_name": form_link['outlet_name'],
+                "contact_name": contact_row['contact_name'],
+                "contact_email": contact_row['email'],
+                "success": email_result["success"],
+                "error": email_result.get("error"),
+                "resend_id": email_result.get("resend_id")
+            })
+
+        conn.commit()
+
+    # Summary
+    successful = sum(1 for r in results if r["success"])
+    failed = len(results) - successful
+
+    return {
+        "results": results,
+        "summary": {
+            "total": len(results),
+            "successful": successful,
+            "failed": failed
+        }
+    }
+
+
+@router.get("/email/log")
+def get_email_log(
+    limit: int = Query(default=20, le=100),
+    offset: int = Query(default=0),
+    email_type: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get recent email log entries."""
+    org_id = current_user["organization_id"]
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        query = """
+            SELECT el.id, el.email_to, el.email_to_name, el.email_subject,
+                   el.email_type, el.status, el.error_message, el.sent_at,
+                   el.resend_id, o.name as outlet_name, c.name as contact_name,
+                   u.name as sent_by_name
+            FROM ehc_email_log el
+            LEFT JOIN ehc_outlet o ON o.id = el.outlet_id
+            LEFT JOIN ehc_contact c ON c.id = el.contact_id
+            LEFT JOIN users u ON u.id = el.sent_by_user_id
+            WHERE el.organization_id = %s
+        """
+        params = [org_id]
+
+        if email_type:
+            query += " AND el.email_type = %s"
+            params.append(email_type)
+
+        query += " ORDER BY el.sent_at DESC LIMIT %s OFFSET %s"
+        params.extend([limit, offset])
+
+        cursor.execute(query, params)
+        logs = dicts_from_rows(cursor)
+
+        # Get total count
+        count_query = """
+            SELECT COUNT(*) as total FROM ehc_email_log WHERE organization_id = %s
+        """
+        count_params = [org_id]
+        if email_type:
+            count_query += " AND email_type = %s"
+            count_params.append(email_type)
+
+        cursor.execute(count_query, count_params)
+        total = cursor.fetchone()['total']
+
+        return {
+            "data": logs,
+            "count": len(logs),
+            "total": total
+        }
