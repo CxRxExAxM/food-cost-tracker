@@ -49,7 +49,9 @@ export default function ContactModal({
     async function loadOutlets() {
       try {
         setLoadingOutlets(true);
+        console.log('[ContactModal] Fetching outlets from:', `${API_BASE}/outlets`);
         const data = await fetchWithAuth(`${API_BASE}/outlets`);
+        console.log('[ContactModal] Received outlets:', data.data?.length, data.data);
         setOutlets(data.data || []);
       } catch (err) {
         console.error('Failed to load outlets:', err);
@@ -204,7 +206,7 @@ export default function ContactModal({
 
           {/* Outlet Assignments */}
           <div className="form-group">
-            <label>Outlet Assignments</label>
+            <label>Outlet Assignments ({outlets.length} outlets loaded)</label>
             <p className="form-help">
               Select outlets this contact is responsible for. Mark one as "Primary" for automatic email distribution.
             </p>
