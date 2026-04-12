@@ -22,6 +22,7 @@ from ..utils.email import (
     send_test_email,
     send_form_qr_email
 )
+from ..utils.qr_generator import generate_form_qr
 
 router = APIRouter(prefix="/ehc", tags=["ehc"])
 
@@ -2543,15 +2544,10 @@ def send_form_link_emails(
             base_url = os.getenv("FRONTEND_URL", "https://www.restaurantek.io")
             form_url = f"{base_url}/ehc/form/{form_link['token']}"
 
-            # Get QR code if requested
+            # Generate QR code if requested
             qr_base64 = None
-            if request.include_qr:
-                cursor.execute("""
-                    SELECT qr_code FROM ehc_form_link WHERE id = %s
-                """, (form_link_id,))
-                qr_row = cursor.fetchone()
-                if qr_row and qr_row['qr_code']:
-                    qr_base64 = qr_row['qr_code']
+            if request.include_qr and form_link.get('token'):
+                qr_base64 = generate_form_qr(form_link['token'])
 
             # Send the email
             form_name = form_link.get('template_name') or "EHC Form"
