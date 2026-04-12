@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Check, ChevronRight, QrCode, ClipboardList, Building2 } from 'lucide-react';
+import { X, Check, ChevronRight, QrCode, ClipboardList, Building2, Mail, AlertCircle } from 'lucide-react';
 import { fetchWithAuth, API_BASE } from '../tabs/shared';
 import './CreateFromTemplateModal.css';
 
@@ -9,9 +9,9 @@ import './CreateFromTemplateModal.css';
  * Deploys a form template to multiple outlets at once.
  * Steps:
  * 1. Select template
- * 2. Select outlets
- * 3. Set period label
- * 4. Review and create
+ * 2. Select outlets + period
+ * 3. Review and create (with optional email)
+ * 4. Success (shows email results if sent)
  */
 export default function CreateFromTemplateModal({
   isOpen,
@@ -34,6 +34,12 @@ export default function CreateFromTemplateModal({
   const [periodLabel, setPeriodLabel] = useState('');
   const [customOutlet, setCustomOutlet] = useState('');
 
+  // Email options
+  const [emailConfigured, setEmailConfigured] = useState(false);
+  const [sendEmails, setSendEmails] = useState(false);
+  const [sendingEmails, setSendingEmails] = useState(false);
+  const [emailResults, setEmailResults] = useState(null);
+
   // Results
   const [createdForms, setCreatedForms] = useState([]);
 
@@ -42,12 +48,15 @@ export default function CreateFromTemplateModal({
     if (isOpen && activeCycle?.id) {
       loadTemplates();
       loadOutlets();
+      checkEmailStatus();
       // Reset state
       setStep(1);
       setSelectedTemplate(null);
       setSelectedOutlets([]);
       setPeriodLabel(getDefaultPeriodLabel());
       setCreatedForms([]);
+      setSendEmails(false);
+      setEmailResults(null);
     }
   }, [isOpen, activeCycle?.id]);
 
@@ -78,6 +87,36 @@ export default function CreateFromTemplateModal({
     } catch (error) {
       console.error('Failed to load outlets:', error);
       // Non-fatal - outlets can be entered manually
+    }
+  }
+
+  async function checkEmailStatus() {
+    try {
+      const data = await fetchWithAuth(`${API_BASE}/email/status`);
+      setEmailConfigured(data.configured || false);
+    } catch (error) {
+      setEmailConfigured(false);
+    }
+  }
+
+  async function sendEmailsToContacts(formLinkIds) {
+    try {
+      setSendingEmails(true);
+      const response = await fetchWithAuth(`${API_BASE}/email/send-form-links`, {
+        method: 'POST',
+        body: JSON.stringify({
+          form_link_ids: formLinkIds,
+          include_qr: true
+        })
+      });
+      setEmailResults(response);
+      return response;
+    } catch (error) {
+      console.error('Failed to send emails:', error);
+      setEmailResults({ error: error.message });
+      return null;
+    } finally {
+      setSendingEmails(false);
     }
   }
 
@@ -115,8 +154,15 @@ export default function CreateFromTemplateModal({
       });
 
       setCreatedForms(response.forms || []);
-      setStep(4); // Success step
       toast?.success?.(`Created ${response.forms_created} form links`);
+
+      // Send emails if checkbox was checked
+      if (sendEmails && response.forms?.length > 0) {
+        const formLinkIds = response.forms.map(f => f.form_link_id);
+        await sendEmailsToContacts(formLinkIds);
+      }
+
+      setStep(4); // Success step
     } catch (error) {
       console.error('Failed to deploy template:', error);
       toast?.error?.(error.message || 'Failed to create forms');
@@ -320,6 +366,26 @@ export default function CreateFromTemplateModal({
                   </div>
                 </div>
               </div>
+
+              {/* Email Option */}
+              <div className="email-option-section">
+                {emailConfigured ? (
+                  <label className="email-checkbox">
+                    <input
+                      type="checkbox"
+                      checked={sendEmails}
+                      onChange={e => setSendEmails(e.target.checked)}
+                    />
+                    <Mail size={18} />
+                    <span>Email QR codes to primary contacts</span>
+                  </label>
+                ) : (
+                  <div className="email-not-configured">
+                    <AlertCircle size={16} />
+                    <span>Email not configured. Configure in Settings to send QR codes automatically.</span>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
@@ -334,32 +400,76 @@ export default function CreateFromTemplateModal({
                 Created {createdForms.length} form links. Each outlet has a unique QR code.
               </p>
 
-              <div className="created-forms-list">
-                {createdForms.map(form => (
-                  <div key={form.form_link_id} className="created-form-item">
-                    <div className="form-outlet">
-                      <Building2 size={16} />
-                      <span>{form.outlet_name}</span>
-                    </div>
-                    <div className="form-actions">
-                      <button
-                        type="button"
-                        className="btn-copy-link"
-                        onClick={() => copyToClipboard(form.url)}
-                        title="Copy link"
-                      >
-                        Copy Link
-                      </button>
-                      {form.qr_code && (
-                        <img
-                          src={`data:image/png;base64,${form.qr_code}`}
-                          alt={`QR for ${form.outlet_name}`}
-                          className="qr-preview"
-                        />
+              {/* Email Results */}
+              {sendingEmails && (
+                <div className="email-sending">
+                  <Mail size={18} />
+                  <span>Sending emails to contacts...</span>
+                </div>
+              )}
+
+              {emailResults && !sendingEmails && (
+                <div className={`email-results ${emailResults.error ? 'error' : 'success'}`}>
+                  <Mail size={18} />
+                  {emailResults.error ? (
+                    <span>Failed to send emails: {emailResults.error}</span>
+                  ) : (
+                    <span>
+                      Emailed {emailResults.summary?.successful || 0} of {emailResults.summary?.total || 0} contacts
+                      {emailResults.summary?.failed > 0 && (
+                        <span className="email-failed"> ({emailResults.summary.failed} failed)</span>
                       )}
+                    </span>
+                  )}
+                </div>
+              )}
+
+              <div className="created-forms-list">
+                {createdForms.map(form => {
+                  // Find email result for this form
+                  const emailResult = emailResults?.results?.find(r => r.form_link_id === form.form_link_id);
+
+                  return (
+                    <div key={form.form_link_id} className="created-form-item">
+                      <div className="form-outlet">
+                        <Building2 size={16} />
+                        <span>{form.outlet_name}</span>
+                        {emailResult && (
+                          <span className={`email-status-badge ${emailResult.success ? 'sent' : 'failed'}`}>
+                            {emailResult.success ? (
+                              <>
+                                <Check size={12} />
+                                Emailed
+                              </>
+                            ) : (
+                              <>
+                                <X size={12} />
+                                {emailResult.error || 'Not sent'}
+                              </>
+                            )}
+                          </span>
+                        )}
+                      </div>
+                      <div className="form-actions">
+                        <button
+                          type="button"
+                          className="btn-copy-link"
+                          onClick={() => copyToClipboard(form.url)}
+                          title="Copy link"
+                        >
+                          Copy Link
+                        </button>
+                        {form.qr_code && (
+                          <img
+                            src={`data:image/png;base64,${form.qr_code}`}
+                            alt={`QR for ${form.outlet_name}`}
+                            className="qr-preview"
+                          />
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}

@@ -443,7 +443,7 @@ export default function Settings({ activeCycle, onCycleUpdated, toast }) {
           <div>
             <h2>EHC Outlets</h2>
             <p className="section-description">
-              Manage property areas for record tracking and form distribution.
+              Property areas for record tracking and form distribution. Assign leaders via Contacts below.
             </p>
           </div>
           <button
@@ -470,14 +470,12 @@ export default function Settings({ activeCycle, onCycleUpdated, toast }) {
                   <div className="outlet-table-header">
                     <span className="col-name">Name</span>
                     <span className="col-full-name">Full Name</span>
-                    <span className="col-leader">Leader</span>
                     <span className="col-actions">Actions</span>
                   </div>
                   {outletsByType[type].map(outlet => (
                     <div key={outlet.id} className="outlet-table-row">
                       <span className="col-name outlet-tag">{outlet.name}</span>
                       <span className="col-full-name">{outlet.full_name || '—'}</span>
-                      <span className="col-leader">{outlet.leader_name || '—'}</span>
                       <span className="col-actions">
                         <button
                           className="btn-icon"

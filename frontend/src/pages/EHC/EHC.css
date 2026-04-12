@@ -2740,6 +2740,15 @@
   background: var(--color-green-dim);
 }
 
+.form-link-actions .btn-icon.email:hover {
+  background: var(--color-blue-dim);
+}
+
+.form-link-actions .btn-icon.sending {
+  opacity: 0.5;
+  cursor: wait;
+}
+
 .expand-icon {
   color: var(--text-tertiary);
   font-size: var(--text-xs);

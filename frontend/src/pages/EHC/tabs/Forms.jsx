@@ -27,19 +27,33 @@ export default function Forms({ activeCycle, toast }) {
   const [deletingLink, setDeletingLink] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
 
+  // Email state
+  const [emailConfigured, setEmailConfigured] = useState(false);
+  const [sendingEmail, setSendingEmail] = useState(null); // form_link_id being sent
+
   // Modal state
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [showCreateFromTemplate, setShowCreateFromTemplate] = useState(false);
   const [editingFormLink, setEditingFormLink] = useState(null); // Full link object for edit mode
   const [duplicatingFormLink, setDuplicatingFormLink] = useState(null); // Form link to duplicate
 
-  // Load form links and records when cycle changes
+  // Load form links, records, and check email status when cycle changes
   useEffect(() => {
     if (activeCycle?.id) {
       loadFormLinks();
       loadRecords();
+      checkEmailStatus();
     }
   }, [activeCycle?.id]);
+
+  async function checkEmailStatus() {
+    try {
+      const data = await fetchWithAuth(`${API_BASE}/email/status`);
+      setEmailConfigured(data.configured || false);
+    } catch {
+      setEmailConfigured(false);
+    }
+  }
 
   async function loadFormLinks() {
     try {
@@ -172,6 +186,36 @@ export default function Forms({ activeCycle, toast }) {
   function copyLink(url) {
     navigator.clipboard.writeText(url);
     toast?.success?.('Link copied to clipboard');
+  }
+
+  async function sendQREmail(link) {
+    if (!emailConfigured) {
+      toast?.error?.('Email not configured. Set up email in Settings first.');
+      return;
+    }
+    try {
+      setSendingEmail(link.id);
+      const response = await fetchWithAuth(`${API_BASE}/email/send-form-links`, {
+        method: 'POST',
+        body: JSON.stringify({
+          form_link_ids: [link.id],
+          include_qr: true
+        })
+      });
+
+      if (response.summary?.successful > 0) {
+        toast?.success?.(`QR code emailed to ${response.results?.[0]?.email || 'contact'}`);
+      } else if (response.summary?.skipped > 0) {
+        toast?.error?.('No primary contact found for this outlet');
+      } else {
+        toast?.error?.(response.results?.[0]?.error || 'Failed to send email');
+      }
+    } catch (error) {
+      console.error('Failed to send QR email:', error);
+      toast?.error?.(error.message || 'Failed to send email');
+    } finally {
+      setSendingEmail(null);
+    }
   }
 
   function handleExpandLink(linkId) {
@@ -471,6 +515,16 @@ export default function Forms({ activeCycle, toast }) {
                       <div className="form-link-actions" onClick={e => e.stopPropagation()}>
                         <button className="btn-icon" title="Copy link" onClick={() => copyLink(link.url)}>📋</button>
                         <button className="btn-icon" title="Download QR code" onClick={() => downloadQR(link)}>📱</button>
+                        {emailConfigured && (
+                          <button
+                            className={`btn-icon email ${sendingEmail === link.id ? 'sending' : ''}`}
+                            title="Email QR to primary contact"
+                            onClick={() => sendQREmail(link)}
+                            disabled={sendingEmail === link.id}
+                          >
+                            {sendingEmail === link.id ? '⏳' : '✉️'}
+                          </button>
+                        )}
                         <button className="btn-icon" title="Download flyer" onClick={() => downloadFlyer(link)}>🖨️</button>
                         <button className="btn-icon" title="Generate PDF" onClick={() => downloadPDF(link)}>📄</button>
                         <button

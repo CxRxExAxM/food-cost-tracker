@@ -2,7 +2,7 @@
  * Outlet Modal Component
  *
  * Create/edit EHC outlets (kitchens, restaurants, bars, etc.)
- * Includes leader contact info for future email distribution
+ * Leader assignment is handled via Contacts (not on this form).
  */
 
 import { useState, useEffect } from 'react';
@@ -13,8 +13,6 @@ export default function OutletModal({ outlet, outletTypes, onSave, onDelete, onC
     name: '',
     full_name: '',
     outlet_type: 'Production Kitchen',
-    leader_name: '',
-    leader_email: '',
     is_active: true,
   });
   const [saving, setSaving] = useState(false);
@@ -27,8 +25,6 @@ export default function OutletModal({ outlet, outletTypes, onSave, onDelete, onC
         name: outlet.name || '',
         full_name: outlet.full_name || '',
         outlet_type: outlet.outlet_type || 'Production Kitchen',
-        leader_name: outlet.leader_name || '',
-        leader_email: outlet.leader_email || '',
         is_active: outlet.is_active ?? true,
       });
     }
@@ -126,34 +122,6 @@ export default function OutletModal({ outlet, outletTypes, onSave, onDelete, onC
                 <option key={type} value={type}>{type}</option>
               ))}
             </select>
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="leader-name">Leader Name</label>
-            <input
-              id="leader-name"
-              type="text"
-              className="input"
-              value={formData.leader_name}
-              onChange={(e) => setFormData({ ...formData, leader_name: e.target.value })}
-              placeholder="Optional"
-              maxLength={255}
-            />
-            <span className="form-help">Area leader / chef de cuisine (for future email distribution)</span>
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="leader-email">Leader Email</label>
-            <input
-              id="leader-email"
-              type="email"
-              className="input"
-              value={formData.leader_email}
-              onChange={(e) => setFormData({ ...formData, leader_email: e.target.value })}
-              placeholder="Optional"
-              maxLength={255}
-            />
-            <span className="form-help">For future monthly checklist distribution</span>
           </div>
 
           <div className="form-group">
