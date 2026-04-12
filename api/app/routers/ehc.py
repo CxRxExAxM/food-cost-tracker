@@ -2485,6 +2485,8 @@ def send_form_link_emails(
     current_user: dict = Depends(get_current_user)
 ):
     """Send QR code emails for form links to their assigned outlets' primary contacts."""
+    import traceback
+
     org_id = current_user["organization_id"]
 
     if not is_email_configured():
@@ -2494,8 +2496,9 @@ def send_form_link_emails(
         raise HTTPException(status_code=400, detail="No form link IDs provided")
 
     results = []
-    with get_db() as conn:
-        cursor = conn.cursor()
+    try:
+        with get_db() as conn:
+            cursor = conn.cursor()
 
         for form_link_id in request.form_link_ids:
             # Get form link details
@@ -2591,20 +2594,24 @@ def send_form_link_emails(
                 "resend_id": email_result.get("resend_id")
             })
 
-        conn.commit()
+            conn.commit()
 
-    # Summary
-    successful = sum(1 for r in results if r["success"])
-    failed = len(results) - successful
+        # Summary
+        successful = sum(1 for r in results if r["success"])
+        failed = len(results) - successful
 
-    return {
-        "results": results,
-        "summary": {
-            "total": len(results),
-            "successful": successful,
-            "failed": failed
+        return {
+            "results": results,
+            "summary": {
+                "total": len(results),
+                "successful": successful,
+                "failed": failed
+            }
         }
-    }
+    except Exception as e:
+        print(f"[send_form_link_emails] Error: {e}")
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Email send failed: {str(e)}")
 
 
 @router.get("/email/log")
