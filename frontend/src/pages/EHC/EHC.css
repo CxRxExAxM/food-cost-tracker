@@ -3897,7 +3897,7 @@
   flex-direction: column;
   gap: var(--space-4);
   margin-top: var(--space-3);
-  max-height: 300px;
+  max-height: 500px;
   overflow-y: auto;
   padding-right: var(--space-2);
 }
@@ -3905,7 +3905,7 @@
 .outlet-type-section {
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
-  overflow: hidden;
+  /* removed overflow: hidden - was cutting off outlets */
 }
 
 .outlet-type-label {

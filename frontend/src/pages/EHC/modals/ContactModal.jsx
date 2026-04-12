@@ -225,8 +225,8 @@ export default function ContactModal({
             <div className="outlet-assignment-grid">
               {sortedTypes.map(type => (
                 <div key={type} className="outlet-type-section">
-                  <span className="outlet-type-label">{type}</span>
-                  <div className="outlet-checkboxes">
+                  <span className="outlet-type-label">{type} ({outletsByType[type]?.length || 0} outlets)</span>
+                  <div className="outlet-checkboxes" style={{background: 'rgba(255,255,0,0.1)'}}>
                     {outletsByType[type].map(outlet => (
                       <div key={outlet.id} className="outlet-assignment-row">
                         <label className="checkbox-label">
