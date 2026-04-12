@@ -140,6 +140,10 @@ export default function ContactModal({
   const typeOrder = ['Production Kitchen', 'Restaurant', 'Bar', 'Lounge', 'Support', 'Franchise', 'Other'];
   const sortedTypes = typeOrder.filter(type => outletsByType[type]);
 
+  console.log('[ContactModal] outletsByType:', outletsByType);
+  console.log('[ContactModal] sortedTypes:', sortedTypes);
+  console.log('[ContactModal] Total outlets to render:', sortedTypes.reduce((sum, t) => sum + outletsByType[t].length, 0));
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-container modal-lg" onClick={(e) => e.stopPropagation()}>
