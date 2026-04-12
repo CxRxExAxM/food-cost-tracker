@@ -7,14 +7,17 @@
 
 import { useState, useEffect } from 'react';
 import { X, Check } from 'lucide-react';
+import { API_BASE, fetchWithAuth } from '../tabs/shared';
 
 export default function ContactModal({
   contact,
-  outlets,
   onSave,
   onDelete,
   onClose
 }) {
+  // Load outlets directly to ensure fresh data
+  const [outlets, setOutlets] = useState([]);
+  const [loadingOutlets, setLoadingOutlets] = useState(true);
   // Initialize form data from contact prop
   const initialFormData = contact ? {
     id: contact.id,
@@ -40,6 +43,22 @@ export default function ContactModal({
   const [outletAssignments, setOutletAssignments] = useState(initialOutlets);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
+
+  // Load outlets when modal opens
+  useEffect(() => {
+    async function loadOutlets() {
+      try {
+        setLoadingOutlets(true);
+        const data = await fetchWithAuth(`${API_BASE}/outlets`);
+        setOutlets(data.data || []);
+      } catch (err) {
+        console.error('Failed to load outlets:', err);
+      } finally {
+        setLoadingOutlets(false);
+      }
+    }
+    loadOutlets();
+  }, []);
 
   function toggleOutlet(outletId) {
     setOutletAssignments(prev => {
@@ -190,6 +209,13 @@ export default function ContactModal({
               Select outlets this contact is responsible for. Mark one as "Primary" for automatic email distribution.
             </p>
 
+            {loadingOutlets ? (
+              <div className="loading-state">Loading outlets...</div>
+            ) : outlets.length === 0 ? (
+              <div className="empty-state">
+                <p>No outlets found. Add outlets in the Settings tab first.</p>
+              </div>
+            ) : (
             <div className="outlet-assignment-grid">
               {sortedTypes.map(type => (
                 <div key={type} className="outlet-type-section">
@@ -231,6 +257,7 @@ export default function ContactModal({
                 </div>
               ))}
             </div>
+            )}
           </div>
 
           {contact && (

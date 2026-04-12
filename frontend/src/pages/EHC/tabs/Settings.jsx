@@ -786,7 +786,6 @@ export default function Settings({ activeCycle, onCycleUpdated, toast }) {
       {contactModal.show && (
         <ContactModal
           contact={contactModal.contact}
-          outlets={outlets}
           onSave={handleSaveContact}
           onDelete={handleDeleteContact}
           onClose={() => setContactModal({ show: false, contact: null })}
