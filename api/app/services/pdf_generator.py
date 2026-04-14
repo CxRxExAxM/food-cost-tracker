@@ -451,6 +451,14 @@ def generate_table_signoff_pdf(
 
     table_data = [header_row]
 
+    # Collect user-added entries (row_index: -1) to append after pre-filled rows
+    user_added_responses = [
+        resp for resp in responses
+        if (resp.get('response_data', {}) or {}).get('row_index', 0) == -1
+        or (isinstance(resp.get('response_data'), str) and
+            json.loads(resp.get('response_data', '{}')).get('row_index', 0) == -1)
+    ]
+
     # Determine if we have pre-filled rows or use responses directly
     if rows and len(rows) > 0:
         # Pre-filled rows mode: show all rows, match signatures
@@ -496,6 +504,29 @@ def generate_table_signoff_pdf(
             sig_img = decode_signature_image(sig_data, max_width=1.2*inch, max_height=0.4*inch)
 
             row_data.append(sig_img if sig_img else Paragraph('—', styles['EHCSmall']))
+            table_data.append(row_data)
+
+        # Append user-added entries (row_index: -1) after the pre-filled rows
+        for resp in user_added_responses:
+            row_data = []
+            resp_data = resp.get('response_data', {}) or {}
+            if isinstance(resp_data, str):
+                resp_data = json.loads(resp_data)
+            resp_row_data = resp_data.get('row_data', {})
+
+            for col in non_sig_columns:
+                key = col.get('key', '')
+                value = resp_row_data.get(key, '')
+                # Fall back to respondent_name for name column
+                if not value and key == name_column_key:
+                    value = resp.get('respondent_name', '')
+                row_data.append(Paragraph(str(value), styles['EHCBody']))
+
+            # Add signature
+            sig_data = resp.get('signature_data', '')
+            sig_img = decode_signature_image(sig_data, max_width=1.2*inch, max_height=0.4*inch)
+            row_data.append(sig_img if sig_img else Paragraph('—', styles['EHCSmall']))
+
             table_data.append(row_data)
     else:
         # No pre-filled rows: show responses directly
@@ -561,7 +592,8 @@ def generate_table_signoff_pdf(
 
     # Footer
     signed_count = len(responses)
-    total_rows = len(rows) if rows else signed_count
+    # Total rows = pre-filled rows + user-added entries
+    total_rows = (len(rows) + len(user_added_responses)) if rows else signed_count
     generated_at = datetime.now().strftime('%B %d, %Y at %H:%M')
 
     elements.append(Paragraph(
