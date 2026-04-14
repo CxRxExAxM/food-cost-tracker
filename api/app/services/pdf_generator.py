@@ -437,6 +437,30 @@ def generate_table_signoff_pdf(
         if not name_column_key:
             name_column_key = non_sig_columns[0].get('key')
 
+    # DEBUG: Add debug info section
+    debug_lines = [
+        f"DEBUG - name_column_key: {name_column_key}",
+        f"DEBUG - columns: {[c.get('key') for c in columns]}",
+        f"DEBUG - rows count: {len(rows) if rows else 0}",
+        f"DEBUG - responses count: {len(responses)}",
+        f"DEBUG - response_lookup keys: {list(response_lookup.keys())}",
+    ]
+    if rows and len(rows) > 0:
+        debug_lines.append(f"DEBUG - first row keys: {list(rows[0].keys()) if rows else 'N/A'}")
+        debug_lines.append(f"DEBUG - first row name_column value: {rows[0].get(name_column_key, 'NOT FOUND') if rows else 'N/A'}")
+    if responses:
+        resp0 = responses[0]
+        resp_data = resp0.get('response_data', {})
+        if isinstance(resp_data, str):
+            import json
+            resp_data = json.loads(resp_data)
+        debug_lines.append(f"DEBUG - first response respondent_name: {resp0.get('respondent_name', 'N/A')}")
+        debug_lines.append(f"DEBUG - first response row_data keys: {list(resp_data.get('row_data', {}).keys())}")
+
+    for line in debug_lines:
+        elements.append(Paragraph(line, styles['EHCSmall']))
+    elements.append(Spacer(1, 0.25*inch))
+
     table_data = [header_row]
 
     # Determine if we have pre-filled rows or use responses directly
