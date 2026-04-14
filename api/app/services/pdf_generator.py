@@ -458,27 +458,35 @@ def generate_table_signoff_pdf(
             row_data = []
             name_value = ''
 
+            # Check if we have a response for this row index
+            resp = response_by_index.get(row_idx)
+            resp_row_data = {}
+            if resp:
+                resp_data = resp.get('response_data', {}) or {}
+                if isinstance(resp_data, str):
+                    resp_data = json.loads(resp_data)
+                resp_row_data = resp_data.get('row_data', {})
+
             for col in non_sig_columns:
                 key = col.get('key', '')
                 # Get value from row config first
                 value = row.get(key, '')
 
-                # If this is the name column and it's empty, try to get from response
+                # If empty in pre-filled row, try to get from response's row_data
+                # (This captures ALL user-filled fields, not just name)
+                if not value and key in resp_row_data:
+                    value = resp_row_data.get(key, '')
+
+                # Special handling for name column - also try respondent_name
                 if key == name_column_key:
                     name_value = value
-                    # Check if we have a response for this row index with a filled name
-                    if not value and row_idx in response_by_index:
-                        resp = response_by_index[row_idx]
-                        resp_data = resp.get('response_data', {}) or {}
-                        if isinstance(resp_data, str):
-                            resp_data = json.loads(resp_data)
-                        # Get name from row_data (user-filled) or respondent_name
-                        value = resp_data.get('row_data', {}).get(key, '') or resp.get('respondent_name', '')
+                    if not value and resp:
+                        value = resp.get('respondent_name', '')
+                        name_value = value
 
                 row_data.append(Paragraph(str(value), styles['EHCBody']))
 
             # Look up signature - try by row_index first, then by name
-            resp = response_by_index.get(row_idx)
             if not resp and name_value:
                 # Fall back to name matching
                 name_key = name_value.strip().lower()
