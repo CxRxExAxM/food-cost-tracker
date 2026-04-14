@@ -401,8 +401,23 @@ export default function TableSignoffForm({
                       );
                     }
 
-                    // Data column
-                    const value = row[col.key];
+                    // Data column - use response data for signed rows, pre-filled for unsigned
+                    let value;
+                    if (isSigned) {
+                      const responseRowData = existingResponse?.response_data?.row_data || {};
+                      value = responseRowData[col.key];
+                      // For name column, fall back to respondent_name
+                      if (!value && (col.key === 'name' || col.key === dataColumns[0]?.key)) {
+                        value = existingResponse?.respondent_name;
+                      }
+                      // Fall back to pre-filled row data
+                      if (!value) {
+                        value = row[col.key];
+                      }
+                    } else {
+                      value = row[col.key];
+                    }
+
                     if (col.type === 'date' && value) {
                       return (
                         <td key={col.key}>
