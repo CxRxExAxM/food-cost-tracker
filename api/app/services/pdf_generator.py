@@ -451,7 +451,7 @@ def generate_table_signoff_pdf(
 
     table_data = [header_row]
 
-    # Collect user-added entries (row_index: -1) to append after pre-filled rows
+    # Collect user-added entries (row_index: -1)
     user_added_responses = [
         resp for resp in responses
         if (resp.get('response_data', {}) or {}).get('row_index', 0) == -1
@@ -461,9 +461,12 @@ def generate_table_signoff_pdf(
 
     # Determine if we have pre-filled rows or use responses directly
     if rows and len(rows) > 0:
+        # Collect all rows with their sort key (name) for sorting
+        all_rows_for_sorting = []  # List of (sort_key, row_cells)
+
         # Pre-filled rows mode: show all rows, match signatures
         for row_idx, row in enumerate(rows):
-            row_data = []
+            row_cells = []
             name_value = ''
 
             # Check if we have a response for this row index
@@ -492,7 +495,7 @@ def generate_table_signoff_pdf(
                         value = resp.get('respondent_name', '')
                         name_value = value
 
-                row_data.append(Paragraph(str(value), styles['EHCBody']))
+                row_cells.append(Paragraph(str(value), styles['EHCBody']))
 
             # Look up signature - try by row_index first, then by name
             if not resp and name_value:
@@ -503,12 +506,13 @@ def generate_table_signoff_pdf(
             sig_data = resp.get('signature_data', '') if resp else ''
             sig_img = decode_signature_image(sig_data, max_width=1.2*inch, max_height=0.4*inch)
 
-            row_data.append(sig_img if sig_img else Paragraph('—', styles['EHCSmall']))
-            table_data.append(row_data)
+            row_cells.append(sig_img if sig_img else Paragraph('—', styles['EHCSmall']))
+            all_rows_for_sorting.append((name_value.lower() if name_value else 'zzz', row_cells))
 
-        # Append user-added entries (row_index: -1) after the pre-filled rows
+        # Add user-added entries (row_index: -1)
         for resp in user_added_responses:
-            row_data = []
+            row_cells = []
+            name_value = ''
             resp_data = resp.get('response_data', {}) or {}
             if isinstance(resp_data, str):
                 resp_data = json.loads(resp_data)
@@ -520,14 +524,23 @@ def generate_table_signoff_pdf(
                 # Fall back to respondent_name for name column
                 if not value and key == name_column_key:
                     value = resp.get('respondent_name', '')
-                row_data.append(Paragraph(str(value), styles['EHCBody']))
+                if key == name_column_key:
+                    name_value = value
+                row_cells.append(Paragraph(str(value), styles['EHCBody']))
 
             # Add signature
             sig_data = resp.get('signature_data', '')
             sig_img = decode_signature_image(sig_data, max_width=1.2*inch, max_height=0.4*inch)
-            row_data.append(sig_img if sig_img else Paragraph('—', styles['EHCSmall']))
+            row_cells.append(sig_img if sig_img else Paragraph('—', styles['EHCSmall']))
 
-            table_data.append(row_data)
+            all_rows_for_sorting.append((name_value.lower() if name_value else 'zzz', row_cells))
+
+        # Sort all rows by name (empty names sort to end with 'zzz')
+        all_rows_for_sorting.sort(key=lambda x: x[0])
+
+        # Add sorted rows to table
+        for _, row_cells in all_rows_for_sorting:
+            table_data.append(row_cells)
     else:
         # No pre-filled rows: show responses directly
         for resp in responses:
