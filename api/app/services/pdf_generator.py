@@ -420,6 +420,23 @@ def generate_table_signoff_pdf(
     header_row = [c.get('label', c.get('key', '')) for c in non_sig_columns]
     header_row.append('Signature')  # Always add signature column at end
 
+    # Determine the "name" column key for matching responses
+    # Priority: 1) column with key='name', 2) first text column
+    name_column_key = None
+    for col in non_sig_columns:
+        if col.get('key') == 'name':
+            name_column_key = 'name'
+            break
+    if not name_column_key and non_sig_columns:
+        # Fall back to first text column
+        for col in non_sig_columns:
+            if col.get('type') == 'text':
+                name_column_key = col.get('key')
+                break
+        # If still not found, use first column regardless of type
+        if not name_column_key:
+            name_column_key = non_sig_columns[0].get('key')
+
     table_data = [header_row]
 
     # Determine if we have pre-filled rows or use responses directly
@@ -434,8 +451,8 @@ def generate_table_signoff_pdf(
                 value = row.get(key, '')
                 row_data.append(Paragraph(str(value), styles['EHCBody']))
 
-                # Track name for signature lookup
-                if col.get('type') == 'text' and key in ['name', 'col_0']:
+                # Track name for signature lookup using determined name column
+                if key == name_column_key:
                     name_value = value
 
             # Look up signature
@@ -460,7 +477,7 @@ def generate_table_signoff_pdf(
                 key = col.get('key', '')
                 # Try row_data first, then respondent_name for name column
                 value = row_values.get(key, '')
-                if not value and key in ['name', 'col_0']:
+                if not value and key == name_column_key:
                     value = resp.get('respondent_name', '')
                 row_data.append(Paragraph(str(value), styles['EHCBody']))
 
