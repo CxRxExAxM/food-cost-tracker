@@ -409,11 +409,23 @@ def generate_table_signoff_pdf(
         elements.append(Paragraph(intro_text, styles['EHCBody']))
         elements.append(Spacer(1, 0.25*inch))
 
-    # Build response lookup by name (case-insensitive)
-    response_lookup = {}
+    # Build response lookups:
+    # 1. By row_index (for pre-filled rows with empty names)
+    # 2. By respondent_name (fallback for name matching)
+    response_by_index = {}
+    response_by_name = {}
     for resp in responses:
+        # Parse response_data to get row_index
+        resp_data = resp.get('response_data', {}) or {}
+        if isinstance(resp_data, str):
+            resp_data = json.loads(resp_data)
+        row_idx = resp_data.get('row_index')
+        if row_idx is not None and row_idx >= 0:
+            response_by_index[row_idx] = resp
+        # Also build name lookup as fallback
         name_key = resp.get('respondent_name', '').strip().lower()
-        response_lookup[name_key] = resp
+        if name_key:
+            response_by_name[name_key] = resp
 
     # Build table headers from columns
     non_sig_columns = [c for c in columns if c.get('type') != 'signature']
@@ -437,52 +449,42 @@ def generate_table_signoff_pdf(
         if not name_column_key:
             name_column_key = non_sig_columns[0].get('key')
 
-    # DEBUG: Add debug info section
-    debug_lines = [
-        f"DEBUG - name_column_key: {name_column_key}",
-        f"DEBUG - columns: {[c.get('key') for c in columns]}",
-        f"DEBUG - rows count: {len(rows) if rows else 0}",
-        f"DEBUG - responses count: {len(responses)}",
-        f"DEBUG - response_lookup keys: {list(response_lookup.keys())}",
-    ]
-    if rows and len(rows) > 0:
-        debug_lines.append(f"DEBUG - first row keys: {list(rows[0].keys()) if rows else 'N/A'}")
-        debug_lines.append(f"DEBUG - first row name_column value: {rows[0].get(name_column_key, 'NOT FOUND') if rows else 'N/A'}")
-    if responses:
-        resp0 = responses[0]
-        resp_data = resp0.get('response_data', {})
-        if isinstance(resp_data, str):
-            import json
-            resp_data = json.loads(resp_data)
-        debug_lines.append(f"DEBUG - first response respondent_name: {resp0.get('respondent_name', 'N/A')}")
-        debug_lines.append(f"DEBUG - first response row_data keys: {list(resp_data.get('row_data', {}).keys())}")
-
-    for line in debug_lines:
-        elements.append(Paragraph(line, styles['EHCSmall']))
-    elements.append(Spacer(1, 0.25*inch))
-
     table_data = [header_row]
 
     # Determine if we have pre-filled rows or use responses directly
     if rows and len(rows) > 0:
         # Pre-filled rows mode: show all rows, match signatures
-        for row in rows:
+        for row_idx, row in enumerate(rows):
             row_data = []
             name_value = ''
 
             for col in non_sig_columns:
                 key = col.get('key', '')
+                # Get value from row config first
                 value = row.get(key, '')
-                row_data.append(Paragraph(str(value), styles['EHCBody']))
 
-                # Track name for signature lookup using determined name column
+                # If this is the name column and it's empty, try to get from response
                 if key == name_column_key:
                     name_value = value
+                    # Check if we have a response for this row index with a filled name
+                    if not value and row_idx in response_by_index:
+                        resp = response_by_index[row_idx]
+                        resp_data = resp.get('response_data', {}) or {}
+                        if isinstance(resp_data, str):
+                            resp_data = json.loads(resp_data)
+                        # Get name from row_data (user-filled) or respondent_name
+                        value = resp_data.get('row_data', {}).get(key, '') or resp.get('respondent_name', '')
 
-            # Look up signature
-            name_key = name_value.strip().lower() if name_value else ''
-            resp = response_lookup.get(name_key, {})
-            sig_data = resp.get('signature_data', '')
+                row_data.append(Paragraph(str(value), styles['EHCBody']))
+
+            # Look up signature - try by row_index first, then by name
+            resp = response_by_index.get(row_idx)
+            if not resp and name_value:
+                # Fall back to name matching
+                name_key = name_value.strip().lower()
+                resp = response_by_name.get(name_key, {})
+
+            sig_data = resp.get('signature_data', '') if resp else ''
             sig_img = decode_signature_image(sig_data, max_width=1.2*inch, max_height=0.4*inch)
 
             row_data.append(sig_img if sig_img else Paragraph('—', styles['EHCSmall']))
@@ -493,7 +495,6 @@ def generate_table_signoff_pdf(
             row_data = []
             resp_data = resp.get('response_data', {}) or {}
             if isinstance(resp_data, str):
-                import json
                 resp_data = json.loads(resp_data)
             row_values = resp_data.get('row_data', {})
 
