@@ -829,6 +829,13 @@ Each column in `config.columns` supports:
 - `rows` - Pre-filled row data (for partial pre-fill workflows)
 - `items` - Checklist questions array (for checklist_form type)
 
+**Checklist Item Structure:**
+Each item in `config.items` supports:
+- `number` - Question number (1-58 for Kitchen Audit)
+- `question` - Question text
+- `response_type` - Always "yes_no" for checklists
+- `expected_answer` - "Y" (default) or "N" - defines which answer is compliant
+
 **Template System:**
 Templates are reusable form definitions stored in `ehc_form_template`. Admins deploy templates to multiple outlets at once via CreateFromTemplateModal.
 
@@ -851,11 +858,14 @@ Templates are reusable form definitions stored in `ehc_form_template`. Admins de
 - **Tokenized access** - 43-char URL-safe tokens via `secrets.token_urlsafe(32)`
 - **Editable columns** - Admin pre-fills some columns, users complete others when signing
 - **Add New Entry** - Users can add items not in pre-filled list (row_index: -1)
-- **Duplicate detection** - Warns if name exists, allows force override
+- **User-added visibility** - Entries with row_index: -1 shown to subsequent form visitors
+- **Duplicate detection** - Skipped for `table_signoff` forms (same person, multiple items allowed)
 - **JSON serialization** - Use `json.dumps()` for JSON columns with psycopg2
 - **Floating sign bar** - Mobile/desktop UX: tap row to select, sticky bar appears at bottom with "Sign Now"
 - **Form duplication** - "Duplicate as template" copies config to new form (for monthly forms)
-- **Checklist corrective actions** - "N" answers require action, when_by, who_by fields
+- **Checklist corrective actions** - Non-compliant answers require action, when_by, who_by fields
+- **Expected answer** - Per-question compliance definition (default Y, can be N for questions like "Are raw eggs used?")
+- **Secondary contacts** - Option to send QR codes to secondary outlet contacts via `include_secondary` flag
 
 **Public Routes (no auth):**
 - `GET /api/ehc/forms/{token}` - Fetch form data (includes response_data for row tracking)
@@ -865,6 +875,7 @@ Templates are reusable form definitions stored in `ehc_form_template`. Admins de
 **Utilities:**
 - `scripts/delete_ehc_responses.py` - Bulk cleanup for deleting submissions/form links/responses
 - `scripts/seed_kitchen_audit_template.py` - Seed Record 20 template with 58 questions
+- `scripts/update_expected_answers.py` - Update existing templates with expected_answer values
 
 **Future Enhancements:**
 - Outlet compliance dashboard (completion % per location)
@@ -945,5 +956,5 @@ At the end of each session, provide:
 
 ---
 
-**Last Updated:** April 9, 2026
+**Last Updated:** April 14, 2026
 **Next Review:** After next major feature completion
