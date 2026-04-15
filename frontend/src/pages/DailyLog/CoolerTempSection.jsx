@@ -55,7 +55,7 @@ export default function CoolerTempSection({
     });
   }
 
-  // Stepper: increment/decrement by 0.5°F
+  // Stepper: increment/decrement by 0.1°F
   // If no value yet, initialize at threshold edge
   function handleTempStep(unitType, unitNumber, shift, direction, threshold) {
     const reading = getReading(unitType, unitNumber, shift);
@@ -65,8 +65,8 @@ export default function CoolerTempSection({
       // First tap: start at threshold (edge of danger zone)
       handleTempChange(unitType, unitNumber, shift, threshold);
     } else {
-      // Subsequent taps: step by 0.5°F
-      const newValue = Math.round((currentValue + (direction * 0.5)) * 10) / 10;
+      // Subsequent taps: step by 0.1°F
+      const newValue = Math.round((currentValue + (direction * 0.1)) * 10) / 10;
       handleTempChange(unitType, unitNumber, shift, newValue);
     }
   }
@@ -140,8 +140,8 @@ export default function CoolerTempSection({
             >
               <Minus size={18} />
             </button>
-            <span className={`temp-display ${amReading?.temperature_f != null ? 'has-value' : ''}`}>
-              {amReading?.temperature_f != null ? `${amReading.temperature_f}°` : '—'}
+            <span className={`temp-display ${amReading?.temperature_f != null ? 'has-value' : 'placeholder'}`}>
+              {amReading?.temperature_f != null ? `${amReading.temperature_f}°` : `${threshold}°`}
             </span>
             <button
               className="stepper-btn"
@@ -177,8 +177,8 @@ export default function CoolerTempSection({
             >
               <Minus size={18} />
             </button>
-            <span className={`temp-display ${pmReading?.temperature_f != null ? 'has-value' : ''}`}>
-              {pmReading?.temperature_f != null ? `${pmReading.temperature_f}°` : '—'}
+            <span className={`temp-display ${pmReading?.temperature_f != null ? 'has-value' : 'placeholder'}`}>
+              {pmReading?.temperature_f != null ? `${pmReading.temperature_f}°` : `${threshold}°`}
             </span>
             <button
               className="stepper-btn"

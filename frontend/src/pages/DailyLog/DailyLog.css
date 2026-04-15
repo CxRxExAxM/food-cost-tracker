@@ -284,16 +284,24 @@
   color: var(--text-tertiary);
 }
 
-/* Saving Indicator */
+/* Saving Indicator - Fixed toast at bottom */
 .saving-indicator {
+  position: fixed;
+  bottom: var(--space-4);
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
-  padding: var(--space-2);
-  background: var(--color-yellow-dim);
-  color: var(--color-yellow-bright);
+  padding: var(--space-2) var(--space-4);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  color: var(--text-secondary);
   font-size: var(--text-sm);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  z-index: 50;
 }
 
 .spinning {
@@ -471,12 +479,18 @@
   font-size: var(--text-base);
   font-weight: var(--font-weight-semibold);
   text-align: center;
-  color: var(--text-tertiary);
+  color: var(--text-primary);
   background: var(--bg-tertiary);
+}
+
+.temp-display.placeholder {
+  color: var(--text-tertiary);
+  opacity: 0.5;
 }
 
 .temp-display.has-value {
   color: var(--text-primary);
+  opacity: 1;
 }
 
 .reading-cell.flagged .temp-stepper {
