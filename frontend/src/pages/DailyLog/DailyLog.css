@@ -354,7 +354,7 @@
 
 .grid-header {
   display: grid;
-  grid-template-columns: 1fr 80px 80px 80px;
+  grid-template-columns: 1fr 150px 150px 70px;
   gap: var(--space-2);
   padding: var(--space-2) 0;
   border-bottom: 1px solid var(--border-subtle);
@@ -391,7 +391,7 @@
 
 .reading-row {
   display: grid;
-  grid-template-columns: 1fr 80px 80px 80px;
+  grid-template-columns: 1fr 150px 150px 70px;
   gap: var(--space-2);
   align-items: center;
   padding: var(--space-2) 0;
@@ -423,30 +423,69 @@
   padding: var(--space-1);
 }
 
-.temp-input {
-  width: 60px;
-  padding: var(--space-2);
+/* Temperature Stepper */
+.temp-stepper {
+  display: flex;
+  align-items: center;
+  gap: 0;
   background: var(--bg-tertiary);
   border: 1px solid var(--border-default);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.stepper-btn {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-elevated);
+  border: none;
   color: var(--text-primary);
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
-  text-align: center;
+  cursor: pointer;
+  transition: all 0.1s ease;
+  -webkit-tap-highlight-color: transparent;
 }
 
-.temp-input:focus {
-  outline: none;
-  border-color: var(--color-focus);
+.stepper-btn:hover:not(:disabled) {
+  background: var(--color-green-dim);
+  color: var(--color-green-bright);
 }
 
-.temp-input:disabled {
-  opacity: 0.6;
+.stepper-btn:active:not(:disabled) {
+  transform: scale(0.95);
+  background: var(--color-green);
+  color: white;
+}
+
+.stepper-btn:disabled {
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
-.reading-cell.flagged .temp-input {
+.temp-display {
+  min-width: 54px;
+  padding: var(--space-2) var(--space-1);
+  font-family: var(--font-mono);
+  font-size: var(--text-base);
+  font-weight: var(--font-weight-semibold);
+  text-align: center;
+  color: var(--text-tertiary);
+  background: var(--bg-tertiary);
+}
+
+.temp-display.has-value {
+  color: var(--text-primary);
+}
+
+.reading-cell.flagged .temp-stepper {
   border-color: var(--color-red);
+}
+
+.reading-cell.flagged .temp-display {
+  color: var(--color-red-bright);
+  background: var(--color-red-dim);
 }
 
 .flag-btn {
@@ -800,19 +839,60 @@
   }
 
   .grid-header {
-    grid-template-columns: 1fr 70px 70px 60px;
+    grid-template-columns: 1fr 130px 130px 50px;
   }
 
   .reading-row {
-    grid-template-columns: 1fr 70px 70px 60px;
+    grid-template-columns: 1fr 130px 130px 50px;
   }
 
-  .temp-input {
-    width: 50px;
-    padding: var(--space-1);
+  .stepper-btn {
+    width: 36px;
+    height: 36px;
+  }
+
+  .temp-display {
+    min-width: 44px;
+    font-size: var(--text-sm);
+  }
+
+  .threshold-label {
+    font-size: 10px;
   }
 
   .signature-buttons {
     flex-direction: column;
+  }
+}
+
+/* Very small screens - stack AM/PM vertically */
+@media (max-width: 480px) {
+  .grid-header {
+    display: none;
+  }
+
+  .reading-row {
+    grid-template-columns: 1fr;
+    gap: var(--space-3);
+    padding: var(--space-3) 0;
+  }
+
+  .reading-cell {
+    justify-content: flex-start;
+    gap: var(--space-2);
+  }
+
+  .reading-cell::before {
+    content: attr(data-shift);
+    font-size: var(--text-xs);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    min-width: 24px;
+  }
+
+  .threshold-cell {
+    text-align: left;
+    padding-left: var(--space-1);
   }
 }

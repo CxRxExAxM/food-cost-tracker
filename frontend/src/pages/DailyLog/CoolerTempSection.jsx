@@ -2,15 +2,15 @@
  * Cooler Temperature Section
  *
  * Record 3: Cooler/freezer temperature logging with AM/PM shifts.
- * - Grid layout: Unit | AM Temp | PM Temp | Status
- * - Auto-threshold check on blur
+ * - Stepper UI for touch-friendly temp entry (starts at threshold edge)
+ * - Auto-threshold check on change
  * - Inline corrective action when flagged
  * - Per-shift signature at bottom
  */
 
 import { useState, useRef } from 'react';
 import {
-  Thermometer, AlertTriangle, Check, Edit2, X
+  Thermometer, AlertTriangle, Check, X, Minus, Plus
 } from 'lucide-react';
 import SignaturePad from 'react-signature-canvas';
 
@@ -49,10 +49,26 @@ export default function CoolerTempSection({
   }
 
   function handleTempChange(unitType, unitNumber, shift, value) {
-    const numValue = value === '' ? null : parseFloat(value);
+    const numValue = value === null ? null : parseFloat(value);
     onReadingUpdate(unitType, unitNumber, shift, {
       temperature_f: numValue
     });
+  }
+
+  // Stepper: increment/decrement by 0.5°F
+  // If no value yet, initialize at threshold edge
+  function handleTempStep(unitType, unitNumber, shift, direction, threshold) {
+    const reading = getReading(unitType, unitNumber, shift);
+    const currentValue = reading?.temperature_f;
+
+    if (currentValue === null || currentValue === undefined) {
+      // First tap: start at threshold (edge of danger zone)
+      handleTempChange(unitType, unitNumber, shift, threshold);
+    } else {
+      // Subsequent taps: step by 0.5°F
+      const newValue = Math.round((currentValue + (direction * 0.5)) * 10) / 10;
+      handleTempChange(unitType, unitNumber, shift, newValue);
+    }
   }
 
   function handleCorrectiveAction(unitType, unitNumber, shift, value) {
@@ -114,16 +130,28 @@ export default function CoolerTempSection({
         </div>
 
         {/* AM Reading */}
-        <div className={`reading-cell ${amReading?.is_flagged ? 'flagged' : ''}`}>
-          <input
-            type="number"
-            step="0.1"
-            className="temp-input"
-            value={amReading?.temperature_f ?? ''}
-            onChange={(e) => handleTempChange(unitType, unitNumber, 'am', e.target.value)}
-            disabled={isLocked || amSigned}
-            placeholder="—"
-          />
+        <div className={`reading-cell ${amReading?.is_flagged ? 'flagged' : ''}`} data-shift="AM">
+          <div className="temp-stepper">
+            <button
+              className="stepper-btn"
+              onClick={() => handleTempStep(unitType, unitNumber, 'am', -1, threshold)}
+              disabled={isLocked || amSigned}
+              aria-label="Decrease temperature"
+            >
+              <Minus size={18} />
+            </button>
+            <span className={`temp-display ${amReading?.temperature_f != null ? 'has-value' : ''}`}>
+              {amReading?.temperature_f != null ? `${amReading.temperature_f}°` : '—'}
+            </span>
+            <button
+              className="stepper-btn"
+              onClick={() => handleTempStep(unitType, unitNumber, 'am', 1, threshold)}
+              disabled={isLocked || amSigned}
+              aria-label="Increase temperature"
+            >
+              <Plus size={18} />
+            </button>
+          </div>
           {amReading?.is_flagged && (
             <button
               className="flag-btn"
@@ -139,16 +167,28 @@ export default function CoolerTempSection({
         </div>
 
         {/* PM Reading */}
-        <div className={`reading-cell ${pmReading?.is_flagged ? 'flagged' : ''}`}>
-          <input
-            type="number"
-            step="0.1"
-            className="temp-input"
-            value={pmReading?.temperature_f ?? ''}
-            onChange={(e) => handleTempChange(unitType, unitNumber, 'pm', e.target.value)}
-            disabled={isLocked || pmSigned}
-            placeholder="—"
-          />
+        <div className={`reading-cell ${pmReading?.is_flagged ? 'flagged' : ''}`} data-shift="PM">
+          <div className="temp-stepper">
+            <button
+              className="stepper-btn"
+              onClick={() => handleTempStep(unitType, unitNumber, 'pm', -1, threshold)}
+              disabled={isLocked || pmSigned}
+              aria-label="Decrease temperature"
+            >
+              <Minus size={18} />
+            </button>
+            <span className={`temp-display ${pmReading?.temperature_f != null ? 'has-value' : ''}`}>
+              {pmReading?.temperature_f != null ? `${pmReading.temperature_f}°` : '—'}
+            </span>
+            <button
+              className="stepper-btn"
+              onClick={() => handleTempStep(unitType, unitNumber, 'pm', 1, threshold)}
+              disabled={isLocked || pmSigned}
+              aria-label="Increase temperature"
+            >
+              <Plus size={18} />
+            </button>
+          </div>
           {pmReading?.is_flagged && (
             <button
               className="flag-btn"
