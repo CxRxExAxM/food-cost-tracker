@@ -35,6 +35,15 @@ function AppLauncher() {
       color: 'purple'
     },
     {
+      id: 'daily-log',
+      name: 'Daily Logs',
+      description: 'Daily cooler temps, cooking records, and food safety monitoring',
+      icon: '🌡️',
+      path: '/daily-log',
+      enabled: true,
+      color: 'teal'
+    },
+    {
       id: 'waste',
       name: 'Waste Tracking',
       description: 'Food waste diversion tracking with QR-based weigh-ins and monthly KPI reporting',

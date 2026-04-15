@@ -15,6 +15,7 @@ function Navigation({ showModuleNav = true }) {
   const isPotentialsModule = location.pathname.startsWith('/potentials');
   const isEHCModule = location.pathname.startsWith('/ehc');
   const isWasteModule = location.pathname.startsWith('/waste');
+  const isDailyLogModule = location.pathname.startsWith('/daily-log');
   const isCostingModule = location.pathname.startsWith('/costing') ||
     location.pathname.startsWith('/products') ||
     location.pathname.startsWith('/recipes') ||
@@ -59,6 +60,7 @@ function Navigation({ showModuleNav = true }) {
     if (isPotentialsModule) return 'Potentials';
     if (isEHCModule) return 'EHC Compliance';
     if (isWasteModule) return 'Waste Tracking';
+    if (isDailyLogModule) return 'Daily Logs';
     if (isCostingModule) return 'Food Costing';
     return null;
   };
@@ -123,6 +125,15 @@ function Navigation({ showModuleNav = true }) {
                 <>
                   <Link to="/ehc" className={`nav-link ${isActivePath('/ehc') ? 'active' : ''}`}>
                     Dashboard
+                  </Link>
+                </>
+              )}
+
+              {/* Daily Log module - daily temperature monitoring */}
+              {isDailyLogModule && (
+                <>
+                  <Link to="/daily-log" className={`nav-link ${isActivePath('/daily-log') ? 'active' : ''}`}>
+                    Today
                   </Link>
                 </>
               )}

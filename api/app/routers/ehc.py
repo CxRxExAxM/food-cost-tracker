@@ -97,6 +97,25 @@ class OutletCreate(BaseModel):
     leader_name: Optional[str] = None
     leader_email: Optional[str] = None
     sort_order: Optional[int] = 0
+    # Daily monitoring configuration
+    daily_monitoring_enabled: Optional[bool] = False
+    cooler_count: Optional[int] = 0
+    freezer_count: Optional[int] = 0
+    has_cooking: Optional[bool] = False
+    has_cooling: Optional[bool] = False
+    has_thawing: Optional[bool] = False
+    has_hot_buffet: Optional[bool] = False
+    has_cold_buffet: Optional[bool] = False
+    serves_breakfast: Optional[bool] = False
+    serves_lunch: Optional[bool] = False
+    serves_dinner: Optional[bool] = False
+    readings_per_service: Optional[int] = 3
+    cooler_max_f: Optional[Decimal] = Decimal("41.0")
+    freezer_max_f: Optional[Decimal] = Decimal("0.0")
+    cook_min_f: Optional[Decimal] = Decimal("165.0")
+    reheat_min_f: Optional[Decimal] = Decimal("165.0")
+    hot_hold_min_f: Optional[Decimal] = Decimal("140.0")
+    cold_hold_max_f: Optional[Decimal] = Decimal("41.0")
 
 
 class OutletUpdate(BaseModel):
@@ -108,6 +127,25 @@ class OutletUpdate(BaseModel):
     leader_email: Optional[str] = None
     is_active: Optional[bool] = None
     sort_order: Optional[int] = None
+    # Daily monitoring configuration
+    daily_monitoring_enabled: Optional[bool] = None
+    cooler_count: Optional[int] = None
+    freezer_count: Optional[int] = None
+    has_cooking: Optional[bool] = None
+    has_cooling: Optional[bool] = None
+    has_thawing: Optional[bool] = None
+    has_hot_buffet: Optional[bool] = None
+    has_cold_buffet: Optional[bool] = None
+    serves_breakfast: Optional[bool] = None
+    serves_lunch: Optional[bool] = None
+    serves_dinner: Optional[bool] = None
+    readings_per_service: Optional[int] = None
+    cooler_max_f: Optional[Decimal] = None
+    freezer_max_f: Optional[Decimal] = None
+    cook_min_f: Optional[Decimal] = None
+    reheat_min_f: Optional[Decimal] = None
+    hot_hold_min_f: Optional[Decimal] = None
+    cold_hold_max_f: Optional[Decimal] = None
 
 
 class OutletReorder(BaseModel):
@@ -1693,7 +1731,12 @@ def get_outlets(
 
         query = """
             SELECT id, name, full_name, outlet_type, leader_name, leader_email,
-                   is_active, sort_order, created_at, updated_at
+                   is_active, sort_order, created_at, updated_at,
+                   daily_monitoring_enabled, cooler_count, freezer_count,
+                   has_cooking, has_cooling, has_thawing, has_hot_buffet, has_cold_buffet,
+                   serves_breakfast, serves_lunch, serves_dinner, readings_per_service,
+                   cooler_max_f, freezer_max_f, cook_min_f, reheat_min_f,
+                   hot_hold_min_f, cold_hold_max_f
             FROM ehc_outlet
             WHERE organization_id = %s
         """
@@ -1733,13 +1776,28 @@ def create_outlet(
         cursor.execute("""
             INSERT INTO ehc_outlet
                 (organization_id, name, full_name, outlet_type, leader_name,
-                 leader_email, sort_order)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+                 leader_email, sort_order, daily_monitoring_enabled,
+                 cooler_count, freezer_count, has_cooking, has_cooling, has_thawing,
+                 has_hot_buffet, has_cold_buffet, serves_breakfast, serves_lunch,
+                 serves_dinner, readings_per_service, cooler_max_f, freezer_max_f,
+                 cook_min_f, reheat_min_f, hot_hold_min_f, cold_hold_max_f)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id, name, full_name, outlet_type, leader_name, leader_email,
-                      is_active, sort_order, created_at, updated_at
+                      is_active, sort_order, created_at, updated_at,
+                      daily_monitoring_enabled, cooler_count, freezer_count,
+                      has_cooking, has_cooling, has_thawing, has_hot_buffet, has_cold_buffet,
+                      serves_breakfast, serves_lunch, serves_dinner, readings_per_service,
+                      cooler_max_f, freezer_max_f, cook_min_f, reheat_min_f,
+                      hot_hold_min_f, cold_hold_max_f
         """, (
             org_id, outlet.name, outlet.full_name, outlet.outlet_type,
-            outlet.leader_name, outlet.leader_email, outlet.sort_order
+            outlet.leader_name, outlet.leader_email, outlet.sort_order,
+            outlet.daily_monitoring_enabled, outlet.cooler_count, outlet.freezer_count,
+            outlet.has_cooking, outlet.has_cooling, outlet.has_thawing,
+            outlet.has_hot_buffet, outlet.has_cold_buffet,
+            outlet.serves_breakfast, outlet.serves_lunch, outlet.serves_dinner,
+            outlet.readings_per_service, outlet.cooler_max_f, outlet.freezer_max_f,
+            outlet.cook_min_f, outlet.reheat_min_f, outlet.hot_hold_min_f, outlet.cold_hold_max_f
         ))
 
         result = dict_from_row(cursor.fetchone())
@@ -1805,6 +1863,62 @@ def update_outlet(
             updates.append("sort_order = %s")
             params.append(outlet.sort_order)
 
+        # Daily monitoring configuration fields
+        if outlet.daily_monitoring_enabled is not None:
+            updates.append("daily_monitoring_enabled = %s")
+            params.append(outlet.daily_monitoring_enabled)
+        if outlet.cooler_count is not None:
+            updates.append("cooler_count = %s")
+            params.append(outlet.cooler_count)
+        if outlet.freezer_count is not None:
+            updates.append("freezer_count = %s")
+            params.append(outlet.freezer_count)
+        if outlet.has_cooking is not None:
+            updates.append("has_cooking = %s")
+            params.append(outlet.has_cooking)
+        if outlet.has_cooling is not None:
+            updates.append("has_cooling = %s")
+            params.append(outlet.has_cooling)
+        if outlet.has_thawing is not None:
+            updates.append("has_thawing = %s")
+            params.append(outlet.has_thawing)
+        if outlet.has_hot_buffet is not None:
+            updates.append("has_hot_buffet = %s")
+            params.append(outlet.has_hot_buffet)
+        if outlet.has_cold_buffet is not None:
+            updates.append("has_cold_buffet = %s")
+            params.append(outlet.has_cold_buffet)
+        if outlet.serves_breakfast is not None:
+            updates.append("serves_breakfast = %s")
+            params.append(outlet.serves_breakfast)
+        if outlet.serves_lunch is not None:
+            updates.append("serves_lunch = %s")
+            params.append(outlet.serves_lunch)
+        if outlet.serves_dinner is not None:
+            updates.append("serves_dinner = %s")
+            params.append(outlet.serves_dinner)
+        if outlet.readings_per_service is not None:
+            updates.append("readings_per_service = %s")
+            params.append(outlet.readings_per_service)
+        if outlet.cooler_max_f is not None:
+            updates.append("cooler_max_f = %s")
+            params.append(outlet.cooler_max_f)
+        if outlet.freezer_max_f is not None:
+            updates.append("freezer_max_f = %s")
+            params.append(outlet.freezer_max_f)
+        if outlet.cook_min_f is not None:
+            updates.append("cook_min_f = %s")
+            params.append(outlet.cook_min_f)
+        if outlet.reheat_min_f is not None:
+            updates.append("reheat_min_f = %s")
+            params.append(outlet.reheat_min_f)
+        if outlet.hot_hold_min_f is not None:
+            updates.append("hot_hold_min_f = %s")
+            params.append(outlet.hot_hold_min_f)
+        if outlet.cold_hold_max_f is not None:
+            updates.append("cold_hold_max_f = %s")
+            params.append(outlet.cold_hold_max_f)
+
         if not updates:
             raise HTTPException(status_code=400, detail="No fields to update")
 
@@ -1816,7 +1930,12 @@ def update_outlet(
             SET {", ".join(updates)}
             WHERE id = %s AND organization_id = %s
             RETURNING id, name, full_name, outlet_type, leader_name, leader_email,
-                      is_active, sort_order, created_at, updated_at
+                      is_active, sort_order, created_at, updated_at,
+                      daily_monitoring_enabled, cooler_count, freezer_count,
+                      has_cooking, has_cooling, has_thawing, has_hot_buffet, has_cold_buffet,
+                      serves_breakfast, serves_lunch, serves_dinner, readings_per_service,
+                      cooler_max_f, freezer_max_f, cook_min_f, reheat_min_f,
+                      hot_hold_min_f, cold_hold_max_f
         """, params)
 
         result = dict_from_row(cursor.fetchone())

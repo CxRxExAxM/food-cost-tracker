@@ -16,7 +16,7 @@ import {
 } from './shared';
 import OutletModal from '../modals/OutletModal';
 import ContactModal from '../modals/ContactModal';
-import { X, Edit2, Plus, Mail, Check, Send, CheckCircle, AlertCircle, Clock } from 'lucide-react';
+import { X, Edit2, Plus, Mail, Check, Send, CheckCircle, AlertCircle, Clock, Thermometer } from 'lucide-react';
 
 export default function Settings({ activeCycle, onCycleUpdated, toast }) {
   const [updating, setUpdating] = useState(false);
@@ -333,6 +333,32 @@ export default function Settings({ activeCycle, onCycleUpdated, toast }) {
   const typeOrder = ['Production Kitchen', 'Restaurant', 'Bar', 'Lounge', 'Support', 'Franchise', 'Other'];
   const sortedTypes = typeOrder.filter(type => outletsByType[type]);
 
+  // Helper to generate monitoring summary for an outlet
+  const getMonitoringSummary = (outlet) => {
+    if (!outlet.daily_monitoring_enabled) {
+      return null;
+    }
+
+    const parts = [];
+    if (outlet.cooler_count > 0) {
+      parts.push(`${outlet.cooler_count} cooler${outlet.cooler_count > 1 ? 's' : ''}`);
+    }
+    if (outlet.freezer_count > 0) {
+      parts.push(`${outlet.freezer_count} freezer${outlet.freezer_count > 1 ? 's' : ''}`);
+    }
+
+    const capabilities = [];
+    if (outlet.has_cooking) capabilities.push('Cook');
+    if (outlet.has_cooling) capabilities.push('Cool');
+    if (outlet.has_thawing) capabilities.push('Thaw');
+
+    if (capabilities.length > 0) {
+      parts.push(capabilities.join('/'));
+    }
+
+    return parts.length > 0 ? parts.join(', ') : 'Enabled';
+  };
+
   return (
     <div className="settings-view-content">
       {/* Cycle Overview */}
@@ -470,23 +496,37 @@ export default function Settings({ activeCycle, onCycleUpdated, toast }) {
                   <div className="outlet-table-header">
                     <span className="col-name">Name</span>
                     <span className="col-full-name">Full Name</span>
+                    <span className="col-monitoring">Daily Monitoring</span>
                     <span className="col-actions">Actions</span>
                   </div>
-                  {outletsByType[type].map(outlet => (
-                    <div key={outlet.id} className="outlet-table-row">
-                      <span className="col-name outlet-tag">{outlet.name}</span>
-                      <span className="col-full-name">{outlet.full_name || '—'}</span>
-                      <span className="col-actions">
-                        <button
-                          className="btn-icon"
-                          onClick={() => setOutletModal({ show: true, outlet })}
-                          title="Edit outlet"
-                        >
-                          <Edit2 size={16} />
-                        </button>
-                      </span>
-                    </div>
-                  ))}
+                  {outletsByType[type].map(outlet => {
+                    const monitoringSummary = getMonitoringSummary(outlet);
+                    return (
+                      <div key={outlet.id} className="outlet-table-row">
+                        <span className="col-name outlet-tag">{outlet.name}</span>
+                        <span className="col-full-name">{outlet.full_name || '—'}</span>
+                        <span className="col-monitoring">
+                          {monitoringSummary ? (
+                            <span className="outlet-monitoring-badge enabled">
+                              <Thermometer size={12} />
+                              {monitoringSummary}
+                            </span>
+                          ) : (
+                            <span className="outlet-monitoring-badge disabled">Off</span>
+                          )}
+                        </span>
+                        <span className="col-actions">
+                          <button
+                            className="btn-icon"
+                            onClick={() => setOutletModal({ show: true, outlet })}
+                            title="Edit outlet"
+                          >
+                            <Edit2 size={16} />
+                          </button>
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             ))}

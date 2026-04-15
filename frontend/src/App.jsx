@@ -24,6 +24,8 @@ import EHC from './pages/EHC/EHC';
 import Waste from './pages/Waste/Waste';
 import WeighInForm from './pages/Waste/WeighInForm';
 import FormPage from './pages/EHC/forms/FormPage';
+import DailyLog from './pages/DailyLog/DailyLog';
+import DailyWorkstation from './pages/DailyLog/DailyWorkstation';
 import ImpersonationBanner from './components/ImpersonationBanner';
 import './App.css';
 
@@ -155,6 +157,22 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <Waste />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/daily-log"
+        element={
+          <ProtectedRoute>
+            <DailyLog />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/daily-log/:outletName/:dateStr"
+        element={
+          <ProtectedRoute>
+            <DailyWorkstation />
           </ProtectedRoute>
         }
       />
