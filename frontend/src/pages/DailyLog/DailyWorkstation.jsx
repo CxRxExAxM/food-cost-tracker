@@ -2,17 +2,21 @@
  * Daily Workstation - The Daily Worksheet View
  *
  * Shows the daily monitoring worksheet for a specific outlet and date.
- * Kitchen staff can log cooler temps, see flags, and sign their shifts.
+ * Kitchen staff can log temps, see flags, and sign their sections.
+ * Tabbed interface shows only enabled sections per outlet config.
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   Thermometer, ChevronLeft, ChevronRight, Check, AlertTriangle,
-  Calendar, RefreshCw
+  Calendar, RefreshCw, Flame, Snowflake, Wind
 } from 'lucide-react';
 import api from '../../lib/axios';
 import CoolerTempSection from './CoolerTempSection';
+import CookReheatSection from './CookReheatSection';
+import CoolingSection from './CoolingSection';
+import ThawingSection from './ThawingSection';
 import './DailyLog.css';
 
 // Debounce delay for auto-save (ms)
@@ -25,6 +29,10 @@ export default function DailyWorkstation() {
   const [worksheet, setWorksheet] = useState(null);
   const [outlet, setOutlet] = useState(null);
   const [coolerReadings, setCoolerReadings] = useState([]);
+  const [cookingRecords, setCookingRecords] = useState([]);
+  const [coolingRecords, setCoolingRecords] = useState([]);
+  const [thawingRecords, setThawingRecords] = useState([]);
+  const [activeTab, setActiveTab] = useState('cooler');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -51,6 +59,21 @@ export default function DailyWorkstation() {
       setWorksheet(response.data.worksheet);
       setOutlet(response.data.outlet);
       setCoolerReadings(response.data.cooler_readings || []);
+      setCookingRecords(response.data.cooking_records || []);
+      setCoolingRecords(response.data.cooling_records || []);
+      setThawingRecords(response.data.thawing_records || []);
+
+      // Set initial active tab based on what's enabled
+      const o = response.data.outlet;
+      if (o?.cooler_count > 0 || o?.freezer_count > 0) {
+        setActiveTab('cooler');
+      } else if (o?.has_cooking) {
+        setActiveTab('cooking');
+      } else if (o?.has_cooling) {
+        setActiveTab('cooling');
+      } else if (o?.has_thawing) {
+        setActiveTab('thawing');
+      }
     } catch (err) {
       console.error('Error loading worksheet:', err);
       if (err.response?.status === 404) {
@@ -170,12 +193,31 @@ export default function DailyWorkstation() {
     return date.toLocaleDateString('en-US', options);
   }
 
-  // Calculate completion stats
+  // Calculate which tabs are available
+  const hasCoolerTab = outlet?.cooler_count > 0 || outlet?.freezer_count > 0;
+  const hasCookingTab = outlet?.has_cooking;
+  const hasCoolingTab = outlet?.has_cooling;
+  const hasThawingTab = outlet?.has_thawing;
+
+  // Build tabs array
+  const tabs = [];
+  if (hasCoolerTab) tabs.push({ id: 'cooler', label: 'Cooler Temps', icon: Thermometer });
+  if (hasCookingTab) tabs.push({ id: 'cooking', label: 'Cook/Reheat', icon: Flame });
+  if (hasCoolingTab) tabs.push({ id: 'cooling', label: 'Cooling', icon: Snowflake });
+  if (hasThawingTab) tabs.push({ id: 'thawing', label: 'Thawing', icon: Wind });
+
+  // Calculate completion stats for coolers
   const totalReadings = coolerReadings.length;
   const completedReadings = coolerReadings.filter(r => r.temperature_f !== null).length;
   const flaggedReadings = coolerReadings.filter(r => r.is_flagged).length;
   const amSigned = coolerReadings.some(r => r.shift === 'am' && r.signature_data);
   const pmSigned = coolerReadings.some(r => r.shift === 'pm' && r.signature_data);
+
+  // Count flagged across all sections
+  const totalFlagged = flaggedReadings +
+    cookingRecords.filter(r => r.is_flagged).length +
+    coolingRecords.filter(r => r.is_flagged).length +
+    thawingRecords.filter(r => r.is_flagged).length;
 
   if (loading) {
     return (
@@ -268,10 +310,10 @@ export default function DailyWorkstation() {
           </span>
         </div>
 
-        {flaggedReadings > 0 && (
+        {totalFlagged > 0 && (
           <div className="status-item flagged">
             <AlertTriangle size={14} />
-            <span>{flaggedReadings} flagged</span>
+            <span>{totalFlagged} flagged</span>
           </div>
         )}
 
@@ -293,10 +335,26 @@ export default function DailyWorkstation() {
         </div>
       )}
 
+      {/* Tab Navigation */}
+      {tabs.length > 1 && (
+        <div className="worksheet-tabs">
+          {tabs.map(tab => (
+            <button
+              key={tab.id}
+              className={`worksheet-tab ${activeTab === tab.id ? 'active' : ''}`}
+              onClick={() => setActiveTab(tab.id)}
+            >
+              <tab.icon size={16} />
+              <span>{tab.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Worksheet Content */}
       <div className="worksheet-content">
-        {/* Cooler/Freezer Section - Always show if any units configured */}
-        {(outlet?.cooler_count > 0 || outlet?.freezer_count > 0) && (
+        {/* Cooler/Freezer Section */}
+        {activeTab === 'cooler' && hasCoolerTab && (
           <CoolerTempSection
             outlet={outlet}
             readings={coolerReadings}
@@ -306,7 +364,38 @@ export default function DailyWorkstation() {
           />
         )}
 
-        {/* Future sections will go here: Cook/Reheat, Cooling, Thawing */}
+        {/* Cook/Reheat Section */}
+        {activeTab === 'cooking' && hasCookingTab && (
+          <CookReheatSection
+            worksheet={worksheet}
+            outlet={outlet}
+            records={cookingRecords}
+            setRecords={setCookingRecords}
+            onSavingChange={setSaving}
+          />
+        )}
+
+        {/* Cooling Section */}
+        {activeTab === 'cooling' && hasCoolingTab && (
+          <CoolingSection
+            worksheet={worksheet}
+            outlet={outlet}
+            records={coolingRecords}
+            setRecords={setCoolingRecords}
+            onSavingChange={setSaving}
+          />
+        )}
+
+        {/* Thawing Section */}
+        {activeTab === 'thawing' && hasThawingTab && (
+          <ThawingSection
+            worksheet={worksheet}
+            outlet={outlet}
+            records={thawingRecords}
+            setRecords={setThawingRecords}
+            onSavingChange={setSaving}
+          />
+        )}
       </div>
     </div>
   );
