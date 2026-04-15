@@ -52,6 +52,73 @@ class WorksheetStatusUpdate(BaseModel):
     status: str  # 'open', 'review', 'approved'
 
 
+class CookingRecordCreate(BaseModel):
+    """Create a cooking/reheat/holding entry."""
+    meal_period: str  # 'breakfast' | 'lunch' | 'dinner'
+    entry_type: str  # 'cook' | 'reheat' | 'hot_hold' | 'cold_hold'
+    item_name: Optional[str] = None
+    temperature_f: Optional[Decimal] = None
+    time_recorded: Optional[str] = None  # HH:MM format
+    recorded_by: Optional[str] = None
+
+
+class CookingRecordUpdate(BaseModel):
+    """Update a cooking record."""
+    item_name: Optional[str] = None
+    temperature_f: Optional[Decimal] = None
+    time_recorded: Optional[str] = None
+    corrective_action: Optional[str] = None
+    alice_ticket: Optional[str] = None
+    recorded_by: Optional[str] = None
+
+
+class CoolingRecordCreate(BaseModel):
+    """Create a cooling log entry."""
+    item_name: str
+    method: Optional[str] = None  # 'ambient' | 'blast_chill' | 'ice_bath' | 'shallow_pan'
+    recorded_by: Optional[str] = None
+
+
+class CoolingRecordUpdate(BaseModel):
+    """Update a cooling record."""
+    item_name: Optional[str] = None
+    start_time: Optional[datetime] = None
+    end_time: Optional[datetime] = None
+    temp_2hr_f: Optional[Decimal] = None
+    temp_6hr_f: Optional[Decimal] = None
+    method: Optional[str] = None
+    corrective_action: Optional[str] = None
+    alice_ticket: Optional[str] = None
+    recorded_by: Optional[str] = None
+
+
+class ThawingRecordCreate(BaseModel):
+    """Create a thawing log entry."""
+    item_name: str
+    method: Optional[str] = None  # 'walkin' | 'running_water' | 'microwave' | 'cooking'
+    recorded_by: Optional[str] = None
+
+
+class ThawingRecordUpdate(BaseModel):
+    """Update a thawing record."""
+    item_name: Optional[str] = None
+    start_time: Optional[datetime] = None
+    finish_date: Optional[date] = None
+    finish_time: Optional[str] = None  # HH:MM format
+    finish_temp_f: Optional[Decimal] = None
+    method: Optional[str] = None
+    corrective_action: Optional[str] = None
+    alice_ticket: Optional[str] = None
+    recorded_by: Optional[str] = None
+
+
+class MealPeriodSignRequest(BaseModel):
+    """Sign a meal period's cooking records."""
+    meal_period: str  # 'breakfast' | 'lunch' | 'dinner'
+    recorded_by: str
+    signature_data: str
+
+
 # ============================================
 # Public Endpoints (No Auth - QR Access)
 # ============================================
@@ -170,17 +237,68 @@ def get_or_create_worksheet(
             ORDER BY unit_type, unit_number, shift
         """, (worksheet["id"],))
 
-        readings = dicts_from_rows(cursor.fetchall())
+        cooler_readings = dicts_from_rows(cursor.fetchall())
+
+        # Get cooking records
+        cursor.execute("""
+            SELECT id, meal_period, entry_type, slot_number,
+                   item_name, temperature_f, time_recorded,
+                   is_flagged, corrective_action, alice_ticket,
+                   recorded_by, signature_data, recorded_at,
+                   created_at, updated_at
+            FROM cooking_record
+            WHERE worksheet_id = %s
+            ORDER BY meal_period, entry_type, slot_number
+        """, (worksheet["id"],))
+
+        cooking_records = dicts_from_rows(cursor.fetchall())
+
+        # Get cooling records
+        cursor.execute("""
+            SELECT id, item_name, start_time, end_time,
+                   temp_2hr_f, temp_6hr_f, method,
+                   is_flagged, corrective_action, alice_ticket,
+                   recorded_by, signature_data, recorded_at,
+                   created_at, updated_at
+            FROM cooling_record
+            WHERE worksheet_id = %s
+            ORDER BY created_at
+        """, (worksheet["id"],))
+
+        cooling_records = dicts_from_rows(cursor.fetchall())
+
+        # Get thawing records
+        cursor.execute("""
+            SELECT id, item_name, start_time,
+                   finish_date, finish_time, finish_temp_f, method,
+                   is_flagged, corrective_action, alice_ticket,
+                   recorded_by, signature_data, recorded_at,
+                   created_at, updated_at
+            FROM thawing_record
+            WHERE worksheet_id = %s
+            ORDER BY created_at
+        """, (worksheet["id"],))
+
+        thawing_records = dicts_from_rows(cursor.fetchall())
 
         # Convert UUID to string for JSON serialization
         worksheet["id"] = str(worksheet["id"])
-        for r in readings:
+        for r in cooler_readings:
+            r["id"] = str(r["id"])
+        for r in cooking_records:
+            r["id"] = str(r["id"])
+        for r in cooling_records:
+            r["id"] = str(r["id"])
+        for r in thawing_records:
             r["id"] = str(r["id"])
 
         return {
             "worksheet": worksheet,
             "outlet": outlet,
-            "cooler_readings": readings
+            "cooler_readings": cooler_readings,
+            "cooking_records": cooking_records,
+            "cooling_records": cooling_records,
+            "thawing_records": thawing_records
         }
 
 
@@ -483,3 +601,804 @@ def get_monthly_calendar(
             "month": month,
             "days": calendar_data
         }
+
+
+# ============================================
+# Cooking Records (Records 4 & 6)
+# ============================================
+
+@router.get("/worksheet/{worksheet_id}/cooking")
+def list_cooking_records(
+    worksheet_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """List all cooking/reheat/holding entries for a worksheet."""
+    org_id = current_user["organization_id"]
+
+    try:
+        ws_uuid = uuid.UUID(worksheet_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid worksheet ID")
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Verify worksheet ownership
+        cursor.execute("""
+            SELECT id FROM daily_worksheet
+            WHERE id = %s AND organization_id = %s
+        """, (ws_uuid, org_id))
+
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Worksheet not found")
+
+        cursor.execute("""
+            SELECT id, meal_period, entry_type, slot_number,
+                   item_name, temperature_f, time_recorded,
+                   is_flagged, corrective_action, alice_ticket,
+                   recorded_by, signature_data, recorded_at,
+                   created_at, updated_at
+            FROM cooking_record
+            WHERE worksheet_id = %s
+            ORDER BY meal_period, entry_type, slot_number
+        """, (ws_uuid,))
+
+        records = dicts_from_rows(cursor.fetchall())
+        for r in records:
+            r["id"] = str(r["id"])
+
+        return {"data": records, "count": len(records)}
+
+
+@router.post("/worksheet/{worksheet_id}/cooking")
+def create_cooking_record(
+    worksheet_id: str,
+    record: CookingRecordCreate,
+    current_user: dict = Depends(get_current_user)
+):
+    """Create a new cooking/reheat/holding entry."""
+    org_id = current_user["organization_id"]
+
+    if record.meal_period not in ["breakfast", "lunch", "dinner"]:
+        raise HTTPException(status_code=400, detail="meal_period must be 'breakfast', 'lunch', or 'dinner'")
+    if record.entry_type not in ["cook", "reheat", "hot_hold", "cold_hold"]:
+        raise HTTPException(status_code=400, detail="entry_type must be 'cook', 'reheat', 'hot_hold', or 'cold_hold'")
+
+    try:
+        ws_uuid = uuid.UUID(worksheet_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid worksheet ID")
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Verify worksheet ownership and get thresholds
+        cursor.execute("""
+            SELECT dw.id, dw.status,
+                   o.cook_min_f, o.reheat_min_f, o.hot_hold_min_f, o.cold_hold_max_f
+            FROM daily_worksheet dw
+            JOIN ehc_outlet o ON o.organization_id = dw.organization_id
+                              AND o.name = dw.outlet_name
+            WHERE dw.id = %s AND dw.organization_id = %s
+        """, (ws_uuid, org_id))
+
+        ws_data = dict_from_row(cursor.fetchone())
+        if not ws_data:
+            raise HTTPException(status_code=404, detail="Worksheet not found")
+
+        if ws_data["status"] == "approved":
+            raise HTTPException(status_code=400, detail="Cannot add to approved worksheet")
+
+        # Get next slot number
+        cursor.execute("""
+            SELECT COALESCE(MAX(slot_number), 0) + 1
+            FROM cooking_record
+            WHERE worksheet_id = %s AND meal_period = %s AND entry_type = %s
+        """, (ws_uuid, record.meal_period, record.entry_type))
+        slot_number = cursor.fetchone()[0]
+
+        # Check flagging based on entry type
+        is_flagged = False
+        if record.temperature_f is not None:
+            temp = float(record.temperature_f)
+            if record.entry_type == "cook" and ws_data["cook_min_f"]:
+                is_flagged = temp < float(ws_data["cook_min_f"])
+            elif record.entry_type == "reheat" and ws_data["reheat_min_f"]:
+                is_flagged = temp < float(ws_data["reheat_min_f"])
+            elif record.entry_type == "hot_hold" and ws_data["hot_hold_min_f"]:
+                is_flagged = temp < float(ws_data["hot_hold_min_f"])
+            elif record.entry_type == "cold_hold" and ws_data["cold_hold_max_f"]:
+                is_flagged = temp > float(ws_data["cold_hold_max_f"])
+
+        # Parse time if provided
+        time_val = None
+        if record.time_recorded:
+            try:
+                time_val = datetime.strptime(record.time_recorded, "%H:%M").time()
+            except ValueError:
+                raise HTTPException(status_code=400, detail="time_recorded must be HH:MM format")
+
+        cursor.execute("""
+            INSERT INTO cooking_record (
+                worksheet_id, meal_period, entry_type, slot_number,
+                item_name, temperature_f, time_recorded, is_flagged,
+                recorded_by, recorded_at
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+            RETURNING id, meal_period, entry_type, slot_number,
+                      item_name, temperature_f, time_recorded,
+                      is_flagged, corrective_action, alice_ticket,
+                      recorded_by, signature_data, recorded_at,
+                      created_at, updated_at
+        """, (ws_uuid, record.meal_period, record.entry_type, slot_number,
+              record.item_name, record.temperature_f, time_val, is_flagged,
+              record.recorded_by))
+
+        result = dict_from_row(cursor.fetchone())
+        conn.commit()
+
+        result["id"] = str(result["id"])
+        return result
+
+
+@router.put("/worksheet/{worksheet_id}/cooking/{record_id}")
+def update_cooking_record(
+    worksheet_id: str,
+    record_id: str,
+    record: CookingRecordUpdate,
+    current_user: dict = Depends(get_current_user)
+):
+    """Update a cooking record."""
+    org_id = current_user["organization_id"]
+
+    try:
+        ws_uuid = uuid.UUID(worksheet_id)
+        rec_uuid = uuid.UUID(record_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid ID format")
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Verify ownership and get thresholds
+        cursor.execute("""
+            SELECT dw.status, cr.entry_type,
+                   o.cook_min_f, o.reheat_min_f, o.hot_hold_min_f, o.cold_hold_max_f
+            FROM daily_worksheet dw
+            JOIN cooking_record cr ON cr.worksheet_id = dw.id
+            JOIN ehc_outlet o ON o.organization_id = dw.organization_id
+                              AND o.name = dw.outlet_name
+            WHERE dw.id = %s AND dw.organization_id = %s AND cr.id = %s
+        """, (ws_uuid, org_id, rec_uuid))
+
+        ws_data = dict_from_row(cursor.fetchone())
+        if not ws_data:
+            raise HTTPException(status_code=404, detail="Record not found")
+
+        if ws_data["status"] == "approved":
+            raise HTTPException(status_code=400, detail="Cannot edit approved worksheet")
+
+        # Build update
+        updates = ["updated_at = NOW()"]
+        params = []
+
+        if record.item_name is not None:
+            updates.append("item_name = %s")
+            params.append(record.item_name)
+
+        if record.temperature_f is not None:
+            updates.append("temperature_f = %s")
+            params.append(record.temperature_f)
+
+            # Check flagging
+            temp = float(record.temperature_f)
+            entry_type = ws_data["entry_type"]
+            is_flagged = False
+            if entry_type == "cook" and ws_data["cook_min_f"]:
+                is_flagged = temp < float(ws_data["cook_min_f"])
+            elif entry_type == "reheat" and ws_data["reheat_min_f"]:
+                is_flagged = temp < float(ws_data["reheat_min_f"])
+            elif entry_type == "hot_hold" and ws_data["hot_hold_min_f"]:
+                is_flagged = temp < float(ws_data["hot_hold_min_f"])
+            elif entry_type == "cold_hold" and ws_data["cold_hold_max_f"]:
+                is_flagged = temp > float(ws_data["cold_hold_max_f"])
+
+            updates.append("is_flagged = %s")
+            params.append(is_flagged)
+
+        if record.time_recorded is not None:
+            try:
+                time_val = datetime.strptime(record.time_recorded, "%H:%M").time()
+                updates.append("time_recorded = %s")
+                params.append(time_val)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="time_recorded must be HH:MM format")
+
+        if record.corrective_action is not None:
+            updates.append("corrective_action = %s")
+            params.append(record.corrective_action)
+
+        if record.alice_ticket is not None:
+            updates.append("alice_ticket = %s")
+            params.append(record.alice_ticket)
+
+        if record.recorded_by is not None:
+            updates.append("recorded_by = %s")
+            params.append(record.recorded_by)
+
+        params.append(rec_uuid)
+
+        cursor.execute(f"""
+            UPDATE cooking_record
+            SET {", ".join(updates)}
+            WHERE id = %s
+            RETURNING id, meal_period, entry_type, slot_number,
+                      item_name, temperature_f, time_recorded,
+                      is_flagged, corrective_action, alice_ticket,
+                      recorded_by, signature_data, recorded_at,
+                      created_at, updated_at
+        """, params)
+
+        result = dict_from_row(cursor.fetchone())
+        conn.commit()
+
+        result["id"] = str(result["id"])
+        return result
+
+
+@router.delete("/worksheet/{worksheet_id}/cooking/{record_id}")
+def delete_cooking_record(
+    worksheet_id: str,
+    record_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Delete a cooking record."""
+    org_id = current_user["organization_id"]
+
+    try:
+        ws_uuid = uuid.UUID(worksheet_id)
+        rec_uuid = uuid.UUID(record_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid ID format")
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Verify ownership
+        cursor.execute("""
+            SELECT dw.status
+            FROM daily_worksheet dw
+            JOIN cooking_record cr ON cr.worksheet_id = dw.id
+            WHERE dw.id = %s AND dw.organization_id = %s AND cr.id = %s
+        """, (ws_uuid, org_id, rec_uuid))
+
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Record not found")
+
+        if row[0] == "approved":
+            raise HTTPException(status_code=400, detail="Cannot delete from approved worksheet")
+
+        cursor.execute("DELETE FROM cooking_record WHERE id = %s", (rec_uuid,))
+        conn.commit()
+
+        return {"status": "ok", "deleted": record_id}
+
+
+@router.post("/worksheet/{worksheet_id}/cooking/sign")
+def sign_cooking_records(
+    worksheet_id: str,
+    sign_request: MealPeriodSignRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Sign a meal period's cooking records."""
+    org_id = current_user["organization_id"]
+
+    if sign_request.meal_period not in ["breakfast", "lunch", "dinner"]:
+        raise HTTPException(status_code=400, detail="meal_period must be 'breakfast', 'lunch', or 'dinner'")
+
+    try:
+        ws_uuid = uuid.UUID(worksheet_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid worksheet ID")
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT status FROM daily_worksheet
+            WHERE id = %s AND organization_id = %s
+        """, (ws_uuid, org_id))
+
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Worksheet not found")
+
+        if row[0] == "approved":
+            raise HTTPException(status_code=400, detail="Cannot sign approved worksheet")
+
+        cursor.execute("""
+            UPDATE cooking_record
+            SET signature_data = %s,
+                recorded_by = COALESCE(recorded_by, %s),
+                updated_at = NOW()
+            WHERE worksheet_id = %s AND meal_period = %s
+            RETURNING id
+        """, (sign_request.signature_data, sign_request.recorded_by, ws_uuid, sign_request.meal_period))
+
+        updated_count = cursor.rowcount
+        conn.commit()
+
+        return {
+            "status": "ok",
+            "meal_period": sign_request.meal_period,
+            "records_signed": updated_count
+        }
+
+
+# ============================================
+# Cooling Records (Record 5)
+# ============================================
+
+@router.get("/worksheet/{worksheet_id}/cooling")
+def list_cooling_records(
+    worksheet_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """List all cooling log entries for a worksheet."""
+    org_id = current_user["organization_id"]
+
+    try:
+        ws_uuid = uuid.UUID(worksheet_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid worksheet ID")
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT id FROM daily_worksheet
+            WHERE id = %s AND organization_id = %s
+        """, (ws_uuid, org_id))
+
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Worksheet not found")
+
+        cursor.execute("""
+            SELECT id, item_name, start_time, end_time,
+                   temp_2hr_f, temp_6hr_f, method,
+                   is_flagged, corrective_action, alice_ticket,
+                   recorded_by, signature_data, recorded_at,
+                   created_at, updated_at
+            FROM cooling_record
+            WHERE worksheet_id = %s
+            ORDER BY created_at
+        """, (ws_uuid,))
+
+        records = dicts_from_rows(cursor.fetchall())
+        for r in records:
+            r["id"] = str(r["id"])
+
+        return {"data": records, "count": len(records)}
+
+
+@router.post("/worksheet/{worksheet_id}/cooling")
+def create_cooling_record(
+    worksheet_id: str,
+    record: CoolingRecordCreate,
+    current_user: dict = Depends(get_current_user)
+):
+    """Create a new cooling log entry."""
+    org_id = current_user["organization_id"]
+
+    try:
+        ws_uuid = uuid.UUID(worksheet_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid worksheet ID")
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT status FROM daily_worksheet
+            WHERE id = %s AND organization_id = %s
+        """, (ws_uuid, org_id))
+
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Worksheet not found")
+
+        if row[0] == "approved":
+            raise HTTPException(status_code=400, detail="Cannot add to approved worksheet")
+
+        cursor.execute("""
+            INSERT INTO cooling_record (
+                worksheet_id, item_name, method, recorded_by,
+                start_time, recorded_at
+            ) VALUES (%s, %s, %s, %s, NOW(), NOW())
+            RETURNING id, item_name, start_time, end_time,
+                      temp_2hr_f, temp_6hr_f, method,
+                      is_flagged, corrective_action, alice_ticket,
+                      recorded_by, signature_data, recorded_at,
+                      created_at, updated_at
+        """, (ws_uuid, record.item_name, record.method, record.recorded_by))
+
+        result = dict_from_row(cursor.fetchone())
+        conn.commit()
+
+        result["id"] = str(result["id"])
+        return result
+
+
+@router.put("/worksheet/{worksheet_id}/cooling/{record_id}")
+def update_cooling_record(
+    worksheet_id: str,
+    record_id: str,
+    record: CoolingRecordUpdate,
+    current_user: dict = Depends(get_current_user)
+):
+    """Update a cooling record. Auto-flags if temps exceed thresholds."""
+    org_id = current_user["organization_id"]
+
+    try:
+        ws_uuid = uuid.UUID(worksheet_id)
+        rec_uuid = uuid.UUID(record_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid ID format")
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT dw.status
+            FROM daily_worksheet dw
+            JOIN cooling_record cr ON cr.worksheet_id = dw.id
+            WHERE dw.id = %s AND dw.organization_id = %s AND cr.id = %s
+        """, (ws_uuid, org_id, rec_uuid))
+
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Record not found")
+
+        if row[0] == "approved":
+            raise HTTPException(status_code=400, detail="Cannot edit approved worksheet")
+
+        # Build update
+        updates = ["updated_at = NOW()"]
+        params = []
+
+        if record.item_name is not None:
+            updates.append("item_name = %s")
+            params.append(record.item_name)
+
+        if record.start_time is not None:
+            updates.append("start_time = %s")
+            params.append(record.start_time)
+
+        if record.end_time is not None:
+            updates.append("end_time = %s")
+            params.append(record.end_time)
+
+        # Check flagging for temp thresholds
+        # 2hr must be <= 70F, 6hr must be <= 41F
+        is_flagged = False
+        if record.temp_2hr_f is not None:
+            updates.append("temp_2hr_f = %s")
+            params.append(record.temp_2hr_f)
+            if float(record.temp_2hr_f) > 70.0:
+                is_flagged = True
+
+        if record.temp_6hr_f is not None:
+            updates.append("temp_6hr_f = %s")
+            params.append(record.temp_6hr_f)
+            if float(record.temp_6hr_f) > 41.0:
+                is_flagged = True
+
+        if record.temp_2hr_f is not None or record.temp_6hr_f is not None:
+            updates.append("is_flagged = %s")
+            params.append(is_flagged)
+
+        if record.method is not None:
+            updates.append("method = %s")
+            params.append(record.method)
+
+        if record.corrective_action is not None:
+            updates.append("corrective_action = %s")
+            params.append(record.corrective_action)
+
+        if record.alice_ticket is not None:
+            updates.append("alice_ticket = %s")
+            params.append(record.alice_ticket)
+
+        if record.recorded_by is not None:
+            updates.append("recorded_by = %s")
+            params.append(record.recorded_by)
+
+        params.append(rec_uuid)
+
+        cursor.execute(f"""
+            UPDATE cooling_record
+            SET {", ".join(updates)}
+            WHERE id = %s
+            RETURNING id, item_name, start_time, end_time,
+                      temp_2hr_f, temp_6hr_f, method,
+                      is_flagged, corrective_action, alice_ticket,
+                      recorded_by, signature_data, recorded_at,
+                      created_at, updated_at
+        """, params)
+
+        result = dict_from_row(cursor.fetchone())
+        conn.commit()
+
+        result["id"] = str(result["id"])
+        return result
+
+
+@router.delete("/worksheet/{worksheet_id}/cooling/{record_id}")
+def delete_cooling_record(
+    worksheet_id: str,
+    record_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Delete a cooling record."""
+    org_id = current_user["organization_id"]
+
+    try:
+        ws_uuid = uuid.UUID(worksheet_id)
+        rec_uuid = uuid.UUID(record_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid ID format")
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT dw.status
+            FROM daily_worksheet dw
+            JOIN cooling_record cr ON cr.worksheet_id = dw.id
+            WHERE dw.id = %s AND dw.organization_id = %s AND cr.id = %s
+        """, (ws_uuid, org_id, rec_uuid))
+
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Record not found")
+
+        if row[0] == "approved":
+            raise HTTPException(status_code=400, detail="Cannot delete from approved worksheet")
+
+        cursor.execute("DELETE FROM cooling_record WHERE id = %s", (rec_uuid,))
+        conn.commit()
+
+        return {"status": "ok", "deleted": record_id}
+
+
+# ============================================
+# Thawing Records (Record 12)
+# ============================================
+
+@router.get("/worksheet/{worksheet_id}/thawing")
+def list_thawing_records(
+    worksheet_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """List all thawing log entries for a worksheet."""
+    org_id = current_user["organization_id"]
+
+    try:
+        ws_uuid = uuid.UUID(worksheet_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid worksheet ID")
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT id FROM daily_worksheet
+            WHERE id = %s AND organization_id = %s
+        """, (ws_uuid, org_id))
+
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Worksheet not found")
+
+        cursor.execute("""
+            SELECT id, item_name, start_time,
+                   finish_date, finish_time, finish_temp_f, method,
+                   is_flagged, corrective_action, alice_ticket,
+                   recorded_by, signature_data, recorded_at,
+                   created_at, updated_at
+            FROM thawing_record
+            WHERE worksheet_id = %s
+            ORDER BY created_at
+        """, (ws_uuid,))
+
+        records = dicts_from_rows(cursor.fetchall())
+        for r in records:
+            r["id"] = str(r["id"])
+
+        return {"data": records, "count": len(records)}
+
+
+@router.post("/worksheet/{worksheet_id}/thawing")
+def create_thawing_record(
+    worksheet_id: str,
+    record: ThawingRecordCreate,
+    current_user: dict = Depends(get_current_user)
+):
+    """Create a new thawing log entry."""
+    org_id = current_user["organization_id"]
+
+    try:
+        ws_uuid = uuid.UUID(worksheet_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid worksheet ID")
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT status FROM daily_worksheet
+            WHERE id = %s AND organization_id = %s
+        """, (ws_uuid, org_id))
+
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Worksheet not found")
+
+        if row[0] == "approved":
+            raise HTTPException(status_code=400, detail="Cannot add to approved worksheet")
+
+        cursor.execute("""
+            INSERT INTO thawing_record (
+                worksheet_id, item_name, method, recorded_by,
+                start_time, recorded_at
+            ) VALUES (%s, %s, %s, %s, NOW(), NOW())
+            RETURNING id, item_name, start_time,
+                      finish_date, finish_time, finish_temp_f, method,
+                      is_flagged, corrective_action, alice_ticket,
+                      recorded_by, signature_data, recorded_at,
+                      created_at, updated_at
+        """, (ws_uuid, record.item_name, record.method, record.recorded_by))
+
+        result = dict_from_row(cursor.fetchone())
+        conn.commit()
+
+        result["id"] = str(result["id"])
+        return result
+
+
+@router.put("/worksheet/{worksheet_id}/thawing/{record_id}")
+def update_thawing_record(
+    worksheet_id: str,
+    record_id: str,
+    record: ThawingRecordUpdate,
+    current_user: dict = Depends(get_current_user)
+):
+    """Update a thawing record. Auto-flags if finish temp > 41F."""
+    org_id = current_user["organization_id"]
+
+    try:
+        ws_uuid = uuid.UUID(worksheet_id)
+        rec_uuid = uuid.UUID(record_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid ID format")
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT dw.status
+            FROM daily_worksheet dw
+            JOIN thawing_record tr ON tr.worksheet_id = dw.id
+            WHERE dw.id = %s AND dw.organization_id = %s AND tr.id = %s
+        """, (ws_uuid, org_id, rec_uuid))
+
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Record not found")
+
+        if row[0] == "approved":
+            raise HTTPException(status_code=400, detail="Cannot edit approved worksheet")
+
+        # Build update
+        updates = ["updated_at = NOW()"]
+        params = []
+
+        if record.item_name is not None:
+            updates.append("item_name = %s")
+            params.append(record.item_name)
+
+        if record.start_time is not None:
+            updates.append("start_time = %s")
+            params.append(record.start_time)
+
+        if record.finish_date is not None:
+            updates.append("finish_date = %s")
+            params.append(record.finish_date)
+
+        if record.finish_time is not None:
+            try:
+                time_val = datetime.strptime(record.finish_time, "%H:%M").time()
+                updates.append("finish_time = %s")
+                params.append(time_val)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="finish_time must be HH:MM format")
+
+        if record.finish_temp_f is not None:
+            updates.append("finish_temp_f = %s")
+            params.append(record.finish_temp_f)
+            # Flag if > 41F
+            is_flagged = float(record.finish_temp_f) > 41.0
+            updates.append("is_flagged = %s")
+            params.append(is_flagged)
+
+        if record.method is not None:
+            updates.append("method = %s")
+            params.append(record.method)
+
+        if record.corrective_action is not None:
+            updates.append("corrective_action = %s")
+            params.append(record.corrective_action)
+
+        if record.alice_ticket is not None:
+            updates.append("alice_ticket = %s")
+            params.append(record.alice_ticket)
+
+        if record.recorded_by is not None:
+            updates.append("recorded_by = %s")
+            params.append(record.recorded_by)
+
+        params.append(rec_uuid)
+
+        cursor.execute(f"""
+            UPDATE thawing_record
+            SET {", ".join(updates)}
+            WHERE id = %s
+            RETURNING id, item_name, start_time,
+                      finish_date, finish_time, finish_temp_f, method,
+                      is_flagged, corrective_action, alice_ticket,
+                      recorded_by, signature_data, recorded_at,
+                      created_at, updated_at
+        """, params)
+
+        result = dict_from_row(cursor.fetchone())
+        conn.commit()
+
+        result["id"] = str(result["id"])
+        return result
+
+
+@router.delete("/worksheet/{worksheet_id}/thawing/{record_id}")
+def delete_thawing_record(
+    worksheet_id: str,
+    record_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Delete a thawing record."""
+    org_id = current_user["organization_id"]
+
+    try:
+        ws_uuid = uuid.UUID(worksheet_id)
+        rec_uuid = uuid.UUID(record_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid ID format")
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT dw.status
+            FROM daily_worksheet dw
+            JOIN thawing_record tr ON tr.worksheet_id = dw.id
+            WHERE dw.id = %s AND dw.organization_id = %s AND tr.id = %s
+        """, (ws_uuid, org_id, rec_uuid))
+
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Record not found")
+
+        if row[0] == "approved":
+            raise HTTPException(status_code=400, detail="Cannot delete from approved worksheet")
+
+        cursor.execute("DELETE FROM thawing_record WHERE id = %s", (rec_uuid,))
+        conn.commit()
+
+        return {"status": "ok", "deleted": record_id}
