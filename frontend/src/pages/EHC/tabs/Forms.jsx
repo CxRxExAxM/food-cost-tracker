@@ -30,6 +30,7 @@ export default function Forms({ activeCycle, toast }) {
   // Email state
   const [emailConfigured, setEmailConfigured] = useState(false);
   const [sendingEmail, setSendingEmail] = useState(null); // form_link_id being sent
+  const [includeSecondary, setIncludeSecondary] = useState(false); // Send to secondary contacts too
 
   // Modal state
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -199,14 +200,20 @@ export default function Forms({ activeCycle, toast }) {
         method: 'POST',
         body: JSON.stringify({
           form_link_ids: [link.id],
-          include_qr: true
+          include_qr: true,
+          include_secondary: includeSecondary
         })
       });
 
       if (response.summary?.successful > 0) {
-        toast?.success?.(`QR code emailed to ${response.results?.[0]?.email || 'contact'}`);
-      } else if (response.summary?.skipped > 0) {
-        toast?.error?.('No primary contact found for this outlet');
+        const count = response.summary.successful;
+        if (count === 1) {
+          toast?.success?.(`QR code emailed to ${response.results?.[0]?.contact_email || 'contact'}`);
+        } else {
+          toast?.success?.(`QR code emailed to ${count} contacts`);
+        }
+      } else if (response.results?.[0]?.error?.includes('No contacts')) {
+        toast?.error?.('No contacts found for this outlet');
       } else {
         toast?.error?.(response.results?.[0]?.error || 'Failed to send email');
       }
@@ -451,6 +458,16 @@ export default function Forms({ activeCycle, toast }) {
                 <option value="active">Active Only</option>
                 <option value="inactive">Inactive Only</option>
               </select>
+              {emailConfigured && (
+                <label className="secondary-toggle" title="When sending QR codes, also email secondary contacts">
+                  <input
+                    type="checkbox"
+                    checked={includeSecondary}
+                    onChange={e => setIncludeSecondary(e.target.checked)}
+                  />
+                  <span>+ Secondary</span>
+                </label>
+              )}
             </div>
           </div>
 

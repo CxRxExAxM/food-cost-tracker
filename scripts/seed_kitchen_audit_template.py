@@ -28,6 +28,7 @@ from psycopg2.extras import RealDictCursor
 # Record 20 in EHC Standards
 # ============================================
 # Note: Question 35 reworded so Y = good (was "Are there any obvious signs of pest activity?")
+# Note: Question 54 has expected_answer: "N" - No raw eggs = compliant
 
 KITCHEN_AUDIT_ITEMS = [
     {"number": 1, "question": "Are all floors, walls and ceiling surfaces clean?", "response_type": "yes_no"},
@@ -86,7 +87,7 @@ KITCHEN_AUDIT_ITEMS = [
     # Bar-specific questions (52-58) - shown to all outlets per Mike's confirmation
     {"number": 52, "question": "Has the bar got sterilising gel?", "response_type": "yes_no"},
     {"number": 53, "question": "Does the bar have a green cutting board for garnishes?", "response_type": "yes_no"},
-    {"number": 54, "question": "Are raw eggs an ingredient for any cocktails?", "response_type": "yes_no"},
+    {"number": 54, "question": "Are raw eggs an ingredient for any cocktails?", "response_type": "yes_no", "expected_answer": "N"},
     {"number": 55, "question": "Is the milk and other dairy products being stored at the correct temperature?", "response_type": "yes_no"},
     {"number": 56, "question": "Are all bar snacks stored correctly with labelling & dating?", "response_type": "yes_no"},
     {"number": 57, "question": "Are straws individually wrapped or otherwise protected?", "response_type": "yes_no"},

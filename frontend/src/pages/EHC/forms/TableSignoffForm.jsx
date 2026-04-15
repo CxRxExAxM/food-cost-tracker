@@ -58,6 +58,11 @@ export default function TableSignoffForm({
     return map;
   }, [existingResponses]);
 
+  // Get user-added entries (row_index: -1) to display in table
+  const userAddedEntries = useMemo(() => {
+    return existingResponses.filter(resp => resp.response_data?.row_index === -1);
+  }, [existingResponses]);
+
   // Handle row tap/click - select row and show floating bar
   const handleRowSelect = (index) => {
     const isSigned = signedIndices.has(index);
@@ -350,7 +355,8 @@ export default function TableSignoffForm({
       {/* Progress */}
       <div className="roster-progress">
         <span className="progress-count">
-          {signedIndices.size} of {rows.length} signed
+          {signedIndices.size + userAddedEntries.length} of {rows.length + userAddedEntries.length} signed
+          {userAddedEntries.length > 0 && ` (${userAddedEntries.length} added)`}
         </span>
         <div className="progress-bar">
           <div
@@ -418,6 +424,39 @@ export default function TableSignoffForm({
                       value = row[col.key];
                     }
 
+                    if (col.type === 'date' && value) {
+                      return (
+                        <td key={col.key}>
+                          {new Date(value).toLocaleDateString()}
+                        </td>
+                      );
+                    }
+                    return <td key={col.key}>{value || '—'}</td>;
+                  })}
+                </tr>
+              );
+            })}
+            {/* User-added entries (row_index: -1) shown after pre-filled rows */}
+            {userAddedEntries.map((resp, idx) => {
+              const rowData = resp.response_data?.row_data || {};
+              return (
+                <tr key={`user-added-${idx}`} className="signed-row user-added-row">
+                  {columns.map(col => {
+                    if (col.type === 'signature') {
+                      return (
+                        <td key={col.key} className="signature-cell">
+                          <div className="signed-indicator">
+                            <Check size={16} />
+                            <span>Signed</span>
+                          </div>
+                        </td>
+                      );
+                    }
+                    // Get value from response row_data or respondent_name
+                    let value = rowData[col.key];
+                    if (!value && (col.key === 'name' || col.key === dataColumns[0]?.key)) {
+                      value = resp.respondent_name;
+                    }
                     if (col.type === 'date' && value) {
                       return (
                         <td key={col.key}>

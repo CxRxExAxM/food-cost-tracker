@@ -155,6 +155,7 @@ class SendFormLinksRequest(BaseModel):
     """Send QR emails for form links."""
     form_link_ids: List[int]
     include_qr: Optional[bool] = True
+    include_secondary: Optional[bool] = False  # Send to secondary contacts too
     custom_message: Optional[str] = None
 
 
@@ -2501,109 +2502,126 @@ def send_form_link_emails(
         with get_db() as conn:
             cursor = conn.cursor()
 
-        for form_link_id in request.form_link_ids:
-            # Get form link details
-            cursor.execute("""
-                SELECT fl.id, fl.token, fl.outlet_name, fl.period_label,
-                       fl.config, t.name as template_name
-                FROM ehc_form_link fl
-                LEFT JOIN ehc_form_template t ON t.id = fl.template_id
-                WHERE fl.id = %s AND fl.organization_id = %s
-            """, (form_link_id, org_id))
+            for form_link_id in request.form_link_ids:
+                # Get form link details
+                cursor.execute("""
+                    SELECT fl.id, fl.token, fl.outlet_name, fl.period_label,
+                           fl.config, t.name as template_name
+                    FROM ehc_form_link fl
+                    LEFT JOIN ehc_form_template t ON t.id = fl.template_id
+                    WHERE fl.id = %s AND fl.organization_id = %s
+                """, (form_link_id, org_id))
 
-            form_link = dict_from_row(cursor.fetchone())
-            if not form_link:
-                results.append({
-                    "form_link_id": form_link_id,
-                    "success": False,
-                    "error": "Form link not found"
-                })
-                continue
+                form_link = dict_from_row(cursor.fetchone())
+                if not form_link:
+                    results.append({
+                        "form_link_id": form_link_id,
+                        "success": False,
+                        "error": "Form link not found"
+                    })
+                    continue
 
-            # Find the outlet and its primary contact
-            cursor.execute("""
-                SELECT o.id as outlet_id, o.name, c.id as contact_id, c.name as contact_name, c.email
-                FROM ehc_outlet o
-                JOIN ehc_contact_outlet co ON co.outlet_id = o.id AND co.is_primary = true
-                JOIN ehc_contact c ON c.id = co.contact_id AND c.is_active = true
-                WHERE o.organization_id = %s AND o.name = %s AND o.is_active = true
-            """, (org_id, form_link['outlet_name']))
+                # Find the outlet and its contacts (primary, or all if include_secondary)
+                if request.include_secondary:
+                    # Get all contacts for this outlet
+                    cursor.execute("""
+                        SELECT o.id as outlet_id, o.name, c.id as contact_id, c.name as contact_name,
+                               c.email, co.is_primary
+                        FROM ehc_outlet o
+                        JOIN ehc_contact_outlet co ON co.outlet_id = o.id
+                        JOIN ehc_contact c ON c.id = co.contact_id AND c.is_active = true
+                        WHERE o.organization_id = %s AND o.name = %s AND o.is_active = true
+                        ORDER BY co.is_primary DESC, c.name
+                    """, (org_id, form_link['outlet_name']))
+                else:
+                    # Get only primary contact
+                    cursor.execute("""
+                        SELECT o.id as outlet_id, o.name, c.id as contact_id, c.name as contact_name,
+                               c.email, co.is_primary
+                        FROM ehc_outlet o
+                        JOIN ehc_contact_outlet co ON co.outlet_id = o.id AND co.is_primary = true
+                        JOIN ehc_contact c ON c.id = co.contact_id AND c.is_active = true
+                        WHERE o.organization_id = %s AND o.name = %s AND o.is_active = true
+                    """, (org_id, form_link['outlet_name']))
 
-            contact_row = dict_from_row(cursor.fetchone())
-            if not contact_row:
-                results.append({
-                    "form_link_id": form_link_id,
-                    "outlet_name": form_link['outlet_name'],
-                    "success": False,
-                    "error": f"No primary contact found for outlet '{form_link['outlet_name']}'"
-                })
-                continue
+                contact_rows = dicts_from_rows(cursor.fetchall())
+                if not contact_rows:
+                    results.append({
+                        "form_link_id": form_link_id,
+                        "outlet_name": form_link['outlet_name'],
+                        "success": False,
+                        "error": f"No contacts found for outlet '{form_link['outlet_name']}'"
+                    })
+                    continue
 
-            # Build form URL
-            # Use production URL if available, otherwise dev
-            base_url = os.getenv("FRONTEND_URL", "https://www.restaurantek.io")
-            form_url = f"{base_url}/ehc/form/{form_link['token']}"
+                # Build form URL
+                base_url = os.getenv("FRONTEND_URL", "https://www.restaurantek.io")
+                form_url = f"{base_url}/ehc/form/{form_link['token']}"
 
-            # Generate QR code if requested
-            qr_base64 = None
-            if request.include_qr and form_link.get('token'):
-                qr_base64 = generate_form_qr(form_link['token'])
+                # Generate QR code if requested (once per form link)
+                qr_base64 = None
+                if request.include_qr and form_link.get('token'):
+                    qr_base64 = generate_form_qr(form_link['token'])
 
-            # Send the email
-            form_name = form_link.get('template_name') or "EHC Form"
-            email_result = send_form_qr_email(
-                to_email=contact_row['email'],
-                to_name=contact_row['contact_name'],
-                outlet_name=form_link['outlet_name'],
-                form_name=form_name,
-                period_label=form_link['period_label'] or "",
-                form_url=form_url,
-                qr_image_base64=qr_base64,
-                custom_message=request.custom_message
-            )
+                form_name = form_link.get('template_name') or "EHC Form"
 
-            # Log the email
-            status = "sent" if email_result["success"] else "failed"
-            cursor.execute("""
-                INSERT INTO ehc_email_log
-                    (organization_id, contact_id, email_to, email_to_name, email_subject,
-                     email_type, form_link_id, outlet_id, resend_id, status, error_message,
-                     sent_by_user_id)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                RETURNING id
-            """, (
-                org_id, contact_row['contact_id'], contact_row['email'],
-                contact_row['contact_name'],
-                f"EHC Form: {form_name} - {form_link['outlet_name']} ({form_link['period_label']})",
-                "form_qr", form_link_id, contact_row['outlet_id'],
-                email_result.get("resend_id"), status, email_result.get("error"),
-                current_user["id"]
-            ))
+                # Send email to each contact
+                for contact_row in contact_rows:
+                    email_result = send_form_qr_email(
+                        to_email=contact_row['email'],
+                        to_name=contact_row['contact_name'],
+                        outlet_name=form_link['outlet_name'],
+                        form_name=form_name,
+                        period_label=form_link['period_label'] or "",
+                        form_url=form_url,
+                        qr_image_base64=qr_base64,
+                        custom_message=request.custom_message
+                    )
 
-            results.append({
-                "form_link_id": form_link_id,
-                "outlet_name": form_link['outlet_name'],
-                "contact_name": contact_row['contact_name'],
-                "contact_email": contact_row['email'],
-                "success": email_result["success"],
-                "error": email_result.get("error"),
-                "resend_id": email_result.get("resend_id")
-            })
+                    # Log the email
+                    status = "sent" if email_result["success"] else "failed"
+                    cursor.execute("""
+                        INSERT INTO ehc_email_log
+                            (organization_id, contact_id, email_to, email_to_name, email_subject,
+                             email_type, form_link_id, outlet_id, resend_id, status, error_message,
+                             sent_by_user_id)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        RETURNING id
+                    """, (
+                        org_id, contact_row['contact_id'], contact_row['email'],
+                        contact_row['contact_name'],
+                        f"EHC Form: {form_name} - {form_link['outlet_name']} ({form_link['period_label']})",
+                        "form_qr", form_link_id, contact_row['outlet_id'],
+                        email_result.get("resend_id"), status, email_result.get("error"),
+                        current_user["id"]
+                    ))
 
-            conn.commit()
+                    is_primary = contact_row.get('is_primary', True)
+                    results.append({
+                        "form_link_id": form_link_id,
+                        "outlet_name": form_link['outlet_name'],
+                        "contact_name": contact_row['contact_name'],
+                        "contact_email": contact_row['email'],
+                        "is_primary": is_primary,
+                        "success": email_result["success"],
+                        "error": email_result.get("error"),
+                        "resend_id": email_result.get("resend_id")
+                    })
 
-        # Summary
-        successful = sum(1 for r in results if r["success"])
-        failed = len(results) - successful
+                conn.commit()
 
-        return {
-            "results": results,
-            "summary": {
-                "total": len(results),
-                "successful": successful,
-                "failed": failed
+            # Summary
+            successful = sum(1 for r in results if r["success"])
+            failed = len(results) - successful
+
+            return {
+                "results": results,
+                "summary": {
+                    "total": len(results),
+                    "successful": successful,
+                    "failed": failed
+                }
             }
-        }
     except Exception as e:
         print(f"[send_form_link_emails] Error: {e}")
         print(traceback.format_exc())

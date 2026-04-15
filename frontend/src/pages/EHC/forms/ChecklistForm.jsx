@@ -39,6 +39,16 @@ export default function ChecklistForm({
   const requireCorrectiveActions = config?.corrective_actions !== false;
   const documentPath = config?.document_path;
 
+  // Helper: Check if answer is non-compliant (doesn't match expected_answer, default "Y")
+  const isNonCompliant = (item, answer) => {
+    if (!answer) return false;
+    const expected = item.expected_answer || 'Y';
+    return answer !== expected;
+  };
+
+  // Get item by question number
+  const getItem = (questionNum) => items.find(i => String(i.number) === String(questionNum));
+
   // Check if form already has a response (checklist forms are one-per-outlet)
   const alreadySubmitted = existingResponses.length > 0;
   const existingResponse = existingResponses[0];
@@ -48,13 +58,16 @@ export default function ChecklistForm({
   const totalQuestions = items.length;
   const progress = totalQuestions > 0 ? (answeredCount / totalQuestions) * 100 : 0;
 
-  // Count N answers that need corrective action
+  // Count non-compliant answers that need corrective action
   const nAnswersNeedingAction = useMemo(() => {
     if (!requireCorrectiveActions) return [];
     return Object.entries(answers)
-      .filter(([_, data]) => data.answer === 'N' && !data.action?.trim())
+      .filter(([num, data]) => {
+        const item = getItem(num);
+        return item && isNonCompliant(item, data.answer) && !data.action?.trim();
+      })
       .map(([num]) => num);
-  }, [answers, requireCorrectiveActions]);
+  }, [answers, requireCorrectiveActions, items]);
 
   // Check if ready to sign
   const allAnswered = answeredCount === totalQuestions;
@@ -71,10 +84,11 @@ export default function ChecklistForm({
       }
     }));
 
-    // If answering N and corrective actions required, expand the question
-    if (answer === 'N' && requireCorrectiveActions) {
+    // If answering non-compliant and corrective actions required, expand the question
+    const item = getItem(questionNum);
+    if (item && isNonCompliant(item, answer) && requireCorrectiveActions) {
       setExpandedQuestion(questionNum);
-    } else if (answer === 'Y' && expandedQuestion === questionNum) {
+    } else if (item && !isNonCompliant(item, answer) && expandedQuestion === questionNum) {
       setExpandedQuestion(null);
     }
   };
@@ -117,8 +131,15 @@ export default function ChecklistForm({
   // If already submitted, show read-only view
   if (alreadySubmitted && existingResponse) {
     const submittedAnswers = existingResponse.response_data?.answers || {};
-    const yesCount = Object.values(submittedAnswers).filter(a => a.answer === 'Y').length;
-    const noCount = Object.values(submittedAnswers).filter(a => a.answer === 'N').length;
+    // Count compliant vs non-compliant based on expected_answer
+    const compliantCount = items.filter(item => {
+      const answer = submittedAnswers[item.number]?.answer;
+      return answer && !isNonCompliant(item, answer);
+    }).length;
+    const nonCompliantCount = items.filter(item => {
+      const answer = submittedAnswers[item.number]?.answer;
+      return answer && isNonCompliant(item, answer);
+    }).length;
 
     return (
       <div className="checklist-form completed">
@@ -143,12 +164,12 @@ export default function ChecklistForm({
         {/* Summary */}
         <div className="results-summary">
           <div className="result-stat yes">
-            <span className="stat-value">{yesCount}</span>
-            <span className="stat-label">Yes</span>
+            <span className="stat-value">{compliantCount}</span>
+            <span className="stat-label">Compliant</span>
           </div>
           <div className="result-stat no">
-            <span className="stat-value">{noCount}</span>
-            <span className="stat-label">No</span>
+            <span className="stat-value">{nonCompliantCount}</span>
+            <span className="stat-label">Non-Compliant</span>
           </div>
           <div className="result-stat total">
             <span className="stat-value">{items.length}</span>
@@ -156,11 +177,11 @@ export default function ChecklistForm({
           </div>
         </div>
 
-        {/* Show N answers with corrective actions */}
-        {noCount > 0 && (
+        {/* Show non-compliant answers with corrective actions */}
+        {nonCompliantCount > 0 && (
           <div className="corrective-actions-summary">
-            <h3>Items Requiring Action ({noCount})</h3>
-            {items.filter(item => submittedAnswers[item.number]?.answer === 'N').map(item => {
+            <h3>Items Requiring Action ({nonCompliantCount})</h3>
+            {items.filter(item => isNonCompliant(item, submittedAnswers[item.number]?.answer)).map(item => {
               const answer = submittedAnswers[item.number];
               return (
                 <div key={item.number} className="action-item">
@@ -257,12 +278,13 @@ export default function ChecklistForm({
           const answer = answers[questionNum]?.answer;
           const isExpanded = expandedQuestion === questionNum;
           const hasAnswer = !!answer;
-          const needsAction = answer === 'N' && requireCorrectiveActions && !answers[questionNum]?.action?.trim();
+          const nonCompliant = isNonCompliant(item, answer);
+          const needsAction = nonCompliant && requireCorrectiveActions && !answers[questionNum]?.action?.trim();
 
           return (
             <div
               key={item.number}
-              className={`question-item ${hasAnswer ? 'answered' : ''} ${answer === 'N' ? 'no-answer' : ''} ${needsAction ? 'needs-action' : ''}`}
+              className={`question-item ${hasAnswer ? 'answered' : ''} ${nonCompliant ? 'no-answer' : ''} ${needsAction ? 'needs-action' : ''}`}
             >
               <div className="question-row">
                 <span className="question-number">{item.number}</span>
@@ -287,8 +309,8 @@ export default function ChecklistForm({
                 </div>
               </div>
 
-              {/* Corrective Action Section (for N answers) */}
-              {answer === 'N' && requireCorrectiveActions && (
+              {/* Corrective Action Section (for non-compliant answers) */}
+              {nonCompliant && requireCorrectiveActions && (
                 <div className="corrective-action-section">
                   <button
                     type="button"

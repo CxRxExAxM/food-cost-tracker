@@ -832,32 +832,37 @@ def generate_checklist_pdf(
     elements.append(Paragraph("Checklist Questions", styles['SectionHeader']))
 
     table_data = [['#', 'Question', 'Answer']]
-    yes_count = 0
-    no_count = 0
+    compliant_count = 0
+    non_compliant_count = 0
     corrective_actions = []
 
     for item in items:
         num = item.get('number', '')
         question = item.get('question', '')
+        expected_answer = item.get('expected_answer', 'Y')  # Default: Y is compliant
         answer_data = answers.get(str(num), {})
         answer = answer_data.get('answer', '-')
 
-        # Count Y/N
-        if answer == 'Y':
-            yes_count += 1
-            answer_display = Paragraph('<font color="#2d8653"><b>Y</b></font>', styles['ChecklistAnswer'])
-        elif answer == 'N':
-            no_count += 1
-            answer_display = Paragraph('<font color="#d32f2f"><b>N</b></font>', styles['ChecklistAnswer'])
-            # Collect corrective action
-            if answer_data.get('action') or answer_data.get('when_by') or answer_data.get('who_by'):
-                corrective_actions.append({
-                    'number': num,
-                    'question': question,
-                    'action': answer_data.get('action', ''),
-                    'when_by': answer_data.get('when_by', ''),
-                    'who_by': answer_data.get('who_by', '')
-                })
+        # Check compliance based on expected_answer
+        if answer in ('Y', 'N'):
+            is_compliant = (answer == expected_answer)
+            if is_compliant:
+                compliant_count += 1
+                # Green for compliant answer
+                answer_display = Paragraph(f'<font color="#2d8653"><b>{answer}</b></font>', styles['ChecklistAnswer'])
+            else:
+                non_compliant_count += 1
+                # Red for non-compliant answer
+                answer_display = Paragraph(f'<font color="#d32f2f"><b>{answer}</b></font>', styles['ChecklistAnswer'])
+                # Collect corrective action for non-compliant answers
+                if answer_data.get('action') or answer_data.get('when_by') or answer_data.get('who_by'):
+                    corrective_actions.append({
+                        'number': num,
+                        'question': question,
+                        'action': answer_data.get('action', ''),
+                        'when_by': answer_data.get('when_by', ''),
+                        'who_by': answer_data.get('who_by', '')
+                    })
         else:
             answer_display = Paragraph('-', styles['ChecklistAnswer'])
 
@@ -901,7 +906,7 @@ def generate_checklist_pdf(
 
     # ---- Summary Stats ----
     total_questions = len(items)
-    summary_text = f"<b>Results:</b> {yes_count} Yes &nbsp;|&nbsp; {no_count} No &nbsp;|&nbsp; {total_questions} Total"
+    summary_text = f"<b>Results:</b> {compliant_count} Compliant &nbsp;|&nbsp; {non_compliant_count} Non-Compliant &nbsp;|&nbsp; {total_questions} Total"
     elements.append(Paragraph(summary_text, styles['EHCBody']))
     elements.append(Spacer(1, 0.2*inch))
 

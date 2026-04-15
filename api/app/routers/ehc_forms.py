@@ -401,33 +401,36 @@ def submit_form_response(
                         )
 
         # Check for duplicate name (case-insensitive)
-        cursor.execute("""
-            SELECT id, submitted_at
-            FROM ehc_form_response
-            WHERE form_link_id = %s AND LOWER(TRIM(respondent_name)) = LOWER(TRIM(%s))
-        """, (form_link_id, response.respondent_name))
-
-        existing = dict_from_row(cursor.fetchone())
-
-        if existing and not force:
-            # Return 409 with info about existing response
-            submitted_at = existing['submitted_at']
-            if isinstance(submitted_at, datetime):
-                submitted_at = submitted_at.isoformat()
-            raise HTTPException(
-                status_code=409,
-                detail={
-                    "message": f"A response for '{response.respondent_name}' was already submitted",
-                    "existing_submitted_at": submitted_at,
-                    "existing_response_id": existing['id']
-                }
-            )
-
-        if existing and force:
-            # Delete existing response before inserting new one
+        # Skip duplicate check for table_signoff forms (allow multiple entries per person)
+        existing = None
+        if form_type != 'table_signoff':
             cursor.execute("""
-                DELETE FROM ehc_form_response WHERE id = %s
-            """, (existing['id'],))
+                SELECT id, submitted_at
+                FROM ehc_form_response
+                WHERE form_link_id = %s AND LOWER(TRIM(respondent_name)) = LOWER(TRIM(%s))
+            """, (form_link_id, response.respondent_name))
+
+            existing = dict_from_row(cursor.fetchone())
+
+            if existing and not force:
+                # Return 409 with info about existing response
+                submitted_at = existing['submitted_at']
+                if isinstance(submitted_at, datetime):
+                    submitted_at = submitted_at.isoformat()
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "message": f"A response for '{response.respondent_name}' was already submitted",
+                        "existing_submitted_at": submitted_at,
+                        "existing_response_id": existing['id']
+                    }
+                )
+
+            if existing and force:
+                # Delete existing response before inserting new one
+                cursor.execute("""
+                    DELETE FROM ehc_form_response WHERE id = %s
+                """, (existing['id'],))
 
         # Check flood prevention (2x expected_responses)
         if form_link.get('expected_responses'):

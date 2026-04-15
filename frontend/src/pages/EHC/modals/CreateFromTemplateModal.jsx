@@ -37,6 +37,7 @@ export default function CreateFromTemplateModal({
   // Email options
   const [emailConfigured, setEmailConfigured] = useState(false);
   const [sendEmails, setSendEmails] = useState(false);
+  const [includeSecondary, setIncludeSecondary] = useState(false);
   const [sendingEmails, setSendingEmails] = useState(false);
   const [emailResults, setEmailResults] = useState(null);
 
@@ -106,7 +107,8 @@ export default function CreateFromTemplateModal({
         method: 'POST',
         body: JSON.stringify({
           form_link_ids: formLinkIds,
-          include_qr: true
+          include_qr: true,
+          include_secondary: includeSecondary
         })
       });
       setEmailResults(response);
@@ -370,15 +372,27 @@ export default function CreateFromTemplateModal({
               {/* Email Option */}
               <div className="email-option-section">
                 {emailConfigured ? (
-                  <label className="email-checkbox">
-                    <input
-                      type="checkbox"
-                      checked={sendEmails}
-                      onChange={e => setSendEmails(e.target.checked)}
-                    />
-                    <Mail size={18} />
-                    <span>Email QR codes to primary contacts</span>
-                  </label>
+                  <>
+                    <label className="email-checkbox">
+                      <input
+                        type="checkbox"
+                        checked={sendEmails}
+                        onChange={e => setSendEmails(e.target.checked)}
+                      />
+                      <Mail size={18} />
+                      <span>Email QR codes to primary contacts</span>
+                    </label>
+                    {sendEmails && (
+                      <label className="email-checkbox secondary-option">
+                        <input
+                          type="checkbox"
+                          checked={includeSecondary}
+                          onChange={e => setIncludeSecondary(e.target.checked)}
+                        />
+                        <span>Also send to secondary contacts</span>
+                      </label>
+                    )}
+                  </>
                 ) : (
                   <div className="email-not-configured">
                     <AlertCircle size={16} />

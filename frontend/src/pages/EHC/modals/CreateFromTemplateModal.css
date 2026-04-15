@@ -602,6 +602,18 @@
   color: var(--text-primary);
 }
 
+.create-template-modal .email-checkbox.secondary-option {
+  margin-top: var(--space-2);
+  margin-left: var(--space-6);
+  padding: var(--space-3);
+  background: var(--bg-tertiary);
+}
+
+.create-template-modal .email-checkbox.secondary-option span {
+  font-weight: var(--font-weight-normal);
+  color: var(--text-secondary);
+}
+
 .create-template-modal .email-not-configured {
   display: flex;
   align-items: center;
