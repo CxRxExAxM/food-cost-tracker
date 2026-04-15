@@ -5,7 +5,7 @@
  * Kitchen staff can log cooler temps, see flags, and sign their shifts.
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   Thermometer, ChevronLeft, ChevronRight, Check, AlertTriangle,
@@ -14,6 +14,9 @@ import {
 import api from '../../lib/axios';
 import CoolerTempSection from './CoolerTempSection';
 import './DailyLog.css';
+
+// Debounce delay for auto-save (ms)
+const SAVE_DEBOUNCE_MS = 1500;
 
 export default function DailyWorkstation() {
   const { outletName, dateStr } = useParams();
@@ -25,6 +28,10 @@ export default function DailyWorkstation() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [saving, setSaving] = useState(false);
+
+  // Pending changes queue for debounced saves
+  const pendingChanges = useRef(new Map());
+  const saveTimeoutRef = useRef(null);
 
   // Parse current date
   const currentDate = new Date(dateStr + 'T00:00:00');
@@ -58,31 +65,77 @@ export default function DailyWorkstation() {
     }
   }
 
-  async function handleReadingUpdate(unitType, unitNumber, shift, updates) {
-    if (!worksheet) return;
+  // Flush all pending changes to the server
+  const flushPendingChanges = useCallback(async () => {
+    if (!worksheet || pendingChanges.current.size === 0) return;
+
+    setSaving(true);
+    const changes = Array.from(pendingChanges.current.entries());
+    pendingChanges.current.clear();
 
     try {
-      setSaving(true);
-      const response = await api.put(
-        `/daily-log/worksheet/${worksheet.id}/coolers/${unitType}/${unitNumber}/${shift}`,
-        updates
-      );
+      // Process all pending changes
+      for (const [key, { unitType, unitNumber, shift, updates }] of changes) {
+        const response = await api.put(
+          `/daily-log/worksheet/${worksheet.id}/coolers/${unitType}/${unitNumber}/${shift}`,
+          updates
+        );
 
-      // Update local state
-      setCoolerReadings(prev =>
-        prev.map(r =>
-          r.unit_type === unitType && r.unit_number === unitNumber && r.shift === shift
-            ? response.data
-            : r
-        )
-      );
+        // Update local state with server response
+        setCoolerReadings(prev =>
+          prev.map(r =>
+            r.unit_type === unitType && r.unit_number === unitNumber && r.shift === shift
+              ? response.data
+              : r
+          )
+        );
+      }
     } catch (err) {
-      console.error('Error updating reading:', err);
-      // Could show a toast here
+      console.error('Error updating readings:', err);
     } finally {
       setSaving(false);
     }
+  }, [worksheet]);
+
+  // Debounced reading update - queues changes and saves after delay
+  function handleReadingUpdate(unitType, unitNumber, shift, updates) {
+    if (!worksheet) return;
+
+    const key = `${unitType}-${unitNumber}-${shift}`;
+
+    // Immediately update local state for responsive UI
+    setCoolerReadings(prev =>
+      prev.map(r =>
+        r.unit_type === unitType && r.unit_number === unitNumber && r.shift === shift
+          ? { ...r, ...updates }
+          : r
+      )
+    );
+
+    // Merge with any pending changes for this reading
+    const existing = pendingChanges.current.get(key) || { unitType, unitNumber, shift, updates: {} };
+    pendingChanges.current.set(key, {
+      unitType,
+      unitNumber,
+      shift,
+      updates: { ...existing.updates, ...updates }
+    });
+
+    // Clear existing timeout and set new one
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+    saveTimeoutRef.current = setTimeout(flushPendingChanges, SAVE_DEBOUNCE_MS);
   }
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, []);
 
   async function handleSignShift(shift, recordedBy, signatureData) {
     if (!worksheet) return;
