@@ -898,7 +898,7 @@ def delete_cooking_record(
         if not row:
             raise HTTPException(status_code=404, detail="Record not found")
 
-        if row[0] == "approved":
+        if row["status"] == "approved":
             raise HTTPException(status_code=400, detail="Cannot delete from approved worksheet")
 
         cursor.execute("DELETE FROM cooking_record WHERE id = %s", (rec_uuid,))
@@ -936,7 +936,7 @@ def sign_cooking_records(
         if not row:
             raise HTTPException(status_code=404, detail="Worksheet not found")
 
-        if row[0] == "approved":
+        if row["status"] == "approved":
             raise HTTPException(status_code=400, detail="Cannot sign approved worksheet")
 
         cursor.execute("""
@@ -1031,7 +1031,7 @@ def create_cooling_record(
             if not row:
                 raise HTTPException(status_code=404, detail="Worksheet not found")
 
-            if row[0] == "approved":
+            if row["status"] == "approved":
                 raise HTTPException(status_code=400, detail="Cannot add to approved worksheet")
 
             cursor.execute("""
@@ -1093,7 +1093,7 @@ def update_cooling_record(
         if not row:
             raise HTTPException(status_code=404, detail="Record not found")
 
-        if row[0] == "approved":
+        if row["status"] == "approved":
             raise HTTPException(status_code=400, detail="Cannot edit approved worksheet")
 
         # Build update
@@ -1196,7 +1196,7 @@ def delete_cooling_record(
         if not row:
             raise HTTPException(status_code=404, detail="Record not found")
 
-        if row[0] == "approved":
+        if row["status"] == "approved":
             raise HTTPException(status_code=400, detail="Cannot delete from approved worksheet")
 
         cursor.execute("DELETE FROM cooling_record WHERE id = %s", (rec_uuid,))
@@ -1278,7 +1278,7 @@ def create_thawing_record(
             if not row:
                 raise HTTPException(status_code=404, detail="Worksheet not found")
 
-            if row[0] == "approved":
+            if row["status"] == "approved":
                 raise HTTPException(status_code=400, detail="Cannot add to approved worksheet")
 
             cursor.execute("""
@@ -1340,7 +1340,7 @@ def update_thawing_record(
         if not row:
             raise HTTPException(status_code=404, detail="Record not found")
 
-        if row[0] == "approved":
+        if row["status"] == "approved":
             raise HTTPException(status_code=400, detail="Cannot edit approved worksheet")
 
         # Build update
@@ -1440,7 +1440,7 @@ def delete_thawing_record(
         if not row:
             raise HTTPException(status_code=404, detail="Record not found")
 
-        if row[0] == "approved":
+        if row["status"] == "approved":
             raise HTTPException(status_code=400, detail="Cannot delete from approved worksheet")
 
         cursor.execute("DELETE FROM thawing_record WHERE id = %s", (rec_uuid,))
