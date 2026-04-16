@@ -12,6 +12,7 @@ import {
   Snowflake, Plus, Trash2, AlertTriangle, Clock
 } from 'lucide-react';
 import api from '../../lib/axios';
+import { useToast } from '../../contexts/ToastContext';
 
 const COOLING_METHODS = [
   { id: 'ambient', label: 'Ambient' },
@@ -29,6 +30,7 @@ export default function CoolingSection({
   onSavingChange
 }) {
   const [newItemName, setNewItemName] = useState('');
+  const { showToast } = useToast();
 
   const isLocked = worksheet?.status === 'approved';
 
@@ -44,6 +46,7 @@ export default function CoolingSection({
       setNewItemName('');
     } catch (err) {
       console.error('Error adding cooling record:', err);
+      showToast(err.response?.data?.detail || 'Failed to add cooling record', 'error');
     } finally {
       onSavingChange(false);
     }
@@ -63,6 +66,7 @@ export default function CoolingSection({
       );
     } catch (err) {
       console.error('Error updating cooling record:', err);
+      showToast(err.response?.data?.detail || 'Failed to update', 'error');
     } finally {
       onSavingChange(false);
     }
@@ -78,6 +82,7 @@ export default function CoolingSection({
       setRecords(prev => prev.filter(r => r.id !== recordId));
     } catch (err) {
       console.error('Error deleting cooling record:', err);
+      showToast(err.response?.data?.detail || 'Failed to delete', 'error');
     } finally {
       onSavingChange(false);
     }
