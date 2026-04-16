@@ -7,12 +7,14 @@
  * - Auto-flags if temps exceed thresholds (2hr > 70°F, 6hr > 41°F)
  */
 
-import { useState } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   Snowflake, Plus, Trash2, AlertTriangle, Clock
 } from 'lucide-react';
 import api from '../../lib/axios';
 import { useToast } from '../../contexts/ToastContext';
+
+const SAVE_DEBOUNCE_MS = 1500;
 
 const COOLING_METHODS = [
   { id: 'ambient', label: 'Ambient' },
@@ -31,6 +33,10 @@ export default function CoolingSection({
 }) {
   const [newItemName, setNewItemName] = useState('');
   const toast = useToast();
+
+  // Debounce state for auto-save
+  const pendingChanges = useRef(new Map());
+  const saveTimeoutRef = useRef(null);
 
   const isLocked = worksheet?.status === 'approved';
 
@@ -53,24 +59,58 @@ export default function CoolingSection({
     }
   }
 
-  async function updateRecord(recordId, updates) {
-    if (!worksheet || isLocked) return;
+  // Flush pending changes to server
+  const flushPendingChanges = useCallback(async () => {
+    if (!worksheet || pendingChanges.current.size === 0) return;
+
+    onSavingChange(true);
+    const changes = Array.from(pendingChanges.current.entries());
+    pendingChanges.current.clear();
 
     try {
-      onSavingChange(true);
-      const response = await api.put(
-        `/daily-log/worksheet/${worksheet.id}/cooling/${recordId}`,
-        updates
-      );
-      setRecords(prev =>
-        prev.map(r => r.id === recordId ? response.data : r)
-      );
+      for (const [recordId, updates] of changes) {
+        const response = await api.put(
+          `/daily-log/worksheet/${worksheet.id}/cooling/${recordId}`,
+          updates
+        );
+        setRecords(prev =>
+          prev.map(r => r.id === recordId ? response.data : r)
+        );
+      }
     } catch (err) {
       console.error('Error updating cooling record:', err);
       toast.error(err.response?.data?.detail || 'Failed to update');
     } finally {
       onSavingChange(false);
     }
+  }, [worksheet, setRecords, onSavingChange, toast]);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  function updateRecord(recordId, updates) {
+    if (!worksheet || isLocked) return;
+
+    // Immediately update local state for responsive UI
+    setRecords(prev =>
+      prev.map(r => r.id === recordId ? { ...r, ...updates } : r)
+    );
+
+    // Merge with any pending changes for this record
+    const existing = pendingChanges.current.get(recordId) || {};
+    pendingChanges.current.set(recordId, { ...existing, ...updates });
+
+    // Clear existing timeout and set new one
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+    saveTimeoutRef.current = setTimeout(flushPendingChanges, SAVE_DEBOUNCE_MS);
   }
 
   async function deleteRecord(recordId) {
