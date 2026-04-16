@@ -239,47 +239,59 @@ def get_or_create_worksheet(
 
         cooler_readings = dicts_from_rows(cursor.fetchall())
 
-        # Get cooking records
-        cursor.execute("""
-            SELECT id, meal_period, entry_type, slot_number,
-                   item_name, temperature_f, time_recorded,
-                   is_flagged, corrective_action, alice_ticket,
-                   recorded_by, signature_data, recorded_at,
-                   created_at, updated_at
-            FROM cooking_record
-            WHERE worksheet_id = %s
-            ORDER BY meal_period, entry_type, slot_number
-        """, (worksheet["id"],))
-
-        cooking_records = dicts_from_rows(cursor.fetchall())
+        # Get cooking records (table may not exist if migration 044 hasn't run)
+        cooking_records = []
+        try:
+            cursor.execute("""
+                SELECT id, meal_period, entry_type, slot_number,
+                       item_name, temperature_f, time_recorded,
+                       is_flagged, corrective_action, alice_ticket,
+                       recorded_by, signature_data, recorded_at,
+                       created_at, updated_at
+                FROM cooking_record
+                WHERE worksheet_id = %s
+                ORDER BY meal_period, entry_type, slot_number
+            """, (worksheet["id"],))
+            cooking_records = dicts_from_rows(cursor.fetchall())
+        except Exception as e:
+            print(f"Warning: Could not fetch cooking_records: {e}")
+            conn.rollback()
 
         # Get cooling records
-        cursor.execute("""
-            SELECT id, item_name, start_time, end_time,
-                   temp_2hr_f, temp_6hr_f, method,
-                   is_flagged, corrective_action, alice_ticket,
-                   recorded_by, signature_data, recorded_at,
-                   created_at, updated_at
-            FROM cooling_record
-            WHERE worksheet_id = %s
-            ORDER BY created_at
-        """, (worksheet["id"],))
-
-        cooling_records = dicts_from_rows(cursor.fetchall())
+        cooling_records = []
+        try:
+            cursor.execute("""
+                SELECT id, item_name, start_time, end_time,
+                       temp_2hr_f, temp_6hr_f, method,
+                       is_flagged, corrective_action, alice_ticket,
+                       recorded_by, signature_data, recorded_at,
+                       created_at, updated_at
+                FROM cooling_record
+                WHERE worksheet_id = %s
+                ORDER BY created_at
+            """, (worksheet["id"],))
+            cooling_records = dicts_from_rows(cursor.fetchall())
+        except Exception as e:
+            print(f"Warning: Could not fetch cooling_records: {e}")
+            conn.rollback()
 
         # Get thawing records
-        cursor.execute("""
-            SELECT id, item_name, start_time,
-                   finish_date, finish_time, finish_temp_f, method,
-                   is_flagged, corrective_action, alice_ticket,
-                   recorded_by, signature_data, recorded_at,
-                   created_at, updated_at
-            FROM thawing_record
-            WHERE worksheet_id = %s
-            ORDER BY created_at
-        """, (worksheet["id"],))
-
-        thawing_records = dicts_from_rows(cursor.fetchall())
+        thawing_records = []
+        try:
+            cursor.execute("""
+                SELECT id, item_name, start_time,
+                       finish_date, finish_time, finish_temp_f, method,
+                       is_flagged, corrective_action, alice_ticket,
+                       recorded_by, signature_data, recorded_at,
+                       created_at, updated_at
+                FROM thawing_record
+                WHERE worksheet_id = %s
+                ORDER BY created_at
+            """, (worksheet["id"],))
+            thawing_records = dicts_from_rows(cursor.fetchall())
+        except Exception as e:
+            print(f"Warning: Could not fetch thawing_records: {e}")
+            conn.rollback()
 
         # Convert UUID to string for JSON serialization
         worksheet["id"] = str(worksheet["id"])
@@ -669,75 +681,86 @@ def create_cooking_record(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid worksheet ID")
 
-    with get_db() as conn:
-        cursor = conn.cursor()
+    try:
+        with get_db() as conn:
+            cursor = conn.cursor()
 
-        # Verify worksheet ownership and get thresholds
-        cursor.execute("""
-            SELECT dw.id, dw.status,
-                   o.cook_min_f, o.reheat_min_f, o.hot_hold_min_f, o.cold_hold_max_f
-            FROM daily_worksheet dw
-            JOIN ehc_outlet o ON o.organization_id = dw.organization_id
-                              AND o.name = dw.outlet_name
-            WHERE dw.id = %s AND dw.organization_id = %s
-        """, (ws_uuid, org_id))
+            # Verify worksheet ownership and get thresholds
+            cursor.execute("""
+                SELECT dw.id, dw.status,
+                       o.cook_min_f, o.reheat_min_f, o.hot_hold_min_f, o.cold_hold_max_f
+                FROM daily_worksheet dw
+                JOIN ehc_outlet o ON o.organization_id = dw.organization_id
+                                  AND o.name = dw.outlet_name
+                WHERE dw.id = %s AND dw.organization_id = %s
+            """, (ws_uuid, org_id))
 
-        ws_data = dict_from_row(cursor.fetchone())
-        if not ws_data:
-            raise HTTPException(status_code=404, detail="Worksheet not found")
+            ws_data = dict_from_row(cursor.fetchone())
+            if not ws_data:
+                raise HTTPException(status_code=404, detail="Worksheet not found")
 
-        if ws_data["status"] == "approved":
-            raise HTTPException(status_code=400, detail="Cannot add to approved worksheet")
+            if ws_data["status"] == "approved":
+                raise HTTPException(status_code=400, detail="Cannot add to approved worksheet")
 
-        # Get next slot number
-        cursor.execute("""
-            SELECT COALESCE(MAX(slot_number), 0) + 1
-            FROM cooking_record
-            WHERE worksheet_id = %s AND meal_period = %s AND entry_type = %s
-        """, (ws_uuid, record.meal_period, record.entry_type))
-        slot_number = cursor.fetchone()[0]
+            # Get next slot number
+            cursor.execute("""
+                SELECT COALESCE(MAX(slot_number), 0) + 1
+                FROM cooking_record
+                WHERE worksheet_id = %s AND meal_period = %s AND entry_type = %s
+            """, (ws_uuid, record.meal_period, record.entry_type))
+            slot_number = cursor.fetchone()[0]
 
-        # Check flagging based on entry type
-        is_flagged = False
-        if record.temperature_f is not None:
-            temp = float(record.temperature_f)
-            if record.entry_type == "cook" and ws_data["cook_min_f"]:
-                is_flagged = temp < float(ws_data["cook_min_f"])
-            elif record.entry_type == "reheat" and ws_data["reheat_min_f"]:
-                is_flagged = temp < float(ws_data["reheat_min_f"])
-            elif record.entry_type == "hot_hold" and ws_data["hot_hold_min_f"]:
-                is_flagged = temp < float(ws_data["hot_hold_min_f"])
-            elif record.entry_type == "cold_hold" and ws_data["cold_hold_max_f"]:
-                is_flagged = temp > float(ws_data["cold_hold_max_f"])
+            # Check flagging based on entry type
+            is_flagged = False
+            if record.temperature_f is not None:
+                temp = float(record.temperature_f)
+                if record.entry_type == "cook" and ws_data["cook_min_f"]:
+                    is_flagged = temp < float(ws_data["cook_min_f"])
+                elif record.entry_type == "reheat" and ws_data["reheat_min_f"]:
+                    is_flagged = temp < float(ws_data["reheat_min_f"])
+                elif record.entry_type == "hot_hold" and ws_data["hot_hold_min_f"]:
+                    is_flagged = temp < float(ws_data["hot_hold_min_f"])
+                elif record.entry_type == "cold_hold" and ws_data["cold_hold_max_f"]:
+                    is_flagged = temp > float(ws_data["cold_hold_max_f"])
 
-        # Parse time if provided
-        time_val = None
-        if record.time_recorded:
-            try:
-                time_val = datetime.strptime(record.time_recorded, "%H:%M").time()
-            except ValueError:
-                raise HTTPException(status_code=400, detail="time_recorded must be HH:MM format")
+            # Parse time if provided
+            time_val = None
+            if record.time_recorded:
+                try:
+                    time_val = datetime.strptime(record.time_recorded, "%H:%M").time()
+                except ValueError:
+                    raise HTTPException(status_code=400, detail="time_recorded must be HH:MM format")
 
-        cursor.execute("""
-            INSERT INTO cooking_record (
-                worksheet_id, meal_period, entry_type, slot_number,
-                item_name, temperature_f, time_recorded, is_flagged,
-                recorded_by, recorded_at
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
-            RETURNING id, meal_period, entry_type, slot_number,
-                      item_name, temperature_f, time_recorded,
-                      is_flagged, corrective_action, alice_ticket,
-                      recorded_by, signature_data, recorded_at,
-                      created_at, updated_at
-        """, (ws_uuid, record.meal_period, record.entry_type, slot_number,
-              record.item_name, record.temperature_f, time_val, is_flagged,
-              record.recorded_by))
+            cursor.execute("""
+                INSERT INTO cooking_record (
+                    worksheet_id, meal_period, entry_type, slot_number,
+                    item_name, temperature_f, time_recorded, is_flagged,
+                    recorded_by, recorded_at
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                RETURNING id, meal_period, entry_type, slot_number,
+                          item_name, temperature_f, time_recorded,
+                          is_flagged, corrective_action, alice_ticket,
+                          recorded_by, signature_data, recorded_at,
+                          created_at, updated_at
+            """, (ws_uuid, record.meal_period, record.entry_type, slot_number,
+                  record.item_name, record.temperature_f, time_val, is_flagged,
+                  record.recorded_by))
 
-        result = dict_from_row(cursor.fetchone())
-        conn.commit()
+            result = dict_from_row(cursor.fetchone())
+            conn.commit()
 
-        result["id"] = str(result["id"])
-        return result
+            result["id"] = str(result["id"])
+            return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        print(f"Error in create_cooking_record: {e}")
+        print(traceback.format_exc())
+        raise HTTPException(
+            status_code=500,
+            detail=f"Database error: {str(e)}. If table doesn't exist, migration 044 may not have run."
+        )
 
 
 @router.put("/worksheet/{worksheet_id}/cooking/{record_id}")
@@ -995,38 +1018,49 @@ def create_cooling_record(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid worksheet ID")
 
-    with get_db() as conn:
-        cursor = conn.cursor()
+    try:
+        with get_db() as conn:
+            cursor = conn.cursor()
 
-        cursor.execute("""
-            SELECT status FROM daily_worksheet
-            WHERE id = %s AND organization_id = %s
-        """, (ws_uuid, org_id))
+            cursor.execute("""
+                SELECT status FROM daily_worksheet
+                WHERE id = %s AND organization_id = %s
+            """, (ws_uuid, org_id))
 
-        row = cursor.fetchone()
-        if not row:
-            raise HTTPException(status_code=404, detail="Worksheet not found")
+            row = cursor.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Worksheet not found")
 
-        if row[0] == "approved":
-            raise HTTPException(status_code=400, detail="Cannot add to approved worksheet")
+            if row[0] == "approved":
+                raise HTTPException(status_code=400, detail="Cannot add to approved worksheet")
 
-        cursor.execute("""
-            INSERT INTO cooling_record (
-                worksheet_id, item_name, method, recorded_by,
-                start_time, recorded_at
-            ) VALUES (%s, %s, %s, %s, NOW(), NOW())
-            RETURNING id, item_name, start_time, end_time,
-                      temp_2hr_f, temp_6hr_f, method,
-                      is_flagged, corrective_action, alice_ticket,
-                      recorded_by, signature_data, recorded_at,
-                      created_at, updated_at
-        """, (ws_uuid, record.item_name, record.method, record.recorded_by))
+            cursor.execute("""
+                INSERT INTO cooling_record (
+                    worksheet_id, item_name, method, recorded_by,
+                    start_time, recorded_at
+                ) VALUES (%s, %s, %s, %s, NOW(), NOW())
+                RETURNING id, item_name, start_time, end_time,
+                          temp_2hr_f, temp_6hr_f, method,
+                          is_flagged, corrective_action, alice_ticket,
+                          recorded_by, signature_data, recorded_at,
+                          created_at, updated_at
+            """, (ws_uuid, record.item_name, record.method, record.recorded_by))
 
-        result = dict_from_row(cursor.fetchone())
-        conn.commit()
+            result = dict_from_row(cursor.fetchone())
+            conn.commit()
 
-        result["id"] = str(result["id"])
-        return result
+            result["id"] = str(result["id"])
+            return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        print(f"Error in create_cooling_record: {e}")
+        print(traceback.format_exc())
+        raise HTTPException(
+            status_code=500,
+            detail=f"Database error: {str(e)}. If table doesn't exist, migration 044 may not have run."
+        )
 
 
 @router.put("/worksheet/{worksheet_id}/cooling/{record_id}")
@@ -1231,38 +1265,49 @@ def create_thawing_record(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid worksheet ID")
 
-    with get_db() as conn:
-        cursor = conn.cursor()
+    try:
+        with get_db() as conn:
+            cursor = conn.cursor()
 
-        cursor.execute("""
-            SELECT status FROM daily_worksheet
-            WHERE id = %s AND organization_id = %s
-        """, (ws_uuid, org_id))
+            cursor.execute("""
+                SELECT status FROM daily_worksheet
+                WHERE id = %s AND organization_id = %s
+            """, (ws_uuid, org_id))
 
-        row = cursor.fetchone()
-        if not row:
-            raise HTTPException(status_code=404, detail="Worksheet not found")
+            row = cursor.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Worksheet not found")
 
-        if row[0] == "approved":
-            raise HTTPException(status_code=400, detail="Cannot add to approved worksheet")
+            if row[0] == "approved":
+                raise HTTPException(status_code=400, detail="Cannot add to approved worksheet")
 
-        cursor.execute("""
-            INSERT INTO thawing_record (
-                worksheet_id, item_name, method, recorded_by,
-                start_time, recorded_at
-            ) VALUES (%s, %s, %s, %s, NOW(), NOW())
-            RETURNING id, item_name, start_time,
-                      finish_date, finish_time, finish_temp_f, method,
-                      is_flagged, corrective_action, alice_ticket,
-                      recorded_by, signature_data, recorded_at,
-                      created_at, updated_at
-        """, (ws_uuid, record.item_name, record.method, record.recorded_by))
+            cursor.execute("""
+                INSERT INTO thawing_record (
+                    worksheet_id, item_name, method, recorded_by,
+                    start_time, recorded_at
+                ) VALUES (%s, %s, %s, %s, NOW(), NOW())
+                RETURNING id, item_name, start_time,
+                          finish_date, finish_time, finish_temp_f, method,
+                          is_flagged, corrective_action, alice_ticket,
+                          recorded_by, signature_data, recorded_at,
+                          created_at, updated_at
+            """, (ws_uuid, record.item_name, record.method, record.recorded_by))
 
-        result = dict_from_row(cursor.fetchone())
-        conn.commit()
+            result = dict_from_row(cursor.fetchone())
+            conn.commit()
 
-        result["id"] = str(result["id"])
-        return result
+            result["id"] = str(result["id"])
+            return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        print(f"Error in create_thawing_record: {e}")
+        print(traceback.format_exc())
+        raise HTTPException(
+            status_code=500,
+            detail=f"Database error: {str(e)}. If table doesn't exist, migration 044 may not have run."
+        )
 
 
 @router.put("/worksheet/{worksheet_id}/thawing/{record_id}")
