@@ -35,7 +35,7 @@ export default function CookReheatSection({
   const [signerName, setSignerName] = useState('');
   const [addingTo, setAddingTo] = useState(null); // { mealPeriod, entryType }
   const sigPadRef = useRef(null);
-  const { showToast } = useToast();
+  const toast = useToast();
 
   const isLocked = worksheet?.status === 'approved';
 
@@ -74,7 +74,7 @@ export default function CookReheatSection({
       setAddingTo(null);
     } catch (err) {
       console.error('Error adding record:', err);
-      showToast(err.response?.data?.detail || 'Failed to add entry', 'error');
+      toast.error(err.response?.data?.detail || 'Failed to add entry');
     } finally {
       onSavingChange(false);
     }
@@ -94,7 +94,7 @@ export default function CookReheatSection({
       );
     } catch (err) {
       console.error('Error updating record:', err);
-      showToast(err.response?.data?.detail || 'Failed to update', 'error');
+      toast.error(err.response?.data?.detail || 'Failed to update');
     } finally {
       onSavingChange(false);
     }
@@ -110,7 +110,7 @@ export default function CookReheatSection({
       setRecords(prev => prev.filter(r => r.id !== recordId));
     } catch (err) {
       console.error('Error deleting record:', err);
-      showToast(err.response?.data?.detail || 'Failed to delete', 'error');
+      toast.error(err.response?.data?.detail || 'Failed to delete');
     } finally {
       onSavingChange(false);
     }
@@ -158,7 +158,7 @@ export default function CookReheatSection({
       setSignerName('');
     } catch (err) {
       console.error('Error signing:', err);
-      showToast(err.response?.data?.detail || 'Failed to sign', 'error');
+      toast.error(err.response?.data?.detail || 'Failed to sign');
     } finally {
       onSavingChange(false);
     }

@@ -30,7 +30,7 @@ export default function ThawingSection({
   onSavingChange
 }) {
   const [newItemName, setNewItemName] = useState('');
-  const { showToast } = useToast();
+  const toast = useToast();
 
   const isLocked = worksheet?.status === 'approved';
 
@@ -46,7 +46,7 @@ export default function ThawingSection({
       setNewItemName('');
     } catch (err) {
       console.error('Error adding thawing record:', err);
-      showToast(err.response?.data?.detail || 'Failed to add thawing record', 'error');
+      toast.error(err.response?.data?.detail || 'Failed to add thawing record');
     } finally {
       onSavingChange(false);
     }
@@ -66,7 +66,7 @@ export default function ThawingSection({
       );
     } catch (err) {
       console.error('Error updating thawing record:', err);
-      showToast(err.response?.data?.detail || 'Failed to update', 'error');
+      toast.error(err.response?.data?.detail || 'Failed to update');
     } finally {
       onSavingChange(false);
     }
@@ -82,7 +82,7 @@ export default function ThawingSection({
       setRecords(prev => prev.filter(r => r.id !== recordId));
     } catch (err) {
       console.error('Error deleting thawing record:', err);
-      showToast(err.response?.data?.detail || 'Failed to delete', 'error');
+      toast.error(err.response?.data?.detail || 'Failed to delete');
     } finally {
       onSavingChange(false);
     }

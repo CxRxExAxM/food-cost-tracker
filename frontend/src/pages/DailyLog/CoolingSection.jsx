@@ -30,7 +30,7 @@ export default function CoolingSection({
   onSavingChange
 }) {
   const [newItemName, setNewItemName] = useState('');
-  const { showToast } = useToast();
+  const toast = useToast();
 
   const isLocked = worksheet?.status === 'approved';
 
@@ -46,7 +46,7 @@ export default function CoolingSection({
       setNewItemName('');
     } catch (err) {
       console.error('Error adding cooling record:', err);
-      showToast(err.response?.data?.detail || 'Failed to add cooling record', 'error');
+      toast.error(err.response?.data?.detail || 'Failed to add cooling record');
     } finally {
       onSavingChange(false);
     }
@@ -66,7 +66,7 @@ export default function CoolingSection({
       );
     } catch (err) {
       console.error('Error updating cooling record:', err);
-      showToast(err.response?.data?.detail || 'Failed to update', 'error');
+      toast.error(err.response?.data?.detail || 'Failed to update');
     } finally {
       onSavingChange(false);
     }
@@ -82,7 +82,7 @@ export default function CoolingSection({
       setRecords(prev => prev.filter(r => r.id !== recordId));
     } catch (err) {
       console.error('Error deleting cooling record:', err);
-      showToast(err.response?.data?.detail || 'Failed to delete', 'error');
+      toast.error(err.response?.data?.detail || 'Failed to delete');
     } finally {
       onSavingChange(false);
     }
