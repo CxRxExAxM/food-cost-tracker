@@ -75,6 +75,7 @@ class CookingRecordUpdate(BaseModel):
 class CoolingRecordCreate(BaseModel):
     """Create a cooling log entry."""
     item_name: str
+    start_time: Optional[str] = None  # HH:MM format
     method: Optional[str] = None  # 'ambient' | 'blast_chill' | 'ice_bath' | 'shallow_pan'
     recorded_by: Optional[str] = None
 
@@ -82,8 +83,8 @@ class CoolingRecordCreate(BaseModel):
 class CoolingRecordUpdate(BaseModel):
     """Update a cooling record."""
     item_name: Optional[str] = None
-    start_time: Optional[datetime] = None
-    end_time: Optional[datetime] = None
+    start_time: Optional[str] = None  # HH:MM format
+    end_time: Optional[str] = None  # HH:MM format
     temp_2hr_f: Optional[Decimal] = None
     temp_6hr_f: Optional[Decimal] = None
     method: Optional[str] = None
@@ -95,6 +96,7 @@ class CoolingRecordUpdate(BaseModel):
 class ThawingRecordCreate(BaseModel):
     """Create a thawing log entry."""
     item_name: str
+    start_time: Optional[str] = None  # HH:MM format
     method: Optional[str] = None  # 'walkin' | 'running_water' | 'microwave' | 'cooking'
     recorded_by: Optional[str] = None
 
@@ -102,7 +104,7 @@ class ThawingRecordCreate(BaseModel):
 class ThawingRecordUpdate(BaseModel):
     """Update a thawing record."""
     item_name: Optional[str] = None
-    start_time: Optional[datetime] = None
+    start_time: Optional[str] = None  # HH:MM format
     finish_date: Optional[date] = None
     finish_time: Optional[str] = None  # HH:MM format
     finish_temp_f: Optional[Decimal] = None
@@ -704,11 +706,11 @@ def create_cooking_record(
 
             # Get next slot number
             cursor.execute("""
-                SELECT COALESCE(MAX(slot_number), 0) + 1
+                SELECT COALESCE(MAX(slot_number), 0) + 1 AS next_slot
                 FROM cooking_record
                 WHERE worksheet_id = %s AND meal_period = %s AND entry_type = %s
             """, (ws_uuid, record.meal_period, record.entry_type))
-            slot_number = cursor.fetchone()[0]
+            slot_number = cursor.fetchone()["next_slot"]
 
             # Check flagging based on entry type
             is_flagged = False
@@ -1034,17 +1036,25 @@ def create_cooling_record(
             if row["status"] == "approved":
                 raise HTTPException(status_code=400, detail="Cannot add to approved worksheet")
 
+            # Parse start_time if provided
+            start_time_val = None
+            if record.start_time:
+                try:
+                    start_time_val = datetime.strptime(record.start_time, "%H:%M").time()
+                except ValueError:
+                    raise HTTPException(status_code=400, detail="start_time must be HH:MM format")
+
             cursor.execute("""
                 INSERT INTO cooling_record (
                     worksheet_id, item_name, method, recorded_by,
                     start_time, recorded_at
-                ) VALUES (%s, %s, %s, %s, NOW(), NOW())
+                ) VALUES (%s, %s, %s, %s, %s, NOW())
                 RETURNING id, item_name, start_time, end_time,
                           temp_2hr_f, temp_6hr_f, method,
                           is_flagged, corrective_action, alice_ticket,
                           recorded_by, signature_data, recorded_at,
                           created_at, updated_at
-            """, (ws_uuid, record.item_name, record.method, record.recorded_by))
+            """, (ws_uuid, record.item_name, record.method, record.recorded_by, start_time_val))
 
             result = dict_from_row(cursor.fetchone())
             conn.commit()
@@ -1105,12 +1115,20 @@ def update_cooling_record(
             params.append(record.item_name)
 
         if record.start_time is not None:
-            updates.append("start_time = %s")
-            params.append(record.start_time)
+            try:
+                time_val = datetime.strptime(record.start_time, "%H:%M").time()
+                updates.append("start_time = %s")
+                params.append(time_val)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="start_time must be HH:MM format")
 
         if record.end_time is not None:
-            updates.append("end_time = %s")
-            params.append(record.end_time)
+            try:
+                time_val = datetime.strptime(record.end_time, "%H:%M").time()
+                updates.append("end_time = %s")
+                params.append(time_val)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="end_time must be HH:MM format")
 
         # Check flagging for temp thresholds
         # 2hr must be <= 70F, 6hr must be <= 41F
@@ -1281,17 +1299,25 @@ def create_thawing_record(
             if row["status"] == "approved":
                 raise HTTPException(status_code=400, detail="Cannot add to approved worksheet")
 
+            # Parse start_time if provided
+            start_time_val = None
+            if record.start_time:
+                try:
+                    start_time_val = datetime.strptime(record.start_time, "%H:%M").time()
+                except ValueError:
+                    raise HTTPException(status_code=400, detail="start_time must be HH:MM format")
+
             cursor.execute("""
                 INSERT INTO thawing_record (
                     worksheet_id, item_name, method, recorded_by,
                     start_time, recorded_at
-                ) VALUES (%s, %s, %s, %s, NOW(), NOW())
+                ) VALUES (%s, %s, %s, %s, %s, NOW())
                 RETURNING id, item_name, start_time,
                           finish_date, finish_time, finish_temp_f, method,
                           is_flagged, corrective_action, alice_ticket,
                           recorded_by, signature_data, recorded_at,
                           created_at, updated_at
-            """, (ws_uuid, record.item_name, record.method, record.recorded_by))
+            """, (ws_uuid, record.item_name, record.method, record.recorded_by, start_time_val))
 
             result = dict_from_row(cursor.fetchone())
             conn.commit()
@@ -1352,8 +1378,12 @@ def update_thawing_record(
             params.append(record.item_name)
 
         if record.start_time is not None:
-            updates.append("start_time = %s")
-            params.append(record.start_time)
+            try:
+                time_val = datetime.strptime(record.start_time, "%H:%M").time()
+                updates.append("start_time = %s")
+                params.append(time_val)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="start_time must be HH:MM format")
 
         if record.finish_date is not None:
             updates.append("finish_date = %s")

@@ -40,7 +40,8 @@ export default function CoolingSection({
     try {
       onSavingChange(true);
       const response = await api.post(`/daily-log/worksheet/${worksheet.id}/cooling`, {
-        item_name: newItemName.trim()
+        item_name: newItemName.trim(),
+        start_time: getCurrentTime()  // Pass local time instead of relying on server UTC
       });
       setRecords(prev => [...prev, response.data]);
       setNewItemName('');
@@ -92,6 +93,17 @@ export default function CoolingSection({
     if (!isoString) return '';
     const date = new Date(isoString);
     return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  function formatTimeForInput(isoString) {
+    if (!isoString) return '';
+    const date = new Date(isoString);
+    return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+  }
+
+  function getCurrentTime() {
+    const now = new Date();
+    return now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
   }
 
   return (
@@ -171,10 +183,13 @@ export default function CoolingSection({
               {/* Start Time */}
               <div className="field-group">
                 <label>Started</label>
-                <span className="time-display">
-                  <Clock size={12} />
-                  {formatTime(record.start_time) || 'Now'}
-                </span>
+                <input
+                  type="time"
+                  className="time-input"
+                  value={record.start_time ? formatTimeForInput(record.start_time) : getCurrentTime()}
+                  onChange={(e) => updateRecord(record.id, { start_time: e.target.value })}
+                  disabled={isLocked}
+                />
               </div>
 
               {/* 2hr Temp */}
