@@ -868,60 +868,6 @@ def update_worksheet_status(
         return result
 
 
-@router.get("/calendar/{outlet_name}/{year}/{month}")
-def get_monthly_calendar(
-    outlet_name: str,
-    year: int,
-    month: int,
-    current_user: dict = Depends(get_current_user)
-):
-    """
-    Get monthly calendar view with worksheet status for each day.
-    Returns status and completion info for each day.
-    """
-    org_id = current_user["organization_id"]
-
-    if month < 1 or month > 12:
-        raise HTTPException(status_code=400, detail="Invalid month")
-
-    with get_db() as conn:
-        cursor = conn.cursor()
-
-        # Get all worksheets for this outlet/month
-        cursor.execute("""
-            SELECT dw.id, dw.worksheet_date, dw.status,
-                   dw.approved_by, dw.approved_at,
-                   COUNT(cr.id) as total_readings,
-                   COUNT(cr.temperature_f) as completed_readings,
-                   SUM(CASE WHEN cr.is_flagged THEN 1 ELSE 0 END) as flagged_count,
-                   COUNT(DISTINCT CASE WHEN cr.signature_data IS NOT NULL THEN cr.shift END) as signed_shifts
-            FROM daily_worksheet dw
-            LEFT JOIN cooler_reading cr ON cr.worksheet_id = dw.id
-            WHERE dw.organization_id = %s
-              AND dw.outlet_name = %s
-              AND EXTRACT(YEAR FROM dw.worksheet_date) = %s
-              AND EXTRACT(MONTH FROM dw.worksheet_date) = %s
-            GROUP BY dw.id
-            ORDER BY dw.worksheet_date
-        """, (org_id, outlet_name, year, month))
-
-        worksheets = dicts_from_rows(cursor.fetchall())
-
-        # Convert to dict by date for easy lookup
-        calendar_data = {}
-        for ws in worksheets:
-            date_key = ws["worksheet_date"].isoformat()
-            ws["id"] = str(ws["id"])
-            calendar_data[date_key] = ws
-
-        return {
-            "outlet_name": outlet_name,
-            "year": year,
-            "month": month,
-            "days": calendar_data
-        }
-
-
 # ============================================
 # Cooking Records (Records 4 & 6)
 # ============================================
