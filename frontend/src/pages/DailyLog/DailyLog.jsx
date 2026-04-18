@@ -1,14 +1,16 @@
 /**
  * Daily Log Module - Main Entry Point
  *
- * Outlet selector for daily monitoring workstation.
- * Kitchen staff scan QR → select outlet → view today's worksheet.
+ * Two views:
+ * 1. Outlet selector - Kitchen staff scan QR → select outlet → view today's worksheet
+ * 2. Monthly calendar - Management view showing completion status across the month
  */
 
 import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Thermometer, ChevronRight, Calendar, Home } from 'lucide-react';
+import { Thermometer, ChevronRight, Calendar, Home, List } from 'lucide-react';
 import api from '../../lib/axios';
+import MonthlyCalendar from './MonthlyCalendar';
 import './DailyLog.css';
 
 export default function DailyLog() {
@@ -16,6 +18,8 @@ export default function DailyLog() {
   const [outlets, setOutlets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [view, setView] = useState('outlets'); // 'outlets' or 'calendar'
+  const [selectedOutlet, setSelectedOutlet] = useState(null);
 
   // Check for remembered outlet
   const rememberedOutlet = localStorage.getItem('dailyLogOutlet');
@@ -24,18 +28,25 @@ export default function DailyLog() {
     loadOutlets();
   }, []);
 
-  // Auto-navigate if outlet is remembered
+  // Auto-navigate if outlet is remembered (only for outlet view)
   useEffect(() => {
-    if (rememberedOutlet && outlets.length > 0) {
-      const outletExists = outlets.some(o => o.name === rememberedOutlet);
-      if (outletExists) {
+    if (rememberedOutlet && outlets.length > 0 && view === 'outlets') {
+      const outlet = outlets.find(o => o.name === rememberedOutlet);
+      if (outlet) {
         navigateToWorkstation(rememberedOutlet);
       } else {
         // Outlet no longer valid, clear it
         localStorage.removeItem('dailyLogOutlet');
       }
     }
-  }, [rememberedOutlet, outlets]);
+  }, [rememberedOutlet, outlets, view]);
+
+  // Set default selected outlet for calendar view
+  useEffect(() => {
+    if (outlets.length > 0 && !selectedOutlet) {
+      setSelectedOutlet(outlets[0]);
+    }
+  }, [outlets]);
 
   async function loadOutlets() {
     try {
@@ -118,47 +129,74 @@ export default function DailyLog() {
           <Home size={18} />
           <span>Dashboard</span>
         </Link>
-      </div>
 
-      <div className="daily-log-header">
-        <div className="header-icon">
-          <Thermometer size={32} />
-        </div>
-        <div className="header-text">
-          <h1>Daily Logs</h1>
-          <p>Select your outlet to start logging</p>
-        </div>
-      </div>
-
-      <div className="outlet-selector">
-        {outlets.map(outlet => (
+        {/* View Toggle */}
+        <div className="view-toggle">
           <button
-            key={outlet.id}
-            className="outlet-card"
-            onClick={() => handleOutletSelect(outlet)}
+            className={`toggle-btn ${view === 'outlets' ? 'active' : ''}`}
+            onClick={() => setView('outlets')}
           >
-            <div className="outlet-card-content">
-              <div className="outlet-name">{outlet.full_name || outlet.name}</div>
-              <div className="outlet-tag">{outlet.name}</div>
-              <div className="outlet-summary">{getOutletSummary(outlet)}</div>
-            </div>
-            <ChevronRight size={24} className="outlet-arrow" />
+            <List size={16} />
+            <span>Outlets</span>
           </button>
-        ))}
+          <button
+            className={`toggle-btn ${view === 'calendar' ? 'active' : ''}`}
+            onClick={() => setView('calendar')}
+          >
+            <Calendar size={16} />
+            <span>Calendar</span>
+          </button>
+        </div>
       </div>
 
-      <div className="daily-log-footer">
-        <button
-          className="btn-secondary"
-          onClick={() => {
-            localStorage.removeItem('dailyLogOutlet');
-            // Could navigate to calendar view here
-          }}
-        >
-          <Calendar size={16} />
-          View Calendar
-        </button>
-      </div>
+      {view === 'outlets' ? (
+        <>
+          <div className="daily-log-header">
+            <div className="header-icon">
+              <Thermometer size={32} />
+            </div>
+            <div className="header-text">
+              <h1>Daily Logs</h1>
+              <p>Select your outlet to start logging</p>
+            </div>
+          </div>
+
+          <div className="outlet-selector">
+            {outlets.map(outlet => (
+              <button
+                key={outlet.id}
+                className="outlet-card"
+                onClick={() => handleOutletSelect(outlet)}
+              >
+                <div className="outlet-card-content">
+                  <div className="outlet-name">{outlet.full_name || outlet.name}</div>
+                  <div className="outlet-tag">{outlet.name}</div>
+                  <div className="outlet-summary">{getOutletSummary(outlet)}</div>
+                </div>
+                <ChevronRight size={24} className="outlet-arrow" />
+              </button>
+            ))}
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="daily-log-header">
+            <div className="header-icon">
+              <Calendar size={32} />
+            </div>
+            <div className="header-text">
+              <h1>Monthly Calendar</h1>
+              <p>Track completion status across the month</p>
+            </div>
+          </div>
+
+          <MonthlyCalendar
+            outlets={outlets}
+            selectedOutlet={selectedOutlet}
+            onOutletChange={setSelectedOutlet}
+          />
+        </>
+      )}
     </div>
   );
 }
