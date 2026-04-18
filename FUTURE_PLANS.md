@@ -1,6 +1,6 @@
 # Future Plans: RestauranTek Platform
 
-**Date:** April 3, 2026
+**Date:** April 17, 2026
 **Status:** Active Development
 **Timeline:** Ongoing
 
@@ -11,13 +11,24 @@
 This document outlines the technical roadmap for RestauranTek, covering both near-term enhancements and long-term platform evolution.
 
 **Current Focus:**
-1. EHC Settings Tab - Outlets, contacts, responsibility coding
-2. AI Recipe Parser enhancements - Method step parsing
-3. Potentials Phase 2 - Group resume ingestion and daily briefs
+1. Daily Monitoring Phase 4 - Dishwasher/glasswasher logs
+2. EHC Settings Tab - Outlets, contacts, responsibility coding
+3. AI Recipe Parser enhancements - Method step parsing
+4. Potentials Phase 2 - Group resume ingestion and daily briefs
 
 ---
 
 ## Recently Completed (Reference)
+
+### Daily Monitoring Module ✅ (April 2026)
+- **Daily Worksheet System:** Per-outlet, per-day worksheets with auto-create on first access
+- **Temperature Logging:** Cooler/freezer temps (AM/PM shifts), cook/reheat temps by meal period
+- **Cooling & Thawing Logs:** Time-based tracking with 2hr/6hr temp checks, method selection
+- **Auto-Flagging:** Readings exceeding thresholds trigger inline corrective action capture
+- **Signature Collection:** Per-section, per-shift signatures with canvas capture
+- **QR Code Access:** Tokenized public URLs for kitchen staff (no login required)
+- **Monthly Calendar:** Completion status visualization with color-coded days
+- **Auto-Save Pattern:** No submit button, changes saved on field edit
 
 ### EHC Digital Forms ✅ (April 2026)
 - **Flexible Form Builder:** Configurable table sign-off forms with dynamic columns
@@ -317,6 +328,8 @@ api/app/routers/
 ### This Month (April 2026)
 - [x] EHC Digital Forms implementation ✅
 - [x] EHC Checklist Forms & Template System ✅
+- [x] Daily Monitoring Module (Phases 1-3) ✅
+- [ ] Daily Monitoring Phase 4 (dishwasher/glasswasher logs)
 - [ ] EHC Settings Tab (outlets, contacts, responsibility coding)
 - [ ] Method step parsing for AI parser
 - [ ] Group resume ingestion planning
@@ -333,6 +346,6 @@ api/app/routers/
 
 ---
 
-**Document Version:** 2.4
-**Last Updated:** April 11, 2026
-**Next Review:** After EHC Settings Tab completion
+**Document Version:** 2.5
+**Last Updated:** April 17, 2026
+**Next Review:** After Daily Monitoring Phase 4 completion

@@ -13,6 +13,18 @@ A comprehensive multi-tenant SaaS platform for F&B operations to manage food cos
 
 ### Completed Modules
 
+**Daily Monitoring Module** - ✅ Complete (April 2026)
+- Daily worksheet for equipment temperature logging (coolers, freezers)
+- Cook/reheat temperature tracking with meal period support
+- Cooling and thawing record logs with time tracking
+- Auto-flagging when readings exceed safety thresholds
+- Inline corrective action capture for flagged entries
+- Per-shift signature collection (AM/PM)
+- QR code access for kitchen staff (tokenized public URLs)
+- Monthly calendar view with completion status per day
+- Auto-save on field change (no submit button)
+- Mobile-first design for tablet/phone entry
+
 **EHC (Environmental Health Compliance)** - ✅ Complete
 - Annual audit cycle management with 6-section hierarchy
 - Three-level readiness tracking: Pre-Work, Internal Walk, Audit Walk
@@ -258,6 +270,7 @@ Clean_Invoices/
 ├── frontend/                      # React + Vite frontend
 │   ├── src/
 │   │   ├── pages/
+│   │   │   ├── DailyLog/         # Daily monitoring worksheets
 │   │   │   ├── EHC/              # Environmental Health Compliance
 │   │   │   ├── Potentials/       # F&B planning dashboard
 │   │   │   └── ...
@@ -306,21 +319,28 @@ Clean_Invoices/
 - `ehc_form_link` - Tokenized public form links with QR codes
 - `ehc_form_response` - Signatures with audit trail (IP, user agent)
 
+**Daily Monitoring:**
+- `daily_worksheet` - Per-outlet, per-day monitoring record
+- `cooler_reading` - Cooler/freezer temperature entries (AM/PM shifts)
+- `cooking_record` - Cook/reheat/holding temps by meal period
+- `cooling_record` - Cooling log with 2hr/6hr temp checks
+- `thawing_record` - Thawing log with method and finish temp
+
 ---
 
 ## Development Roadmap
 
 ### Current Priorities
+- Daily Monitoring Phase 4 (dishwasher/glasswasher logs)
 - EHC Settings Tab (outlets, contacts, responsibility coding)
-- EHC Monthly Outlet Checks workflow
 - AI Recipe Parser enhancements (method step parsing)
 - Potentials Phase 2 (group resume ingestion)
 
 ### Future Considerations
 - EHC Monthly Outlet Checks (automated email distribution)
-- HACCP & Temperature Monitoring
 - Inventory Management
 - Labor Scheduling
+- Menu Engineering
 
 See [FUTURE_PLANS.md](FUTURE_PLANS.md) for detailed roadmap.
 

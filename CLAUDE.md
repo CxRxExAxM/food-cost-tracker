@@ -632,6 +632,70 @@ import_logs          -- Track file imports and processing
 
 ---
 
+## Daily Monitoring Module
+
+### Overview
+Daily equipment monitoring and food safety logging system replacing paper "Daily Worksheets". Kitchen staff log cooler temps, cooking temps, cooling records, and thawing records throughout shifts via QR code access.
+
+### Key Components
+
+**Backend (`api/app/routers/daily_log.py`):**
+- Worksheet CRUD with auto-create on first access
+- Cooler/freezer readings with AM/PM shifts
+- Cooking records by meal period (breakfast/lunch/dinner)
+- Cooling records with 2hr/6hr temp tracking
+- Thawing records with method and finish temp
+- Public (tokenized) endpoints for QR access
+- Monthly calendar endpoint with completion status
+
+**Frontend (`frontend/src/pages/DailyLog/`):**
+- `DailyLog.jsx` - Entry point with outlet selector and calendar toggle
+- `DailyWorkstation.jsx` - Main worksheet view with tabbed sections
+- `CoolerTempSection.jsx` - Cooler/freezer temperature grid
+- `CookReheatSection.jsx` - Cook/reheat/holding temps by meal
+- `CoolingSection.jsx` - Cooling log with time tracking
+- `ThawingSection.jsx` - Thawing log entries
+- `MonthlyCalendar.jsx` - Calendar view with day status
+
+### Database Tables
+
+```sql
+daily_worksheet      -- Per-outlet, per-day record (auto-created)
+cooler_reading       -- Cooler/freezer temps with AM/PM shift, signature
+cooking_record       -- Cook/reheat/hold temps by meal period
+cooling_record       -- Cooling log with start_time, 2hr/6hr temps
+thawing_record       -- Thawing log with method, finish temp
+```
+
+### Key Patterns
+
+**Auto-Save:** No submit button. Changes save on field edit with debounce.
+
+**Tokenized Public Access:** Same pattern as EHC forms.
+- `ehc_outlet.daily_log_token` - 43-char token via `secrets.token_urlsafe(32)`
+- Public routes: `/api/daily-log/public/{token}/...`
+- QR code generation via `/api/daily-log/outlets/{name}/qr-code`
+
+**Auto-Flagging:** Readings exceeding thresholds auto-flag:
+- Coolers: > 41°F flagged
+- Freezers: > 0°F flagged
+- Cooling 2hr: > 70°F flagged
+- Cooling 6hr: > 41°F flagged
+- Thawing finish: > 41°F flagged
+
+**Completion Logic:**
+- Cooler outlets: Requires AM + PM signatures
+- Cooking outlets: Requires signature per active meal period
+- Calendar shows: complete (green), partial (blue), flagged (yellow), empty (gray)
+
+### URL Structure
+- `/daily-log` - Outlet selector (with remembered outlet auto-redirect)
+- `/daily-log?view=calendar` - Monthly calendar view
+- `/daily-log/{outlet}/{date}` - Worksheet for specific day
+- `/daily-log/public/{token}` - QR code entry point (public)
+
+---
+
 ## AI Recipe Parser
 
 ### Overview
@@ -956,5 +1020,5 @@ At the end of each session, provide:
 
 ---
 
-**Last Updated:** April 14, 2026
-**Next Review:** After next major feature completion
+**Last Updated:** April 17, 2026
+**Next Review:** After Daily Monitoring Phase 4 completion
