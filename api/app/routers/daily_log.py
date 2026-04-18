@@ -317,8 +317,9 @@ def get_monthly_calendar(
         cursor.execute("""
             SELECT id, worksheet_date, status
             FROM daily_worksheet
-            WHERE outlet_id = %s AND worksheet_date >= %s AND worksheet_date <= %s
-        """, (outlet["id"], start_date, end_date))
+            WHERE organization_id = %s AND outlet_name = %s
+              AND worksheet_date >= %s AND worksheet_date <= %s
+        """, (org_id, outlet_name, start_date, end_date))
 
         worksheets = {row["worksheet_date"]: row for row in dicts_from_rows(cursor.fetchall())}
 
