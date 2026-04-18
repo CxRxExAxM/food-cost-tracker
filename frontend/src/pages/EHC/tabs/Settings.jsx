@@ -13,6 +13,7 @@ import { useState, useEffect } from 'react';
 import {
   API_BASE,
   fetchWithAuth,
+  getAuthHeaders,
 } from './shared';
 import OutletModal from '../modals/OutletModal';
 import ContactModal from '../modals/ContactModal';
@@ -180,7 +181,12 @@ export default function Settings({ activeCycle, onCycleUpdated, toast }) {
   async function loadQrCode(outletName) {
     try {
       setLoadingQr(true);
-      const response = await fetch(`/api/daily-log/outlets/${encodeURIComponent(outletName)}/qr-code`);
+      // Need to use auth headers - this endpoint returns binary PNG, not JSON
+      const headers = getAuthHeaders();
+      delete headers['Content-Type']; // Don't set content-type for GET request
+      const response = await fetch(`/api/daily-log/outlets/${encodeURIComponent(outletName)}/qr-code`, {
+        headers
+      });
       if (!response.ok) {
         throw new Error('Failed to load QR code');
       }
