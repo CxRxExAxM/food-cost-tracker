@@ -6,8 +6,8 @@
  */
 
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Thermometer, ChevronRight, Calendar } from 'lucide-react';
+import { useNavigate, Link } from 'react-router-dom';
+import { Thermometer, ChevronRight, Calendar, Home } from 'lucide-react';
 import api from '../../lib/axios';
 import './DailyLog.css';
 
@@ -113,6 +113,13 @@ export default function DailyLog() {
 
   return (
     <div className="daily-log-page">
+      <div className="daily-log-topbar">
+        <Link to="/" className="back-to-dashboard">
+          <Home size={18} />
+          <span>Dashboard</span>
+        </Link>
+      </div>
+
       <div className="daily-log-header">
         <div className="header-icon">
           <Thermometer size={32} />

@@ -10,7 +10,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   Thermometer, ChevronLeft, ChevronRight, Check, AlertTriangle,
-  Calendar, RefreshCw, Flame, Snowflake, Wind
+  Calendar, RefreshCw, Flame, Snowflake, Wind, Home
 } from 'lucide-react';
 import api from '../../lib/axios';
 import CoolerTempSection from './CoolerTempSection';
@@ -254,10 +254,15 @@ export default function DailyWorkstation() {
     <div className="daily-workstation">
       {/* Header */}
       <div className="workstation-header">
-        <Link to="/daily-log" className="back-link">
-          <ChevronLeft size={20} />
-          <span>Change Outlet</span>
-        </Link>
+        <div className="header-nav">
+          <Link to="/" className="home-link" title="Dashboard">
+            <Home size={18} />
+          </Link>
+          <Link to="/daily-log" className="back-link">
+            <ChevronLeft size={20} />
+            <span>Change Outlet</span>
+          </Link>
+        </div>
 
         <div className="outlet-info">
           <span className="outlet-badge">{outletName}</span>
