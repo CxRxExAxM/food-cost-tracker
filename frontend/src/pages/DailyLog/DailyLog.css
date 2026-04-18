@@ -238,6 +238,24 @@
   color: var(--text-primary);
 }
 
+.calendar-link {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--color-blue-bright);
+  text-decoration: none;
+  font-size: var(--text-sm);
+  padding: var(--space-1) var(--space-2);
+  background: var(--color-blue-dim);
+  border-radius: var(--radius-md);
+  margin-left: auto;
+}
+
+.calendar-link:hover {
+  background: var(--color-blue);
+  color: white;
+}
+
 .outlet-info {
   display: flex;
   align-items: center;

@@ -260,7 +260,11 @@ export default function DailyWorkstation() {
           </Link>
           <Link to="/daily-log" className="back-link">
             <ChevronLeft size={20} />
-            <span>Change Outlet</span>
+            <span>Outlets</span>
+          </Link>
+          <Link to="/daily-log?view=calendar" className="calendar-link" title="Monthly Calendar">
+            <Calendar size={16} />
+            <span>Calendar</span>
           </Link>
         </div>
 
