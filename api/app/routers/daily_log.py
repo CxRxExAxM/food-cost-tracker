@@ -317,13 +317,13 @@ def get_monthly_calendar(
             # Get cooler reading signatures
             cooler_sigs = {}
             if has_coolers and worksheets:
-                worksheet_ids = [w["id"] for w in worksheets.values()]
+                worksheet_ids = [str(w["id"]) for w in worksheets.values()]
                 cursor.execute("""
                     SELECT cr.worksheet_id, cr.shift,
                            bool_or(cr.signature_data IS NOT NULL) as is_signed,
                            bool_or(cr.is_flagged) as has_flags
                     FROM cooler_reading cr
-                    WHERE cr.worksheet_id = ANY(%s)
+                    WHERE cr.worksheet_id = ANY(%s::uuid[])
                     GROUP BY cr.worksheet_id, cr.shift
                 """, (worksheet_ids,))
 
@@ -338,13 +338,13 @@ def get_monthly_calendar(
             # Get cooking record signatures
             cooking_sigs = {}
             if has_cooking and worksheets:
-                worksheet_ids = [w["id"] for w in worksheets.values()]
+                worksheet_ids = [str(w["id"]) for w in worksheets.values()]
                 cursor.execute("""
                     SELECT cr.worksheet_id, cr.meal_period,
                            bool_or(cr.signature_data IS NOT NULL) as is_signed,
                            bool_or(cr.is_flagged) as has_flags
                     FROM cooking_record cr
-                    WHERE cr.worksheet_id = ANY(%s)
+                    WHERE cr.worksheet_id = ANY(%s::uuid[])
                     GROUP BY cr.worksheet_id, cr.meal_period
                 """, (worksheet_ids,))
 
