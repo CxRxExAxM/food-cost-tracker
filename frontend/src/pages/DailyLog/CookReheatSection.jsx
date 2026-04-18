@@ -30,8 +30,14 @@ export default function CookReheatSection({
   outlet,
   records,
   setRecords,
-  onSavingChange
+  onSavingChange,
+  publicToken  // Token for public (QR code) access - uses public API endpoints
 }) {
+  // Build API base path - uses public endpoint when accessed via QR code
+  const apiBase = publicToken
+    ? `/daily-log/public/${publicToken}`
+    : `/daily-log/worksheet/${worksheet?.id}`;
+
   const [signingMeal, setSigningMeal] = useState(null);
   const [signerName, setSignerName] = useState('');
   const [addingTo, setAddingTo] = useState(null); // { mealPeriod, entryType }
@@ -67,11 +73,11 @@ export default function CookReheatSection({
   const minEntries = outlet?.readings_per_service || 3;
 
   async function addRecord(mealPeriod, entryType) {
-    if (!worksheet || isLocked) return;
+    if ((!worksheet && !publicToken) || isLocked) return;
 
     try {
       onSavingChange(true);
-      const response = await api.post(`/daily-log/worksheet/${worksheet.id}/cooking`, {
+      const response = await api.post(`${apiBase}/cooking`, {
         meal_period: mealPeriod,
         entry_type: entryType
       });
@@ -87,7 +93,7 @@ export default function CookReheatSection({
 
   // Flush pending changes to server
   const flushPendingChanges = useCallback(async () => {
-    if (!worksheet || pendingChanges.current.size === 0) return;
+    if ((!worksheet && !publicToken) || pendingChanges.current.size === 0) return;
 
     onSavingChange(true);
     const changes = Array.from(pendingChanges.current.entries());
@@ -96,7 +102,7 @@ export default function CookReheatSection({
     try {
       for (const [recordId, updates] of changes) {
         const response = await api.put(
-          `/daily-log/worksheet/${worksheet.id}/cooking/${recordId}`,
+          `${apiBase}/cooking/${recordId}`,
           updates
         );
         setRecords(prev =>
@@ -109,7 +115,7 @@ export default function CookReheatSection({
     } finally {
       onSavingChange(false);
     }
-  }, [worksheet, setRecords, onSavingChange, toast]);
+  }, [worksheet, publicToken, apiBase, setRecords, onSavingChange, toast]);
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -121,7 +127,7 @@ export default function CookReheatSection({
   }, []);
 
   function updateRecord(recordId, updates) {
-    if (!worksheet || isLocked) return;
+    if ((!worksheet && !publicToken) || isLocked) return;
 
     // Immediately update local state for responsive UI
     setRecords(prev =>
@@ -140,12 +146,12 @@ export default function CookReheatSection({
   }
 
   async function deleteRecord(recordId) {
-    if (!worksheet || isLocked) return;
+    if ((!worksheet && !publicToken) || isLocked) return;
     if (!confirm('Delete this entry?')) return;
 
     try {
       onSavingChange(true);
-      await api.delete(`/daily-log/worksheet/${worksheet.id}/cooking/${recordId}`);
+      await api.delete(`${apiBase}/cooking/${recordId}`);
       setRecords(prev => prev.filter(r => r.id !== recordId));
     } catch (err) {
       console.error('Error deleting record:', err);
@@ -179,7 +185,7 @@ export default function CookReheatSection({
     try {
       onSavingChange(true);
       const signatureData = sigPadRef.current.toDataURL('image/png');
-      await api.post(`/daily-log/worksheet/${worksheet.id}/cooking/sign`, {
+      await api.post(`${apiBase}/cooking/sign`, {
         meal_period: signingMeal,
         recorded_by: signerName.trim(),
         signature_data: signatureData

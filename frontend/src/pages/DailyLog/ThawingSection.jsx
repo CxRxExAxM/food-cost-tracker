@@ -29,8 +29,14 @@ export default function ThawingSection({
   outlet,
   records,
   setRecords,
-  onSavingChange
+  onSavingChange,
+  publicToken  // Token for public (QR code) access - uses public API endpoints
 }) {
+  // Build API base path - uses public endpoint when accessed via QR code
+  const apiBase = publicToken
+    ? `/daily-log/public/${publicToken}`
+    : `/daily-log/worksheet/${worksheet?.id}`;
+
   const [newItemName, setNewItemName] = useState('');
   const toast = useToast();
 
@@ -41,11 +47,11 @@ export default function ThawingSection({
   const isLocked = worksheet?.status === 'approved';
 
   async function addRecord() {
-    if (!worksheet || isLocked || !newItemName.trim()) return;
+    if ((!worksheet && !publicToken) || isLocked || !newItemName.trim()) return;
 
     try {
       onSavingChange(true);
-      const response = await api.post(`/daily-log/worksheet/${worksheet.id}/thawing`, {
+      const response = await api.post(`${apiBase}/thawing`, {
         item_name: newItemName.trim(),
         start_time: getCurrentTime()  // Pass local time instead of relying on server UTC
       });
@@ -61,7 +67,7 @@ export default function ThawingSection({
 
   // Flush pending changes to server
   const flushPendingChanges = useCallback(async () => {
-    if (!worksheet || pendingChanges.current.size === 0) return;
+    if ((!worksheet && !publicToken) || pendingChanges.current.size === 0) return;
 
     onSavingChange(true);
     const changes = Array.from(pendingChanges.current.entries());
@@ -70,7 +76,7 @@ export default function ThawingSection({
     try {
       for (const [recordId, updates] of changes) {
         const response = await api.put(
-          `/daily-log/worksheet/${worksheet.id}/thawing/${recordId}`,
+          `${apiBase}/thawing/${recordId}`,
           updates
         );
         setRecords(prev =>
@@ -83,7 +89,7 @@ export default function ThawingSection({
     } finally {
       onSavingChange(false);
     }
-  }, [worksheet, setRecords, onSavingChange, toast]);
+  }, [worksheet, publicToken, apiBase, setRecords, onSavingChange, toast]);
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -95,7 +101,7 @@ export default function ThawingSection({
   }, []);
 
   function updateRecord(recordId, updates) {
-    if (!worksheet || isLocked) return;
+    if ((!worksheet && !publicToken) || isLocked) return;
 
     // Immediately update local state for responsive UI
     setRecords(prev =>
@@ -114,12 +120,12 @@ export default function ThawingSection({
   }
 
   async function deleteRecord(recordId) {
-    if (!worksheet || isLocked) return;
+    if ((!worksheet && !publicToken) || isLocked) return;
     if (!confirm('Delete this thawing entry?')) return;
 
     try {
       onSavingChange(true);
-      await api.delete(`/daily-log/worksheet/${worksheet.id}/thawing/${recordId}`);
+      await api.delete(`${apiBase}/thawing/${recordId}`);
       setRecords(prev => prev.filter(r => r.id !== recordId));
     } catch (err) {
       console.error('Error deleting thawing record:', err);

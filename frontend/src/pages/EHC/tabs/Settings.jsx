@@ -16,7 +16,7 @@ import {
 } from './shared';
 import OutletModal from '../modals/OutletModal';
 import ContactModal from '../modals/ContactModal';
-import { X, Edit2, Plus, Mail, Check, Send, CheckCircle, AlertCircle, Clock, Thermometer } from 'lucide-react';
+import { X, Edit2, Plus, Mail, Check, Send, CheckCircle, AlertCircle, Clock, Thermometer, QrCode, Download, RefreshCw } from 'lucide-react';
 
 export default function Settings({ activeCycle, onCycleUpdated, toast }) {
   const [updating, setUpdating] = useState(false);
@@ -44,6 +44,12 @@ export default function Settings({ activeCycle, onCycleUpdated, toast }) {
   const [emailLog, setEmailLog] = useState([]);
   const [loadingEmailLog, setLoadingEmailLog] = useState(true);
   const [sendingTestEmail, setSendingTestEmail] = useState(false);
+
+  // Daily Log QR state
+  const [qrModal, setQrModal] = useState({ show: false, outlet: null });
+  const [qrData, setQrData] = useState(null);
+  const [loadingQr, setLoadingQr] = useState(false);
+  const [generatingToken, setGeneratingToken] = useState(false);
 
   const cycleStatuses = [
     { value: 'preparing', label: 'Preparing', description: 'Setting up records and collecting evidence' },
@@ -157,6 +163,81 @@ export default function Settings({ activeCycle, onCycleUpdated, toast }) {
     } finally {
       setSendingTestEmail(false);
     }
+  }
+
+  // Open QR modal for an outlet
+  async function handleShowQr(outlet) {
+    setQrModal({ show: true, outlet });
+    setQrData(null);
+
+    // Check if outlet already has a token
+    if (outlet.daily_log_token) {
+      await loadQrCode(outlet.name);
+    }
+  }
+
+  // Load existing QR code
+  async function loadQrCode(outletName) {
+    try {
+      setLoadingQr(true);
+      const response = await fetch(`/api/daily-log/outlets/${encodeURIComponent(outletName)}/qr-code`);
+      if (!response.ok) {
+        throw new Error('Failed to load QR code');
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      setQrData(url);
+    } catch (error) {
+      toast?.error?.('Failed to load QR code');
+    } finally {
+      setLoadingQr(false);
+    }
+  }
+
+  // Generate new token for outlet
+  async function handleGenerateToken() {
+    if (!qrModal.outlet) return;
+
+    try {
+      setGeneratingToken(true);
+      const result = await fetchWithAuth(`/api/daily-log/outlets/${encodeURIComponent(qrModal.outlet.name)}/generate-token`, {
+        method: 'POST'
+      });
+      toast?.success?.('Access link generated');
+      // Update modal's outlet state to reflect token exists
+      setQrModal(prev => ({
+        ...prev,
+        outlet: { ...prev.outlet, daily_log_token: result.token }
+      }));
+      // Reload outlet data and QR code
+      await loadOutlets();
+      await loadQrCode(qrModal.outlet.name);
+    } catch (error) {
+      toast?.error?.(error.message || 'Failed to generate access link');
+    } finally {
+      setGeneratingToken(false);
+    }
+  }
+
+  // Download QR code image
+  function handleDownloadQr() {
+    if (!qrData || !qrModal.outlet) return;
+
+    const link = document.createElement('a');
+    link.href = qrData;
+    link.download = `daily-log-qr-${qrModal.outlet.name}.png`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+
+  // Close QR modal and cleanup
+  function closeQrModal() {
+    if (qrData) {
+      URL.revokeObjectURL(qrData);
+    }
+    setQrModal({ show: false, outlet: null });
+    setQrData(null);
   }
 
   async function updateCycleStatus(newStatus) {
@@ -516,6 +597,15 @@ export default function Settings({ activeCycle, onCycleUpdated, toast }) {
                           )}
                         </span>
                         <span className="col-actions">
+                          {outlet.daily_monitoring_enabled && (
+                            <button
+                              className="btn-icon"
+                              onClick={() => handleShowQr(outlet)}
+                              title="Daily Log QR Code"
+                            >
+                              <QrCode size={16} />
+                            </button>
+                          )}
                           <button
                             className="btn-icon"
                             onClick={() => setOutletModal({ show: true, outlet })}
@@ -830,6 +920,79 @@ export default function Settings({ activeCycle, onCycleUpdated, toast }) {
           onDelete={handleDeleteContact}
           onClose={() => setContactModal({ show: false, contact: null })}
         />
+      )}
+
+      {/* Daily Log QR Code Modal */}
+      {qrModal.show && (
+        <div className="modal-overlay" onClick={closeQrModal}>
+          <div className="modal-container modal-sm" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Daily Log QR Code</h2>
+              <button className="modal-close" onClick={closeQrModal}>
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="modal-body qr-modal-body">
+              <div className="qr-outlet-info">
+                <span className="outlet-tag">{qrModal.outlet?.name}</span>
+                <span className="outlet-name">{qrModal.outlet?.full_name}</span>
+              </div>
+
+              {!qrModal.outlet?.daily_log_token && !loadingQr && !generatingToken ? (
+                <div className="qr-empty-state">
+                  <QrCode size={48} className="qr-placeholder-icon" />
+                  <p>No access link generated yet.</p>
+                  <p className="text-muted">
+                    Generate a QR code so staff can access the daily log without logging in.
+                  </p>
+                  <button
+                    className="btn-primary"
+                    onClick={handleGenerateToken}
+                    disabled={generatingToken}
+                  >
+                    <QrCode size={16} />
+                    Generate QR Code
+                  </button>
+                </div>
+              ) : loadingQr || generatingToken ? (
+                <div className="qr-loading">
+                  <RefreshCw size={24} className="spinning" />
+                  <span>{generatingToken ? 'Generating...' : 'Loading...'}</span>
+                </div>
+              ) : qrData ? (
+                <div className="qr-display">
+                  <img src={qrData} alt="Daily Log QR Code" className="qr-image" />
+                  <p className="qr-instructions">
+                    Staff can scan this code to access the daily worksheet for{' '}
+                    <strong>{qrModal.outlet?.name}</strong> without logging in.
+                  </p>
+                </div>
+              ) : null}
+            </div>
+
+            {qrData && (
+              <div className="modal-footer">
+                <button
+                  className="btn-ghost"
+                  onClick={handleGenerateToken}
+                  disabled={generatingToken}
+                  title="Generate a new link (invalidates old one)"
+                >
+                  <RefreshCw size={16} />
+                  Regenerate
+                </button>
+                <button
+                  className="btn-primary"
+                  onClick={handleDownloadQr}
+                >
+                  <Download size={16} />
+                  Download
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );

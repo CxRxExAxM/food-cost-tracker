@@ -26,6 +26,7 @@ import WeighInForm from './pages/Waste/WeighInForm';
 import FormPage from './pages/EHC/forms/FormPage';
 import DailyLog from './pages/DailyLog/DailyLog';
 import DailyWorkstation from './pages/DailyLog/DailyWorkstation';
+import PublicDailyWorkstation from './pages/DailyLog/PublicDailyWorkstation';
 import ImpersonationBanner from './components/ImpersonationBanner';
 import './App.css';
 
@@ -120,6 +121,7 @@ function AppRoutes() {
       {/* Public form routes - no auth required, token provides access */}
       <Route path="/form/:token" element={<FormPage />} />
       <Route path="/waste/weigh-in/:token" element={<WeighInForm />} />
+      <Route path="/daily-log/public/:token" element={<PublicDailyWorkstation />} />
       <Route
         path="/"
         element={

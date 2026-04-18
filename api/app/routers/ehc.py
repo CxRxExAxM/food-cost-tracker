@@ -1736,7 +1736,7 @@ def get_outlets(
                    has_cooking, has_cooling, has_thawing, has_hot_buffet, has_cold_buffet,
                    serves_breakfast, serves_lunch, serves_dinner, readings_per_service,
                    cooler_max_f, freezer_max_f, cook_min_f, reheat_min_f,
-                   hot_hold_min_f, cold_hold_max_f
+                   hot_hold_min_f, cold_hold_max_f, daily_log_token
             FROM ehc_outlet
             WHERE organization_id = %s
         """

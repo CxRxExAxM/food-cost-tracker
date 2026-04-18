@@ -106,3 +106,30 @@ def generate_form_qr(token: str, box_size: int = 10) -> str:
     """
     url = generate_form_url(token)
     return generate_qr_code(url, box_size=box_size)
+
+
+def generate_daily_log_url(token: str) -> str:
+    """Generate the full URL for a daily log public access link.
+
+    Args:
+        token: The outlet's daily_log_token (43-char URL-safe string)
+
+    Returns:
+        Full URL like https://domain.com/daily-log/public/abc123...
+    """
+    base_url = get_frontend_url().rstrip("/")
+    return f"{base_url}/daily-log/public/{token}"
+
+
+def generate_daily_log_qr(token: str, box_size: int = 10) -> str:
+    """Generate QR code for daily log public access.
+
+    Args:
+        token: The outlet's daily_log_token
+        box_size: Size of each box in pixels (default 10)
+
+    Returns:
+        Base64-encoded PNG image string
+    """
+    url = generate_daily_log_url(token)
+    return generate_qr_code(url, box_size=box_size)

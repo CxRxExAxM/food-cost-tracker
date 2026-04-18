@@ -15,14 +15,17 @@ Authenticated endpoints for management:
 """
 
 from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi.responses import Response
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime, date
 from decimal import Decimal
 import uuid
+import secrets
 
 from ..database import get_db, dicts_from_rows, dict_from_row
 from ..auth import get_current_user
+from ..utils.qr_generator import generate_daily_log_url, generate_daily_log_qr, generate_qr_code_bytes
 
 
 router = APIRouter(prefix="/daily-log", tags=["daily-log"])
@@ -143,7 +146,8 @@ def list_monitoring_outlets(
                    serves_breakfast, serves_lunch, serves_dinner,
                    readings_per_service,
                    cooler_max_f, freezer_max_f, cook_min_f, reheat_min_f,
-                   hot_hold_min_f, cold_hold_max_f
+                   hot_hold_min_f, cold_hold_max_f,
+                   daily_log_token
             FROM ehc_outlet
             WHERE organization_id = %s
               AND is_active = true
@@ -153,6 +157,97 @@ def list_monitoring_outlets(
 
         outlets = dicts_from_rows(cursor.fetchall())
         return {"data": outlets, "count": len(outlets)}
+
+
+@router.post("/outlets/{outlet_name}/generate-token")
+def generate_outlet_token(
+    outlet_name: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Generate or regenerate the daily log access token for an outlet.
+    Returns the token, QR code URL, and QR code image (base64).
+    """
+    org_id = current_user["organization_id"]
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Verify outlet exists and belongs to org
+        cursor.execute("""
+            SELECT id, daily_monitoring_enabled
+            FROM ehc_outlet
+            WHERE organization_id = %s AND name = %s AND is_active = true
+        """, (org_id, outlet_name))
+
+        outlet = dict_from_row(cursor.fetchone())
+        if not outlet:
+            raise HTTPException(status_code=404, detail="Outlet not found")
+
+        if not outlet["daily_monitoring_enabled"]:
+            raise HTTPException(status_code=400, detail="Daily monitoring not enabled for this outlet")
+
+        # Generate new token
+        new_token = secrets.token_urlsafe(32)  # 43-char URL-safe token
+
+        # Update outlet with new token
+        cursor.execute("""
+            UPDATE ehc_outlet
+            SET daily_log_token = %s, updated_at = NOW()
+            WHERE id = %s
+            RETURNING daily_log_token
+        """, (new_token, outlet["id"]))
+
+        conn.commit()
+
+        # Generate QR code
+        url = generate_daily_log_url(new_token)
+        qr_base64 = generate_daily_log_qr(new_token)
+
+        return {
+            "outlet_name": outlet_name,
+            "token": new_token,
+            "url": url,
+            "qr_code": qr_base64
+        }
+
+
+@router.get("/outlets/{outlet_name}/qr-code")
+def get_outlet_qr_code(
+    outlet_name: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Get the QR code image for an outlet's daily log.
+    Returns PNG image directly.
+    """
+    org_id = current_user["organization_id"]
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT daily_log_token
+            FROM ehc_outlet
+            WHERE organization_id = %s AND name = %s
+              AND is_active = true AND daily_monitoring_enabled = true
+        """, (org_id, outlet_name))
+
+        outlet = dict_from_row(cursor.fetchone())
+        if not outlet:
+            raise HTTPException(status_code=404, detail="Outlet not found")
+
+        if not outlet["daily_log_token"]:
+            raise HTTPException(status_code=400, detail="Token not generated. Call generate-token first.")
+
+        url = generate_daily_log_url(outlet["daily_log_token"])
+        qr_bytes = generate_qr_code_bytes(url, box_size=10)
+
+        return Response(
+            content=qr_bytes,
+            media_type="image/png",
+            headers={"Content-Disposition": f"inline; filename={outlet_name}-daily-log-qr.png"}
+        )
 
 
 @router.get("/worksheet/{outlet_name}/{date_str}")
@@ -1465,6 +1560,948 @@ def delete_thawing_record(
             JOIN thawing_record tr ON tr.worksheet_id = dw.id
             WHERE dw.id = %s AND dw.organization_id = %s AND tr.id = %s
         """, (ws_uuid, org_id, rec_uuid))
+
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Record not found")
+
+        if row["status"] == "approved":
+            raise HTTPException(status_code=400, detail="Cannot delete from approved worksheet")
+
+        cursor.execute("DELETE FROM thawing_record WHERE id = %s", (rec_uuid,))
+        conn.commit()
+
+        return {"status": "ok", "deleted": record_id}
+
+
+# ============================================
+# PUBLIC ENDPOINTS (Token-based, No Auth)
+# ============================================
+# These endpoints allow kitchen staff to access daily logs
+# via QR code without logging in. Access controlled by token.
+
+def _get_outlet_by_token(cursor, token: str):
+    """Look up outlet by daily_log_token. Returns outlet dict or None."""
+    cursor.execute("""
+        SELECT id, organization_id, name, full_name, outlet_type,
+               cooler_count, freezer_count,
+               has_cooking, has_cooling, has_thawing,
+               has_hot_buffet, has_cold_buffet,
+               serves_breakfast, serves_lunch, serves_dinner,
+               readings_per_service,
+               cooler_max_f, freezer_max_f, cook_min_f, reheat_min_f,
+               hot_hold_min_f, cold_hold_max_f,
+               daily_monitoring_enabled
+        FROM ehc_outlet
+        WHERE daily_log_token = %s
+          AND is_active = true
+          AND daily_monitoring_enabled = true
+    """, (token,))
+    return dict_from_row(cursor.fetchone())
+
+
+@router.get("/public/{token}")
+def get_public_worksheet_today(token: str):
+    """
+    Get today's worksheet for public access. No authentication required.
+    Creates worksheet if it doesn't exist.
+    """
+    today = date.today()
+    return get_public_worksheet(token, today.isoformat())
+
+
+@router.get("/public/{token}/{date_str}")
+def get_public_worksheet(token: str, date_str: str):
+    """
+    Get or create a daily worksheet for public access.
+    No authentication required - uses token for access control.
+    """
+    # Parse date
+    try:
+        worksheet_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Get outlet by token
+        outlet = _get_outlet_by_token(cursor, token)
+        if not outlet:
+            raise HTTPException(status_code=404, detail="Invalid or inactive token")
+
+        org_id = outlet["organization_id"]
+        outlet_name = outlet["name"]
+
+        # Get or create worksheet
+        cursor.execute("""
+            SELECT id, outlet_name, worksheet_date, status,
+                   approved_by, approved_at, created_at, updated_at
+            FROM daily_worksheet
+            WHERE organization_id = %s
+              AND outlet_name = %s
+              AND worksheet_date = %s
+        """, (org_id, outlet_name, worksheet_date))
+
+        worksheet = dict_from_row(cursor.fetchone())
+
+        if not worksheet:
+            # Create new worksheet
+            cursor.execute("""
+                INSERT INTO daily_worksheet (organization_id, outlet_name, worksheet_date)
+                VALUES (%s, %s, %s)
+                RETURNING id, outlet_name, worksheet_date, status,
+                          approved_by, approved_at, created_at, updated_at
+            """, (org_id, outlet_name, worksheet_date))
+
+            worksheet = dict_from_row(cursor.fetchone())
+
+            # Pre-create cooler reading slots
+            _create_cooler_reading_slots(cursor, worksheet["id"], outlet)
+
+            conn.commit()
+
+        # Get all records
+        cursor.execute("""
+            SELECT id, unit_type, unit_number, shift,
+                   temperature_f, is_flagged, corrective_action,
+                   alice_ticket, recorded_by, signature_data, recorded_at,
+                   created_at, updated_at
+            FROM cooler_reading
+            WHERE worksheet_id = %s
+            ORDER BY unit_type, unit_number, shift
+        """, (worksheet["id"],))
+        cooler_readings = dicts_from_rows(cursor.fetchall())
+
+        # Get cooking records (handle missing table gracefully)
+        cooking_records = []
+        try:
+            cursor.execute("""
+                SELECT id, meal_period, entry_type, slot_number,
+                       item_name, temperature_f, time_recorded,
+                       is_flagged, corrective_action, alice_ticket,
+                       recorded_by, signature_data, recorded_at,
+                       created_at, updated_at
+                FROM cooking_record
+                WHERE worksheet_id = %s
+                ORDER BY meal_period, entry_type, slot_number
+            """, (worksheet["id"],))
+            cooking_records = dicts_from_rows(cursor.fetchall())
+        except Exception:
+            conn.rollback()
+
+        # Get cooling records
+        cooling_records = []
+        try:
+            cursor.execute("""
+                SELECT id, item_name, start_time, end_time,
+                       temp_2hr_f, temp_6hr_f, method,
+                       is_flagged, corrective_action, alice_ticket,
+                       recorded_by, signature_data, recorded_at,
+                       created_at, updated_at
+                FROM cooling_record
+                WHERE worksheet_id = %s
+                ORDER BY created_at
+            """, (worksheet["id"],))
+            cooling_records = dicts_from_rows(cursor.fetchall())
+        except Exception:
+            conn.rollback()
+
+        # Get thawing records
+        thawing_records = []
+        try:
+            cursor.execute("""
+                SELECT id, item_name, start_time,
+                       finish_date, finish_time, finish_temp_f, method,
+                       is_flagged, corrective_action, alice_ticket,
+                       recorded_by, signature_data, recorded_at,
+                       created_at, updated_at
+                FROM thawing_record
+                WHERE worksheet_id = %s
+                ORDER BY created_at
+            """, (worksheet["id"],))
+            thawing_records = dicts_from_rows(cursor.fetchall())
+        except Exception:
+            conn.rollback()
+
+        # Convert UUIDs to strings
+        worksheet["id"] = str(worksheet["id"])
+        for r in cooler_readings:
+            r["id"] = str(r["id"])
+        for r in cooking_records:
+            r["id"] = str(r["id"])
+        for r in cooling_records:
+            r["id"] = str(r["id"])
+        for r in thawing_records:
+            r["id"] = str(r["id"])
+
+        return {
+            "worksheet": worksheet,
+            "outlet": outlet,
+            "cooler_readings": cooler_readings,
+            "cooking_records": cooking_records,
+            "cooling_records": cooling_records,
+            "thawing_records": thawing_records
+        }
+
+
+@router.put("/public/{token}/coolers/{unit_type}/{unit_number}/{shift}")
+def update_public_cooler_reading(
+    token: str,
+    unit_type: str,
+    unit_number: int,
+    shift: str,
+    reading: CoolerReadingUpdate
+):
+    """Update a cooler reading via public token access."""
+    if unit_type not in ["cooler", "freezer"]:
+        raise HTTPException(status_code=400, detail="unit_type must be 'cooler' or 'freezer'")
+    if shift not in ["am", "pm"]:
+        raise HTTPException(status_code=400, detail="shift must be 'am' or 'pm'")
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Get outlet by token
+        outlet = _get_outlet_by_token(cursor, token)
+        if not outlet:
+            raise HTTPException(status_code=404, detail="Invalid or inactive token")
+
+        org_id = outlet["organization_id"]
+        outlet_name = outlet["name"]
+        today = date.today()
+
+        # Get today's worksheet
+        cursor.execute("""
+            SELECT id, status FROM daily_worksheet
+            WHERE organization_id = %s AND outlet_name = %s AND worksheet_date = %s
+        """, (org_id, outlet_name, today))
+
+        ws_data = dict_from_row(cursor.fetchone())
+        if not ws_data:
+            raise HTTPException(status_code=404, detail="No worksheet for today")
+
+        if ws_data["status"] == "approved":
+            raise HTTPException(status_code=400, detail="Cannot edit approved worksheet")
+
+        ws_uuid = ws_data["id"]
+
+        # Get threshold
+        threshold = outlet["cooler_max_f"] if unit_type == "cooler" else outlet["freezer_max_f"]
+
+        # Check flagging
+        is_flagged = False
+        if reading.temperature_f is not None and threshold is not None:
+            is_flagged = float(reading.temperature_f) > float(threshold)
+
+        # Build update
+        updates = ["updated_at = NOW()"]
+        params = []
+
+        if reading.temperature_f is not None:
+            updates.append("temperature_f = %s")
+            params.append(reading.temperature_f)
+            updates.append("is_flagged = %s")
+            params.append(is_flagged)
+            updates.append("recorded_at = COALESCE(recorded_at, NOW())")
+
+        if reading.corrective_action is not None:
+            updates.append("corrective_action = %s")
+            params.append(reading.corrective_action)
+
+        if reading.alice_ticket is not None:
+            updates.append("alice_ticket = %s")
+            params.append(reading.alice_ticket)
+
+        if reading.recorded_by is not None:
+            updates.append("recorded_by = %s")
+            params.append(reading.recorded_by)
+
+        params.extend([ws_uuid, unit_type, unit_number, shift])
+
+        cursor.execute(f"""
+            UPDATE cooler_reading
+            SET {", ".join(updates)}
+            WHERE worksheet_id = %s
+              AND unit_type = %s
+              AND unit_number = %s
+              AND shift = %s
+            RETURNING id, unit_type, unit_number, shift,
+                      temperature_f, is_flagged, corrective_action,
+                      alice_ticket, recorded_by, signature_data, recorded_at,
+                      created_at, updated_at
+        """, params)
+
+        result = dict_from_row(cursor.fetchone())
+        if not result:
+            raise HTTPException(status_code=404, detail="Reading slot not found")
+
+        conn.commit()
+
+        result["id"] = str(result["id"])
+        return result
+
+
+@router.post("/public/{token}/coolers/sign")
+def sign_public_cooler_readings(token: str, sign_request: CoolerSignRequest):
+    """Sign a shift's cooler readings via public token access."""
+    if sign_request.shift not in ["am", "pm"]:
+        raise HTTPException(status_code=400, detail="shift must be 'am' or 'pm'")
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        outlet = _get_outlet_by_token(cursor, token)
+        if not outlet:
+            raise HTTPException(status_code=404, detail="Invalid or inactive token")
+
+        org_id = outlet["organization_id"]
+        outlet_name = outlet["name"]
+        today = date.today()
+
+        cursor.execute("""
+            SELECT id, status FROM daily_worksheet
+            WHERE organization_id = %s AND outlet_name = %s AND worksheet_date = %s
+        """, (org_id, outlet_name, today))
+
+        ws_data = dict_from_row(cursor.fetchone())
+        if not ws_data:
+            raise HTTPException(status_code=404, detail="No worksheet for today")
+
+        if ws_data["status"] == "approved":
+            raise HTTPException(status_code=400, detail="Cannot sign approved worksheet")
+
+        cursor.execute("""
+            UPDATE cooler_reading
+            SET signature_data = %s,
+                recorded_by = COALESCE(recorded_by, %s),
+                updated_at = NOW()
+            WHERE worksheet_id = %s AND shift = %s
+            RETURNING id
+        """, (sign_request.signature_data, sign_request.recorded_by, ws_data["id"], sign_request.shift))
+
+        updated_count = cursor.rowcount
+        conn.commit()
+
+        return {
+            "status": "ok",
+            "shift": sign_request.shift,
+            "readings_signed": updated_count
+        }
+
+
+@router.post("/public/{token}/cooking")
+def create_public_cooking_record(token: str, record: CookingRecordCreate):
+    """Create a cooking record via public token access."""
+    if record.meal_period not in ["breakfast", "lunch", "dinner"]:
+        raise HTTPException(status_code=400, detail="meal_period must be 'breakfast', 'lunch', or 'dinner'")
+    if record.entry_type not in ["cook", "reheat", "hot_hold", "cold_hold"]:
+        raise HTTPException(status_code=400, detail="entry_type must be 'cook', 'reheat', 'hot_hold', or 'cold_hold'")
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        outlet = _get_outlet_by_token(cursor, token)
+        if not outlet:
+            raise HTTPException(status_code=404, detail="Invalid or inactive token")
+
+        org_id = outlet["organization_id"]
+        outlet_name = outlet["name"]
+        today = date.today()
+
+        cursor.execute("""
+            SELECT id, status FROM daily_worksheet
+            WHERE organization_id = %s AND outlet_name = %s AND worksheet_date = %s
+        """, (org_id, outlet_name, today))
+
+        ws_data = dict_from_row(cursor.fetchone())
+        if not ws_data:
+            raise HTTPException(status_code=404, detail="No worksheet for today")
+
+        if ws_data["status"] == "approved":
+            raise HTTPException(status_code=400, detail="Cannot add to approved worksheet")
+
+        ws_uuid = ws_data["id"]
+
+        # Get next slot number
+        cursor.execute("""
+            SELECT COALESCE(MAX(slot_number), 0) + 1 AS next_slot
+            FROM cooking_record
+            WHERE worksheet_id = %s AND meal_period = %s AND entry_type = %s
+        """, (ws_uuid, record.meal_period, record.entry_type))
+        slot_number = cursor.fetchone()["next_slot"]
+
+        # Check flagging
+        is_flagged = False
+        if record.temperature_f is not None:
+            temp = float(record.temperature_f)
+            if record.entry_type == "cook" and outlet["cook_min_f"]:
+                is_flagged = temp < float(outlet["cook_min_f"])
+            elif record.entry_type == "reheat" and outlet["reheat_min_f"]:
+                is_flagged = temp < float(outlet["reheat_min_f"])
+            elif record.entry_type == "hot_hold" and outlet["hot_hold_min_f"]:
+                is_flagged = temp < float(outlet["hot_hold_min_f"])
+            elif record.entry_type == "cold_hold" and outlet["cold_hold_max_f"]:
+                is_flagged = temp > float(outlet["cold_hold_max_f"])
+
+        time_val = None
+        if record.time_recorded:
+            try:
+                time_val = datetime.strptime(record.time_recorded, "%H:%M").time()
+            except ValueError:
+                raise HTTPException(status_code=400, detail="time_recorded must be HH:MM format")
+
+        cursor.execute("""
+            INSERT INTO cooking_record (
+                worksheet_id, meal_period, entry_type, slot_number,
+                item_name, temperature_f, time_recorded, is_flagged,
+                recorded_by, recorded_at
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+            RETURNING id, meal_period, entry_type, slot_number,
+                      item_name, temperature_f, time_recorded,
+                      is_flagged, corrective_action, alice_ticket,
+                      recorded_by, signature_data, recorded_at,
+                      created_at, updated_at
+        """, (ws_uuid, record.meal_period, record.entry_type, slot_number,
+              record.item_name, record.temperature_f, time_val, is_flagged,
+              record.recorded_by))
+
+        result = dict_from_row(cursor.fetchone())
+        conn.commit()
+
+        result["id"] = str(result["id"])
+        return result
+
+
+@router.put("/public/{token}/cooking/{record_id}")
+def update_public_cooking_record(token: str, record_id: str, record: CookingRecordUpdate):
+    """Update a cooking record via public token access."""
+    try:
+        rec_uuid = uuid.UUID(record_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid record ID")
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        outlet = _get_outlet_by_token(cursor, token)
+        if not outlet:
+            raise HTTPException(status_code=404, detail="Invalid or inactive token")
+
+        org_id = outlet["organization_id"]
+        outlet_name = outlet["name"]
+
+        # Verify record belongs to this outlet
+        cursor.execute("""
+            SELECT dw.status, cr.entry_type
+            FROM daily_worksheet dw
+            JOIN cooking_record cr ON cr.worksheet_id = dw.id
+            WHERE dw.organization_id = %s AND dw.outlet_name = %s AND cr.id = %s
+        """, (org_id, outlet_name, rec_uuid))
+
+        ws_data = dict_from_row(cursor.fetchone())
+        if not ws_data:
+            raise HTTPException(status_code=404, detail="Record not found")
+
+        if ws_data["status"] == "approved":
+            raise HTTPException(status_code=400, detail="Cannot edit approved worksheet")
+
+        # Build update
+        updates = ["updated_at = NOW()"]
+        params = []
+
+        if record.item_name is not None:
+            updates.append("item_name = %s")
+            params.append(record.item_name)
+
+        if record.temperature_f is not None:
+            updates.append("temperature_f = %s")
+            params.append(record.temperature_f)
+
+            temp = float(record.temperature_f)
+            entry_type = ws_data["entry_type"]
+            is_flagged = False
+            if entry_type == "cook" and outlet["cook_min_f"]:
+                is_flagged = temp < float(outlet["cook_min_f"])
+            elif entry_type == "reheat" and outlet["reheat_min_f"]:
+                is_flagged = temp < float(outlet["reheat_min_f"])
+            elif entry_type == "hot_hold" and outlet["hot_hold_min_f"]:
+                is_flagged = temp < float(outlet["hot_hold_min_f"])
+            elif entry_type == "cold_hold" and outlet["cold_hold_max_f"]:
+                is_flagged = temp > float(outlet["cold_hold_max_f"])
+
+            updates.append("is_flagged = %s")
+            params.append(is_flagged)
+
+        if record.time_recorded is not None:
+            try:
+                time_val = datetime.strptime(record.time_recorded, "%H:%M").time()
+                updates.append("time_recorded = %s")
+                params.append(time_val)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="time_recorded must be HH:MM format")
+
+        if record.corrective_action is not None:
+            updates.append("corrective_action = %s")
+            params.append(record.corrective_action)
+
+        if record.recorded_by is not None:
+            updates.append("recorded_by = %s")
+            params.append(record.recorded_by)
+
+        params.append(rec_uuid)
+
+        cursor.execute(f"""
+            UPDATE cooking_record
+            SET {", ".join(updates)}
+            WHERE id = %s
+            RETURNING id, meal_period, entry_type, slot_number,
+                      item_name, temperature_f, time_recorded,
+                      is_flagged, corrective_action, alice_ticket,
+                      recorded_by, signature_data, recorded_at,
+                      created_at, updated_at
+        """, params)
+
+        result = dict_from_row(cursor.fetchone())
+        conn.commit()
+
+        result["id"] = str(result["id"])
+        return result
+
+
+@router.delete("/public/{token}/cooking/{record_id}")
+def delete_public_cooking_record(token: str, record_id: str):
+    """Delete a cooking record via public token access."""
+    try:
+        rec_uuid = uuid.UUID(record_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid record ID")
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        outlet = _get_outlet_by_token(cursor, token)
+        if not outlet:
+            raise HTTPException(status_code=404, detail="Invalid or inactive token")
+
+        cursor.execute("""
+            SELECT dw.status
+            FROM daily_worksheet dw
+            JOIN cooking_record cr ON cr.worksheet_id = dw.id
+            WHERE dw.organization_id = %s AND dw.outlet_name = %s AND cr.id = %s
+        """, (outlet["organization_id"], outlet["name"], rec_uuid))
+
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Record not found")
+
+        if row["status"] == "approved":
+            raise HTTPException(status_code=400, detail="Cannot delete from approved worksheet")
+
+        cursor.execute("DELETE FROM cooking_record WHERE id = %s", (rec_uuid,))
+        conn.commit()
+
+        return {"status": "ok", "deleted": record_id}
+
+
+@router.post("/public/{token}/cooking/sign")
+def sign_public_cooking_records(token: str, sign_request: MealPeriodSignRequest):
+    """Sign a meal period's cooking records via public token access."""
+    if sign_request.meal_period not in ["breakfast", "lunch", "dinner"]:
+        raise HTTPException(status_code=400, detail="meal_period must be 'breakfast', 'lunch', or 'dinner'")
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        outlet = _get_outlet_by_token(cursor, token)
+        if not outlet:
+            raise HTTPException(status_code=404, detail="Invalid or inactive token")
+
+        today = date.today()
+
+        cursor.execute("""
+            SELECT id, status FROM daily_worksheet
+            WHERE organization_id = %s AND outlet_name = %s AND worksheet_date = %s
+        """, (outlet["organization_id"], outlet["name"], today))
+
+        ws_data = dict_from_row(cursor.fetchone())
+        if not ws_data:
+            raise HTTPException(status_code=404, detail="No worksheet for today")
+
+        if ws_data["status"] == "approved":
+            raise HTTPException(status_code=400, detail="Cannot sign approved worksheet")
+
+        cursor.execute("""
+            UPDATE cooking_record
+            SET signature_data = %s,
+                recorded_by = COALESCE(recorded_by, %s),
+                updated_at = NOW()
+            WHERE worksheet_id = %s AND meal_period = %s
+            RETURNING id
+        """, (sign_request.signature_data, sign_request.recorded_by, ws_data["id"], sign_request.meal_period))
+
+        updated_count = cursor.rowcount
+        conn.commit()
+
+        return {
+            "status": "ok",
+            "meal_period": sign_request.meal_period,
+            "records_signed": updated_count
+        }
+
+
+@router.post("/public/{token}/cooling")
+def create_public_cooling_record(token: str, record: CoolingRecordCreate):
+    """Create a cooling record via public token access."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        outlet = _get_outlet_by_token(cursor, token)
+        if not outlet:
+            raise HTTPException(status_code=404, detail="Invalid or inactive token")
+
+        today = date.today()
+
+        cursor.execute("""
+            SELECT id, status FROM daily_worksheet
+            WHERE organization_id = %s AND outlet_name = %s AND worksheet_date = %s
+        """, (outlet["organization_id"], outlet["name"], today))
+
+        ws_data = dict_from_row(cursor.fetchone())
+        if not ws_data:
+            raise HTTPException(status_code=404, detail="No worksheet for today")
+
+        if ws_data["status"] == "approved":
+            raise HTTPException(status_code=400, detail="Cannot add to approved worksheet")
+
+        start_time_val = None
+        if record.start_time:
+            try:
+                start_time_val = datetime.strptime(record.start_time, "%H:%M").time()
+            except ValueError:
+                raise HTTPException(status_code=400, detail="start_time must be HH:MM format")
+
+        cursor.execute("""
+            INSERT INTO cooling_record (
+                worksheet_id, item_name, method, recorded_by,
+                start_time, recorded_at
+            ) VALUES (%s, %s, %s, %s, %s, NOW())
+            RETURNING id, item_name, start_time, end_time,
+                      temp_2hr_f, temp_6hr_f, method,
+                      is_flagged, corrective_action, alice_ticket,
+                      recorded_by, signature_data, recorded_at,
+                      created_at, updated_at
+        """, (ws_data["id"], record.item_name, record.method, record.recorded_by, start_time_val))
+
+        result = dict_from_row(cursor.fetchone())
+        conn.commit()
+
+        result["id"] = str(result["id"])
+        return result
+
+
+@router.put("/public/{token}/cooling/{record_id}")
+def update_public_cooling_record(token: str, record_id: str, record: CoolingRecordUpdate):
+    """Update a cooling record via public token access."""
+    try:
+        rec_uuid = uuid.UUID(record_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid record ID")
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        outlet = _get_outlet_by_token(cursor, token)
+        if not outlet:
+            raise HTTPException(status_code=404, detail="Invalid or inactive token")
+
+        cursor.execute("""
+            SELECT dw.status
+            FROM daily_worksheet dw
+            JOIN cooling_record cr ON cr.worksheet_id = dw.id
+            WHERE dw.organization_id = %s AND dw.outlet_name = %s AND cr.id = %s
+        """, (outlet["organization_id"], outlet["name"], rec_uuid))
+
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Record not found")
+
+        if row["status"] == "approved":
+            raise HTTPException(status_code=400, detail="Cannot edit approved worksheet")
+
+        updates = ["updated_at = NOW()"]
+        params = []
+
+        if record.item_name is not None:
+            updates.append("item_name = %s")
+            params.append(record.item_name)
+
+        if record.start_time is not None:
+            try:
+                time_val = datetime.strptime(record.start_time, "%H:%M").time()
+                updates.append("start_time = %s")
+                params.append(time_val)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="start_time must be HH:MM format")
+
+        if record.end_time is not None:
+            try:
+                time_val = datetime.strptime(record.end_time, "%H:%M").time()
+                updates.append("end_time = %s")
+                params.append(time_val)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="end_time must be HH:MM format")
+
+        is_flagged = False
+        if record.temp_2hr_f is not None:
+            updates.append("temp_2hr_f = %s")
+            params.append(record.temp_2hr_f)
+            if float(record.temp_2hr_f) > 70.0:
+                is_flagged = True
+
+        if record.temp_6hr_f is not None:
+            updates.append("temp_6hr_f = %s")
+            params.append(record.temp_6hr_f)
+            if float(record.temp_6hr_f) > 41.0:
+                is_flagged = True
+
+        if record.temp_2hr_f is not None or record.temp_6hr_f is not None:
+            updates.append("is_flagged = %s")
+            params.append(is_flagged)
+
+        if record.method is not None:
+            updates.append("method = %s")
+            params.append(record.method)
+
+        if record.corrective_action is not None:
+            updates.append("corrective_action = %s")
+            params.append(record.corrective_action)
+
+        if record.recorded_by is not None:
+            updates.append("recorded_by = %s")
+            params.append(record.recorded_by)
+
+        params.append(rec_uuid)
+
+        cursor.execute(f"""
+            UPDATE cooling_record
+            SET {", ".join(updates)}
+            WHERE id = %s
+            RETURNING id, item_name, start_time, end_time,
+                      temp_2hr_f, temp_6hr_f, method,
+                      is_flagged, corrective_action, alice_ticket,
+                      recorded_by, signature_data, recorded_at,
+                      created_at, updated_at
+        """, params)
+
+        result = dict_from_row(cursor.fetchone())
+        conn.commit()
+
+        result["id"] = str(result["id"])
+        return result
+
+
+@router.delete("/public/{token}/cooling/{record_id}")
+def delete_public_cooling_record(token: str, record_id: str):
+    """Delete a cooling record via public token access."""
+    try:
+        rec_uuid = uuid.UUID(record_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid record ID")
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        outlet = _get_outlet_by_token(cursor, token)
+        if not outlet:
+            raise HTTPException(status_code=404, detail="Invalid or inactive token")
+
+        cursor.execute("""
+            SELECT dw.status
+            FROM daily_worksheet dw
+            JOIN cooling_record cr ON cr.worksheet_id = dw.id
+            WHERE dw.organization_id = %s AND dw.outlet_name = %s AND cr.id = %s
+        """, (outlet["organization_id"], outlet["name"], rec_uuid))
+
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Record not found")
+
+        if row["status"] == "approved":
+            raise HTTPException(status_code=400, detail="Cannot delete from approved worksheet")
+
+        cursor.execute("DELETE FROM cooling_record WHERE id = %s", (rec_uuid,))
+        conn.commit()
+
+        return {"status": "ok", "deleted": record_id}
+
+
+@router.post("/public/{token}/thawing")
+def create_public_thawing_record(token: str, record: ThawingRecordCreate):
+    """Create a thawing record via public token access."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        outlet = _get_outlet_by_token(cursor, token)
+        if not outlet:
+            raise HTTPException(status_code=404, detail="Invalid or inactive token")
+
+        today = date.today()
+
+        cursor.execute("""
+            SELECT id, status FROM daily_worksheet
+            WHERE organization_id = %s AND outlet_name = %s AND worksheet_date = %s
+        """, (outlet["organization_id"], outlet["name"], today))
+
+        ws_data = dict_from_row(cursor.fetchone())
+        if not ws_data:
+            raise HTTPException(status_code=404, detail="No worksheet for today")
+
+        if ws_data["status"] == "approved":
+            raise HTTPException(status_code=400, detail="Cannot add to approved worksheet")
+
+        start_time_val = None
+        if record.start_time:
+            try:
+                start_time_val = datetime.strptime(record.start_time, "%H:%M").time()
+            except ValueError:
+                raise HTTPException(status_code=400, detail="start_time must be HH:MM format")
+
+        cursor.execute("""
+            INSERT INTO thawing_record (
+                worksheet_id, item_name, method, recorded_by,
+                start_time, recorded_at
+            ) VALUES (%s, %s, %s, %s, %s, NOW())
+            RETURNING id, item_name, start_time,
+                      finish_date, finish_time, finish_temp_f, method,
+                      is_flagged, corrective_action, alice_ticket,
+                      recorded_by, signature_data, recorded_at,
+                      created_at, updated_at
+        """, (ws_data["id"], record.item_name, record.method, record.recorded_by, start_time_val))
+
+        result = dict_from_row(cursor.fetchone())
+        conn.commit()
+
+        result["id"] = str(result["id"])
+        return result
+
+
+@router.put("/public/{token}/thawing/{record_id}")
+def update_public_thawing_record(token: str, record_id: str, record: ThawingRecordUpdate):
+    """Update a thawing record via public token access."""
+    try:
+        rec_uuid = uuid.UUID(record_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid record ID")
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        outlet = _get_outlet_by_token(cursor, token)
+        if not outlet:
+            raise HTTPException(status_code=404, detail="Invalid or inactive token")
+
+        cursor.execute("""
+            SELECT dw.status
+            FROM daily_worksheet dw
+            JOIN thawing_record tr ON tr.worksheet_id = dw.id
+            WHERE dw.organization_id = %s AND dw.outlet_name = %s AND tr.id = %s
+        """, (outlet["organization_id"], outlet["name"], rec_uuid))
+
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Record not found")
+
+        if row["status"] == "approved":
+            raise HTTPException(status_code=400, detail="Cannot edit approved worksheet")
+
+        updates = ["updated_at = NOW()"]
+        params = []
+
+        if record.item_name is not None:
+            updates.append("item_name = %s")
+            params.append(record.item_name)
+
+        if record.start_time is not None:
+            try:
+                time_val = datetime.strptime(record.start_time, "%H:%M").time()
+                updates.append("start_time = %s")
+                params.append(time_val)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="start_time must be HH:MM format")
+
+        if record.finish_date is not None:
+            updates.append("finish_date = %s")
+            params.append(record.finish_date)
+
+        if record.finish_time is not None:
+            try:
+                time_val = datetime.strptime(record.finish_time, "%H:%M").time()
+                updates.append("finish_time = %s")
+                params.append(time_val)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="finish_time must be HH:MM format")
+
+        if record.finish_temp_f is not None:
+            updates.append("finish_temp_f = %s")
+            params.append(record.finish_temp_f)
+            is_flagged = float(record.finish_temp_f) > 41.0
+            updates.append("is_flagged = %s")
+            params.append(is_flagged)
+
+        if record.method is not None:
+            updates.append("method = %s")
+            params.append(record.method)
+
+        if record.corrective_action is not None:
+            updates.append("corrective_action = %s")
+            params.append(record.corrective_action)
+
+        if record.recorded_by is not None:
+            updates.append("recorded_by = %s")
+            params.append(record.recorded_by)
+
+        params.append(rec_uuid)
+
+        cursor.execute(f"""
+            UPDATE thawing_record
+            SET {", ".join(updates)}
+            WHERE id = %s
+            RETURNING id, item_name, start_time,
+                      finish_date, finish_time, finish_temp_f, method,
+                      is_flagged, corrective_action, alice_ticket,
+                      recorded_by, signature_data, recorded_at,
+                      created_at, updated_at
+        """, params)
+
+        result = dict_from_row(cursor.fetchone())
+        conn.commit()
+
+        result["id"] = str(result["id"])
+        return result
+
+
+@router.delete("/public/{token}/thawing/{record_id}")
+def delete_public_thawing_record(token: str, record_id: str):
+    """Delete a thawing record via public token access."""
+    try:
+        rec_uuid = uuid.UUID(record_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid record ID")
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        outlet = _get_outlet_by_token(cursor, token)
+        if not outlet:
+            raise HTTPException(status_code=404, detail="Invalid or inactive token")
+
+        cursor.execute("""
+            SELECT dw.status
+            FROM daily_worksheet dw
+            JOIN thawing_record tr ON tr.worksheet_id = dw.id
+            WHERE dw.organization_id = %s AND dw.outlet_name = %s AND tr.id = %s
+        """, (outlet["organization_id"], outlet["name"], rec_uuid))
 
         row = cursor.fetchone()
         if not row:
