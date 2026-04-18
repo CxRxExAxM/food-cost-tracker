@@ -2760,43 +2760,53 @@ def get_email_log(
     with get_db() as conn:
         cursor = conn.cursor()
 
-        query = """
-            SELECT el.id, el.email_to, el.email_to_name, el.email_subject,
-                   el.email_type, el.status, el.error_message, el.sent_at,
-                   el.resend_id, o.name as outlet_name, c.name as contact_name,
-                   u.name as sent_by_name
-            FROM ehc_email_log el
-            LEFT JOIN ehc_outlet o ON o.id = el.outlet_id
-            LEFT JOIN ehc_contact c ON c.id = el.contact_id
-            LEFT JOIN users u ON u.id = el.sent_by_user_id
-            WHERE el.organization_id = %s
-        """
-        params = [org_id]
+        try:
+            query = """
+                SELECT el.id, el.email_to, el.email_to_name, el.email_subject,
+                       el.email_type, el.status, el.error_message, el.sent_at,
+                       el.resend_id, o.name as outlet_name, c.name as contact_name,
+                       u.name as sent_by_name
+                FROM ehc_email_log el
+                LEFT JOIN ehc_outlet o ON o.id = el.outlet_id
+                LEFT JOIN ehc_contact c ON c.id = el.contact_id
+                LEFT JOIN users u ON u.id = el.sent_by_user_id
+                WHERE el.organization_id = %s
+            """
+            params = [org_id]
 
-        if email_type:
-            query += " AND el.email_type = %s"
-            params.append(email_type)
+            if email_type:
+                query += " AND el.email_type = %s"
+                params.append(email_type)
 
-        query += " ORDER BY el.sent_at DESC LIMIT %s OFFSET %s"
-        params.extend([limit, offset])
+            query += " ORDER BY el.sent_at DESC LIMIT %s OFFSET %s"
+            params.extend([limit, offset])
 
-        cursor.execute(query, params)
-        logs = dicts_from_rows(cursor)
+            cursor.execute(query, params)
+            logs = dicts_from_rows(cursor.fetchall())
 
-        # Get total count
-        count_query = """
-            SELECT COUNT(*) as total FROM ehc_email_log WHERE organization_id = %s
-        """
-        count_params = [org_id]
-        if email_type:
-            count_query += " AND email_type = %s"
-            count_params.append(email_type)
+            # Get total count
+            count_query = """
+                SELECT COUNT(*) as total FROM ehc_email_log WHERE organization_id = %s
+            """
+            count_params = [org_id]
+            if email_type:
+                count_query += " AND email_type = %s"
+                count_params.append(email_type)
 
-        cursor.execute(count_query, count_params)
-        total = cursor.fetchone()['total']
+            cursor.execute(count_query, count_params)
+            row = cursor.fetchone()
+            total = row['total'] if row else 0
 
-        return {
-            "data": logs,
-            "count": len(logs),
-            "total": total
-        }
+            return {
+                "data": logs,
+                "count": len(logs),
+                "total": total
+            }
+        except Exception as e:
+            # Table might not exist yet
+            print(f"[email/log] Error: {e}")
+            return {
+                "data": [],
+                "count": 0,
+                "total": 0
+            }
