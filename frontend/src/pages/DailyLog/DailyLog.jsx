@@ -7,7 +7,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { Thermometer, ChevronRight, Calendar, Home, List } from 'lucide-react';
 import api from '../../lib/axios';
 import MonthlyCalendar from './MonthlyCalendar';
@@ -15,14 +15,19 @@ import './DailyLog.css';
 
 export default function DailyLog() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [outlets, setOutlets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [view, setView] = useState('outlets'); // 'outlets' or 'calendar'
+
+  // Initialize view from URL param (e.g., /daily-log?view=calendar)
+  // This prevents auto-redirect when user explicitly wants calendar view
+  const initialView = searchParams.get('view') === 'calendar' ? 'calendar' : 'outlets';
+  const [view, setView] = useState(initialView);
   const [selectedOutlet, setSelectedOutlet] = useState(null);
 
-  // Check for remembered outlet
-  const rememberedOutlet = localStorage.getItem('dailyLogOutlet');
+  // Check for remembered outlet (but skip auto-redirect if view=calendar)
+  const rememberedOutlet = initialView === 'outlets' ? localStorage.getItem('dailyLogOutlet') : null;
 
   useEffect(() => {
     loadOutlets();

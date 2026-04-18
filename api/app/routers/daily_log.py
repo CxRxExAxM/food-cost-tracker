@@ -1341,11 +1341,12 @@ def create_cooling_record(
             if row["status"] == "approved":
                 raise HTTPException(status_code=400, detail="Cannot add to approved worksheet")
 
-            # Parse start_time if provided
+            # Parse start_time if provided - combine with today's date for timestamp column
             start_time_val = None
             if record.start_time:
                 try:
-                    start_time_val = datetime.strptime(record.start_time, "%H:%M").time()
+                    time_parsed = datetime.strptime(record.start_time, "%H:%M").time()
+                    start_time_val = datetime.combine(date.today(), time_parsed)
                 except ValueError:
                     raise HTTPException(status_code=400, detail="start_time must be HH:MM format")
 
@@ -1421,7 +1422,8 @@ def update_cooling_record(
 
         if record.start_time is not None:
             try:
-                time_val = datetime.strptime(record.start_time, "%H:%M").time()
+                time_parsed = datetime.strptime(record.start_time, "%H:%M").time()
+                time_val = datetime.combine(date.today(), time_parsed)
                 updates.append("start_time = %s")
                 params.append(time_val)
             except ValueError:
@@ -1429,7 +1431,8 @@ def update_cooling_record(
 
         if record.end_time is not None:
             try:
-                time_val = datetime.strptime(record.end_time, "%H:%M").time()
+                time_parsed = datetime.strptime(record.end_time, "%H:%M").time()
+                time_val = datetime.combine(date.today(), time_parsed)
                 updates.append("end_time = %s")
                 params.append(time_val)
             except ValueError:
@@ -1604,11 +1607,12 @@ def create_thawing_record(
             if row["status"] == "approved":
                 raise HTTPException(status_code=400, detail="Cannot add to approved worksheet")
 
-            # Parse start_time if provided
+            # Parse start_time if provided - combine with today's date for timestamp column
             start_time_val = None
             if record.start_time:
                 try:
-                    start_time_val = datetime.strptime(record.start_time, "%H:%M").time()
+                    time_parsed = datetime.strptime(record.start_time, "%H:%M").time()
+                    start_time_val = datetime.combine(date.today(), time_parsed)
                 except ValueError:
                     raise HTTPException(status_code=400, detail="start_time must be HH:MM format")
 
@@ -1684,7 +1688,8 @@ def update_thawing_record(
 
         if record.start_time is not None:
             try:
-                time_val = datetime.strptime(record.start_time, "%H:%M").time()
+                time_parsed = datetime.strptime(record.start_time, "%H:%M").time()
+                time_val = datetime.combine(date.today(), time_parsed)
                 updates.append("start_time = %s")
                 params.append(time_val)
             except ValueError:
@@ -2384,10 +2389,12 @@ def create_public_cooling_record(token: str, record: CoolingRecordCreate):
         if ws_data["status"] == "approved":
             raise HTTPException(status_code=400, detail="Cannot add to approved worksheet")
 
+        # Combine time with today's date for timestamp column
         start_time_val = None
         if record.start_time:
             try:
-                start_time_val = datetime.strptime(record.start_time, "%H:%M").time()
+                time_parsed = datetime.strptime(record.start_time, "%H:%M").time()
+                start_time_val = datetime.combine(date.today(), time_parsed)
             except ValueError:
                 raise HTTPException(status_code=400, detail="start_time must be HH:MM format")
 
@@ -2448,7 +2455,8 @@ def update_public_cooling_record(token: str, record_id: str, record: CoolingReco
 
         if record.start_time is not None:
             try:
-                time_val = datetime.strptime(record.start_time, "%H:%M").time()
+                time_parsed = datetime.strptime(record.start_time, "%H:%M").time()
+                time_val = datetime.combine(date.today(), time_parsed)
                 updates.append("start_time = %s")
                 params.append(time_val)
             except ValueError:
@@ -2456,7 +2464,8 @@ def update_public_cooling_record(token: str, record_id: str, record: CoolingReco
 
         if record.end_time is not None:
             try:
-                time_val = datetime.strptime(record.end_time, "%H:%M").time()
+                time_parsed = datetime.strptime(record.end_time, "%H:%M").time()
+                time_val = datetime.combine(date.today(), time_parsed)
                 updates.append("end_time = %s")
                 params.append(time_val)
             except ValueError:
@@ -2570,10 +2579,12 @@ def create_public_thawing_record(token: str, record: ThawingRecordCreate):
         if ws_data["status"] == "approved":
             raise HTTPException(status_code=400, detail="Cannot add to approved worksheet")
 
+        # Combine time with today's date for timestamp column
         start_time_val = None
         if record.start_time:
             try:
-                start_time_val = datetime.strptime(record.start_time, "%H:%M").time()
+                time_parsed = datetime.strptime(record.start_time, "%H:%M").time()
+                start_time_val = datetime.combine(date.today(), time_parsed)
             except ValueError:
                 raise HTTPException(status_code=400, detail="start_time must be HH:MM format")
 
@@ -2634,7 +2645,8 @@ def update_public_thawing_record(token: str, record_id: str, record: ThawingReco
 
         if record.start_time is not None:
             try:
-                time_val = datetime.strptime(record.start_time, "%H:%M").time()
+                time_parsed = datetime.strptime(record.start_time, "%H:%M").time()
+                time_val = datetime.combine(date.today(), time_parsed)
                 updates.append("start_time = %s")
                 params.append(time_val)
             except ValueError:
