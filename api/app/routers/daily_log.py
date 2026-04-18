@@ -257,208 +257,203 @@ def get_monthly_calendar(
     month: int,
     current_user: dict = Depends(get_current_user)
 ):
-    """
-    Get monthly calendar data for an outlet showing completion status per day.
-
-    Returns each day's status:
-    - worksheet_id: ID if exists
-    - has_cooler_data: bool
-    - am_signed: bool (for cooler temps)
-    - pm_signed: bool (for cooler temps)
-    - cooking_signed: dict of meal periods signed
-    - has_flags: any readings flagged
-    - completion_status: 'complete', 'partial', 'empty', 'flagged'
-    """
-    import calendar
+    """Get monthly calendar data for an outlet showing completion status per day."""
+    import calendar as cal_module
     from datetime import date as date_type
 
     org_id = current_user["organization_id"]
 
-    # Validate month/year
     if month < 1 or month > 12:
         raise HTTPException(status_code=400, detail="Invalid month")
     if year < 2020 or year > 2100:
         raise HTTPException(status_code=400, detail="Invalid year")
 
-    with get_db() as conn:
-        cursor = conn.cursor()
+    try:
+        with get_db() as conn:
+            cursor = conn.cursor()
 
-        # Get outlet config
-        cursor.execute("""
-            SELECT id, name, full_name, outlet_type,
-                   cooler_count, freezer_count,
-                   has_cooking, serves_breakfast, serves_lunch, serves_dinner
-            FROM ehc_outlet
-            WHERE organization_id = %s AND name = %s
-              AND is_active = true AND daily_monitoring_enabled = true
-        """, (org_id, outlet_name))
-
-        outlet = dict_from_row(cursor.fetchone())
-        if not outlet:
-            raise HTTPException(status_code=404, detail="Outlet not found")
-
-        # Calculate date range for month
-        _, last_day = calendar.monthrange(year, month)
-        start_date = date_type(year, month, 1)
-        end_date = date_type(year, month, last_day)
-
-        # Determine what signatures are required for this outlet
-        has_coolers = (outlet["cooler_count"] or 0) > 0 or (outlet["freezer_count"] or 0) > 0
-        has_cooking = outlet["has_cooking"]
-        active_meals = []
-        if outlet["serves_breakfast"]:
-            active_meals.append("breakfast")
-        if outlet["serves_lunch"]:
-            active_meals.append("lunch")
-        if outlet["serves_dinner"]:
-            active_meals.append("dinner")
-
-        # Get all worksheets for the month
-        cursor.execute("""
-            SELECT id, worksheet_date, status
-            FROM daily_worksheet
-            WHERE organization_id = %s AND outlet_name = %s
-              AND worksheet_date >= %s AND worksheet_date <= %s
-        """, (org_id, outlet_name, start_date, end_date))
-
-        worksheets = {row["worksheet_date"]: row for row in dicts_from_rows(cursor.fetchall())}
-
-        # Get cooler reading signatures for the month
-        cooler_sigs = {}
-        if has_coolers and worksheets:
-            worksheet_ids = [w["id"] for w in worksheets.values()]
+            # Get outlet config
             cursor.execute("""
-                SELECT cr.worksheet_id, cr.shift,
-                       bool_or(cr.signature_data IS NOT NULL) as is_signed,
-                       bool_or(cr.is_flagged) as has_flags
-                FROM cooler_reading cr
-                WHERE cr.worksheet_id = ANY(%s)
-                GROUP BY cr.worksheet_id, cr.shift
-            """, (worksheet_ids,))
+                SELECT id, name, full_name, outlet_type,
+                       cooler_count, freezer_count,
+                       has_cooking, serves_breakfast, serves_lunch, serves_dinner
+                FROM ehc_outlet
+                WHERE organization_id = %s AND name = %s
+                  AND is_active = true AND daily_monitoring_enabled = true
+            """, (org_id, outlet_name))
 
-            for row in dicts_from_rows(cursor.fetchall()):
-                ws_id = row["worksheet_id"]
-                if ws_id not in cooler_sigs:
-                    cooler_sigs[ws_id] = {"am": False, "pm": False, "flags": False}
-                cooler_sigs[ws_id][row["shift"]] = row["is_signed"]
-                if row["has_flags"]:
-                    cooler_sigs[ws_id]["flags"] = True
+            outlet = dict_from_row(cursor.fetchone())
+            if not outlet:
+                raise HTTPException(status_code=404, detail="Outlet not found")
 
-        # Get cooking record signatures for the month
-        cooking_sigs = {}
-        if has_cooking and worksheets:
-            worksheet_ids = [w["id"] for w in worksheets.values()]
+            outlet["id"] = str(outlet["id"])
+
+            # Calculate date range for month
+            _, last_day = cal_module.monthrange(year, month)
+            start_date = date_type(year, month, 1)
+            end_date = date_type(year, month, last_day)
+
+            # Determine what signatures are required
+            has_coolers = (outlet["cooler_count"] or 0) > 0 or (outlet["freezer_count"] or 0) > 0
+            has_cooking = outlet["has_cooking"]
+            active_meals = []
+            if outlet["serves_breakfast"]:
+                active_meals.append("breakfast")
+            if outlet["serves_lunch"]:
+                active_meals.append("lunch")
+            if outlet["serves_dinner"]:
+                active_meals.append("dinner")
+
+            # Get all worksheets for the month
             cursor.execute("""
-                SELECT cr.worksheet_id, cr.meal_period,
-                       bool_or(cr.signature_data IS NOT NULL) as is_signed,
-                       bool_or(cr.is_flagged) as has_flags
-                FROM cooking_record cr
-                WHERE cr.worksheet_id = ANY(%s)
-                GROUP BY cr.worksheet_id, cr.meal_period
-            """, (worksheet_ids,))
+                SELECT id, worksheet_date, status
+                FROM daily_worksheet
+                WHERE organization_id = %s AND outlet_name = %s
+                  AND worksheet_date >= %s AND worksheet_date <= %s
+            """, (org_id, outlet_name, start_date, end_date))
 
-            for row in dicts_from_rows(cursor.fetchall()):
-                ws_id = row["worksheet_id"]
-                if ws_id not in cooking_sigs:
-                    cooking_sigs[ws_id] = {m: False for m in active_meals}
-                    cooking_sigs[ws_id]["flags"] = False
-                if row["meal_period"] in active_meals:
-                    cooking_sigs[ws_id][row["meal_period"]] = row["is_signed"]
-                if row["has_flags"]:
-                    cooking_sigs[ws_id]["flags"] = True
+            worksheets = {row["worksheet_date"]: row for row in dicts_from_rows(cursor.fetchall())}
 
-        # Build day-by-day status
-        days = []
-        today = date_type.today()
+            # Get cooler reading signatures
+            cooler_sigs = {}
+            if has_coolers and worksheets:
+                worksheet_ids = [w["id"] for w in worksheets.values()]
+                cursor.execute("""
+                    SELECT cr.worksheet_id, cr.shift,
+                           bool_or(cr.signature_data IS NOT NULL) as is_signed,
+                           bool_or(cr.is_flagged) as has_flags
+                    FROM cooler_reading cr
+                    WHERE cr.worksheet_id = ANY(%s)
+                    GROUP BY cr.worksheet_id, cr.shift
+                """, (worksheet_ids,))
 
-        for day in range(1, last_day + 1):
-            current_date = date_type(year, month, day)
-            worksheet = worksheets.get(current_date)
+                for row in dicts_from_rows(cursor.fetchall()):
+                    ws_id = row["worksheet_id"]
+                    if ws_id not in cooler_sigs:
+                        cooler_sigs[ws_id] = {"am": False, "pm": False, "flags": False}
+                    cooler_sigs[ws_id][row["shift"]] = row["is_signed"]
+                    if row["has_flags"]:
+                        cooler_sigs[ws_id]["flags"] = True
 
-            day_data = {
-                "date": current_date.isoformat(),
-                "day": day,
-                "weekday": current_date.strftime("%a"),
-                "is_future": current_date > today,
-                "is_today": current_date == today,
-                "worksheet_id": worksheet["id"] if worksheet else None,
-                "status": "empty"
-            }
+            # Get cooking record signatures
+            cooking_sigs = {}
+            if has_cooking and worksheets:
+                worksheet_ids = [w["id"] for w in worksheets.values()]
+                cursor.execute("""
+                    SELECT cr.worksheet_id, cr.meal_period,
+                           bool_or(cr.signature_data IS NOT NULL) as is_signed,
+                           bool_or(cr.is_flagged) as has_flags
+                    FROM cooking_record cr
+                    WHERE cr.worksheet_id = ANY(%s)
+                    GROUP BY cr.worksheet_id, cr.meal_period
+                """, (worksheet_ids,))
 
-            if current_date > today:
-                day_data["status"] = "future"
-            elif worksheet:
-                ws_id = worksheet["id"]
-                has_flags = False
-                sigs_required = 0
-                sigs_present = 0
+                for row in dicts_from_rows(cursor.fetchall()):
+                    ws_id = row["worksheet_id"]
+                    if ws_id not in cooking_sigs:
+                        cooking_sigs[ws_id] = {m: False for m in active_meals}
+                        cooking_sigs[ws_id]["flags"] = False
+                    if row["meal_period"] in active_meals:
+                        cooking_sigs[ws_id][row["meal_period"]] = row["is_signed"]
+                    if row["has_flags"]:
+                        cooking_sigs[ws_id]["flags"] = True
 
-                # Check cooler signatures
-                if has_coolers:
-                    sigs_required += 2  # AM + PM
-                    cs = cooler_sigs.get(ws_id, {})
-                    if cs.get("am"):
-                        sigs_present += 1
-                    if cs.get("pm"):
-                        sigs_present += 1
-                    if cs.get("flags"):
-                        has_flags = True
+            # Build day-by-day status
+            days = []
+            today = date_type.today()
 
-                # Check cooking signatures
-                if has_cooking:
-                    sigs_required += len(active_meals)
-                    ck = cooking_sigs.get(ws_id, {})
-                    for meal in active_meals:
-                        if ck.get(meal):
+            for day in range(1, last_day + 1):
+                current_date = date_type(year, month, day)
+                worksheet = worksheets.get(current_date)
+
+                day_data = {
+                    "date": current_date.isoformat(),
+                    "day": day,
+                    "weekday": current_date.strftime("%a"),
+                    "is_future": current_date > today,
+                    "is_today": current_date == today,
+                    "worksheet_id": str(worksheet["id"]) if worksheet else None,
+                    "status": "empty"
+                }
+
+                if current_date > today:
+                    day_data["status"] = "future"
+                elif worksheet:
+                    ws_id = worksheet["id"]
+                    has_flags = False
+                    sigs_required = 0
+                    sigs_present = 0
+
+                    if has_coolers:
+                        sigs_required += 2
+                        cs = cooler_sigs.get(ws_id, {})
+                        if cs.get("am"):
                             sigs_present += 1
-                    if ck.get("flags"):
-                        has_flags = True
+                        if cs.get("pm"):
+                            sigs_present += 1
+                        if cs.get("flags"):
+                            has_flags = True
 
-                # Determine status
-                if sigs_required == 0:
-                    day_data["status"] = "empty"
-                elif sigs_present == sigs_required:
-                    day_data["status"] = "flagged" if has_flags else "complete"
-                elif sigs_present > 0:
-                    day_data["status"] = "partial"
-                else:
-                    day_data["status"] = "empty"
+                    if has_cooking:
+                        sigs_required += len(active_meals)
+                        ck = cooking_sigs.get(ws_id, {})
+                        for meal in active_meals:
+                            if ck.get(meal):
+                                sigs_present += 1
+                        if ck.get("flags"):
+                            has_flags = True
 
-                day_data["sigs_present"] = sigs_present
-                day_data["sigs_required"] = sigs_required
-                day_data["has_flags"] = has_flags
+                    if sigs_required == 0:
+                        day_data["status"] = "empty"
+                    elif sigs_present == sigs_required:
+                        day_data["status"] = "flagged" if has_flags else "complete"
+                    elif sigs_present > 0:
+                        day_data["status"] = "partial"
+                    else:
+                        day_data["status"] = "empty"
 
-            days.append(day_data)
+                    day_data["sigs_present"] = sigs_present
+                    day_data["sigs_required"] = sigs_required
+                    day_data["has_flags"] = has_flags
 
-        # Calculate summary stats
-        complete_days = sum(1 for d in days if d["status"] == "complete")
-        partial_days = sum(1 for d in days if d["status"] == "partial")
-        flagged_days = sum(1 for d in days if d["status"] == "flagged")
-        empty_days = sum(1 for d in days if d["status"] == "empty")
-        past_days = sum(1 for d in days if not d.get("is_future", True))
+                days.append(day_data)
 
-        return {
-            "outlet": {
-                "id": outlet["id"],
-                "name": outlet["name"],
-                "full_name": outlet["full_name"],
-                "has_coolers": has_coolers,
-                "has_cooking": has_cooking,
-                "active_meals": active_meals
-            },
-            "year": year,
-            "month": month,
-            "month_name": calendar.month_name[month],
-            "days": days,
-            "summary": {
-                "complete": complete_days,
-                "partial": partial_days,
-                "flagged": flagged_days,
-                "empty": empty_days,
-                "past_days": past_days,
-                "completion_rate": round((complete_days + flagged_days) / past_days * 100, 1) if past_days > 0 else 0
+            # Calculate summary stats
+            complete_days = sum(1 for d in days if d["status"] == "complete")
+            partial_days = sum(1 for d in days if d["status"] == "partial")
+            flagged_days = sum(1 for d in days if d["status"] == "flagged")
+            empty_days = sum(1 for d in days if d["status"] == "empty")
+            past_days = sum(1 for d in days if not d.get("is_future", True))
+
+            return {
+                "outlet": {
+                    "id": outlet["id"],
+                    "name": outlet["name"],
+                    "full_name": outlet["full_name"],
+                    "has_coolers": has_coolers,
+                    "has_cooking": has_cooking,
+                    "active_meals": active_meals
+                },
+                "year": year,
+                "month": month,
+                "month_name": cal_module.month_name[month],
+                "days": days,
+                "summary": {
+                    "complete": complete_days,
+                    "partial": partial_days,
+                    "flagged": flagged_days,
+                    "empty": empty_days,
+                    "past_days": past_days,
+                    "completion_rate": round((complete_days + flagged_days) / past_days * 100, 1) if past_days > 0 else 0
+                }
             }
-        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        print(f"[calendar] Error: {e}")
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Calendar error: {str(e)}")
 
 
 @router.get("/worksheet/{outlet_name}/{date_str}")
