@@ -55,6 +55,8 @@ function VariantTree({
   formatPrice,
   attributeValues,
   openReassignModal,
+  deleteVariant,
+  deleteCP,
   EDITABLE_ATTRS,
   ATTRIBUTE_LABELS,
 }) {
@@ -238,6 +240,8 @@ function VariantTree({
             formatPrice={formatPrice}
             attributeValues={attributeValues}
             openReassignModal={openReassignModal}
+            deleteVariant={deleteVariant}
+            deleteCP={deleteCP}
             EDITABLE_ATTRS={EDITABLE_ATTRS}
             ATTRIBUTE_LABELS={ATTRIBUTE_LABELS}
           />
@@ -1131,6 +1135,8 @@ function TaxonomyView() {
                         formatPrice={formatPrice}
                         attributeValues={attributeValues}
                         openReassignModal={openReassignModal}
+                        deleteVariant={deleteVariant}
+                        deleteCP={deleteCP}
                         EDITABLE_ATTRS={EDITABLE_ATTRS}
                         ATTRIBUTE_LABELS={ATTRIBUTE_LABELS}
                       />
