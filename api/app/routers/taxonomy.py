@@ -890,6 +890,43 @@ def delete_common_product(cp_id: int, current_user: dict = Depends(get_current_u
         conn.commit()
         return {"message": f"Common product '{row['common_name']}' deleted"}
 
+class CPMoveRequest(BaseModel):
+    variant_id: int
+
+
+@router.patch("/common-products/{cp_id}/move")
+def move_common_product(cp_id: int, data: CPMoveRequest, current_user: dict = Depends(get_current_user)):
+    """Move a common product to a different variant."""
+    org_id = current_user["organization_id"]
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute(
+            "SELECT id, common_name, variant_id FROM common_products WHERE id = %s AND organization_id = %s AND is_active = 1",
+            (cp_id, org_id)
+        )
+        cp = cursor.fetchone()
+        if not cp:
+            raise HTTPException(status_code=404, detail="Common product not found")
+
+        cursor.execute(
+            "SELECT id, base_ingredient_id FROM ingredient_variants WHERE id = %s AND is_active = 1",
+            (data.variant_id,)
+        )
+        target = cursor.fetchone()
+        if not target:
+            raise HTTPException(status_code=404, detail="Target variant not found")
+
+        cursor.execute(
+            """UPDATE common_products
+               SET variant_id = %s, base_ingredient_id = %s
+               WHERE id = %s""",
+            (data.variant_id, target["base_ingredient_id"], cp_id)
+        )
+        conn.commit()
+        return {"id": cp_id, "common_name": cp["common_name"], "variant_id": data.variant_id}
+
+
 @router.patch("/common-products/{cp_id}/reparse", response_model=CommonProductReparseResponse)
 def update_and_reparse_common_product(
     cp_id: int,

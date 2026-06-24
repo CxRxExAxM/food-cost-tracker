@@ -55,6 +55,7 @@ function VariantTree({
   formatPrice,
   attributeValues,
   openReassignModal,
+  openCPMoveModal,
   deleteVariant,
   deleteCP,
   EDITABLE_ATTRS,
@@ -240,6 +241,7 @@ function VariantTree({
             formatPrice={formatPrice}
             attributeValues={attributeValues}
             openReassignModal={openReassignModal}
+            openCPMoveModal={openCPMoveModal}
             deleteVariant={deleteVariant}
             deleteCP={deleteCP}
             EDITABLE_ATTRS={EDITABLE_ATTRS}
@@ -324,6 +326,13 @@ function VariantTree({
                               title="Edit name"
                             >
                               ✎
+                            </button>
+                            <button
+                              onClick={(e) => openCPMoveModal(cp, e)}
+                              className="btn-move"
+                              title="Move to different variant"
+                            >
+                              ↗
                             </button>
                             <button
                               onClick={(e) => { e.stopPropagation(); deleteCP(cp.id, cp.common_name); }}
@@ -422,6 +431,11 @@ function TaxonomyView() {
   // Move variant modal
   const [movingVariant, setMovingVariant] = useState(null);
   const [moveTargetId, setMoveTargetId] = useState(null);
+
+  // Move CP modal
+  const [movingCP, setMovingCP] = useState(null);
+  const [cpMoveTargetId, setCpMoveTargetId] = useState(null);
+  const [cpMoveSearch, setCpMoveSearch] = useState('');
 
   // Product reassignment modal
   const [reassigningProduct, setReassigningProduct] = useState(null);
@@ -792,6 +806,34 @@ function TaxonomyView() {
     }
   };
 
+  // === Move CP Functions ===
+  const openCPMoveModal = (cp, e) => {
+    e.stopPropagation();
+    setMovingCP(cp);
+    setCpMoveTargetId(cp.variant_id ? cp.variant_id.toString() : null);
+    setCpMoveSearch('');
+  };
+
+  const closeCPMoveModal = () => {
+    setMovingCP(null);
+    setCpMoveTargetId(null);
+    setCpMoveSearch('');
+  };
+
+  const executeCPMove = async () => {
+    if (!movingCP || !cpMoveTargetId) return;
+    try {
+      await axios.patch(`${API_URL}/taxonomy/common-products/${movingCP.id}/move`, {
+        variant_id: parseInt(cpMoveTargetId)
+      });
+      toast.success('Common product moved');
+      closeCPMoveModal();
+      fetchTaxonomyData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to move common product');
+    }
+  };
+
   // === Product Reassignment Functions ===
   const openReassignModal = (product, variantId, e) => {
     e.stopPropagation();
@@ -1135,6 +1177,7 @@ function TaxonomyView() {
                         formatPrice={formatPrice}
                         attributeValues={attributeValues}
                         openReassignModal={openReassignModal}
+                        openCPMoveModal={openCPMoveModal}
                         deleteVariant={deleteVariant}
                         deleteCP={deleteCP}
                         EDITABLE_ATTRS={EDITABLE_ATTRS}
@@ -1273,6 +1316,68 @@ function TaxonomyView() {
             <div className="modal-actions">
               <button onClick={closeMoveModal} className="btn-secondary">Cancel</button>
               <button onClick={executeMove} className="btn-primary">Move</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Move CP Modal */}
+      {movingCP && (
+        <div className="modal-overlay" onClick={closeCPMoveModal}>
+          <div className="modal-content move-modal" onClick={(e) => e.stopPropagation()}>
+            <h3>Move "{movingCP.common_name}"</h3>
+            <p className="move-hint">Select target variant</p>
+
+            <input
+              type="text"
+              className="move-search-input"
+              placeholder="Filter variants..."
+              value={cpMoveSearch}
+              onChange={(e) => setCpMoveSearch(e.target.value)}
+              autoFocus
+            />
+
+            <div className="move-options">
+              {baseIngredients.flatMap(base =>
+                getAllVariantsFlat(base.variants || []).map(v => ({
+                  ...v,
+                  baseName: base.name,
+                }))
+              )
+                .filter(v => {
+                  const q = cpMoveSearch.toLowerCase();
+                  return !q || v.display_name.toLowerCase().includes(q) || v.baseName.toLowerCase().includes(q);
+                })
+                .map(v => (
+                  <label
+                    key={v.id}
+                    className={`move-option ${cpMoveTargetId === v.id.toString() ? 'selected' : ''}`}
+                  >
+                    <input
+                      type="radio"
+                      name="cpMoveTarget"
+                      value={v.id}
+                      checked={cpMoveTargetId === v.id.toString()}
+                      onChange={() => setCpMoveTargetId(v.id.toString())}
+                    />
+                    <span className="option-label">
+                      <span className="option-base">{v.baseName}</span>
+                      {' › '}
+                      {v.depth > 0 && '└ '}{v.display_name}
+                    </span>
+                  </label>
+                ))}
+            </div>
+
+            <div className="modal-actions">
+              <button onClick={closeCPMoveModal} className="btn-secondary">Cancel</button>
+              <button
+                onClick={executeCPMove}
+                className="btn-primary"
+                disabled={!cpMoveTargetId || cpMoveTargetId === movingCP.variant_id?.toString()}
+              >
+                Move
+              </button>
             </div>
           </div>
         </div>

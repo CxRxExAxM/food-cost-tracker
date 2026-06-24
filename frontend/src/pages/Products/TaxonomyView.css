@@ -949,6 +949,29 @@
   font-size: var(--text-sm);
 }
 
+.move-option .option-base {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.move-search-input {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  font-family: var(--font-primary);
+  margin-bottom: var(--space-3);
+  box-sizing: border-box;
+}
+
+.move-search-input:focus {
+  outline: none;
+  border-color: var(--color-yellow);
+}
+
 /* Reassign Product Button */
 .btn-reassign {
   width: 20px;
