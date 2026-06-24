@@ -770,8 +770,7 @@
   padding: var(--space-6);
   max-width: 600px;
   width: 90%;
-  max-height: 80vh;
-  overflow-y: auto;
+  max-height: 90vh;
 }
 
 .modal-content h3 {
@@ -902,6 +901,8 @@
 /* Move Modal */
 .move-modal {
   max-width: 450px;
+  max-height: 90vh;
+  overflow-y: auto;
 }
 
 .move-hint {
@@ -914,7 +915,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  max-height: 300px;
+  max-height: 50vh;
   overflow-y: auto;
   padding: var(--space-2) 0;
   border: 1px solid var(--border-subtle);
@@ -979,6 +980,7 @@
 /* Reassign Modal */
 .reassign-modal {
   max-width: 500px;
+  overflow: visible; /* PathBasedProductMapper autocomplete must escape modal boundary */
 }
 
 .reassign-product-name {
