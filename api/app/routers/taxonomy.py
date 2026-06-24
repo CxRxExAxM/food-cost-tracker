@@ -1515,13 +1515,34 @@ def create_in_path(
             base_id, variant_id, _ = _resolve_path(cursor, data.path)
             # variant_id can be None if path only has a base ingredient — still valid
 
-            # Check for duplicate name in this org
+            # Error only on active duplicate
             cursor.execute(
                 "SELECT id FROM common_products WHERE LOWER(common_name) = LOWER(%s) AND organization_id = %s AND is_active = 1",
                 (data.name, org_id)
             )
             if cursor.fetchone():
                 raise HTTPException(status_code=400, detail=f"Common product '{data.name}' already exists in your organization")
+
+            # Reactivate archived CP (unique constraint blocks a fresh insert for the same name+org)
+            cursor.execute(
+                "SELECT id FROM common_products WHERE LOWER(common_name) = LOWER(%s) AND organization_id = %s AND is_active = 0",
+                (data.name, org_id)
+            )
+            archived = cursor.fetchone()
+            if archived:
+                cursor.execute(
+                    """UPDATE common_products
+                       SET is_active = 1, variant_id = %s, base_ingredient_id = %s, updated_at = NOW()
+                       WHERE id = %s RETURNING *""",
+                    (variant_id, base_id, archived["id"])
+                )
+                row = cursor.fetchone()
+                conn.commit()
+                log_audit(cursor, "common_product_reactivated", "common_product", row["id"],
+                          current_user["id"], org_id,
+                          {"common_name": data.name, "path": data.path, "variant_id": variant_id})
+                conn.commit()
+                return {**dict_from_row(row), "object_type": "common_product"}
 
             cursor.execute(
                 """INSERT INTO common_products (common_name, organization_id, variant_id, base_ingredient_id, is_active)
