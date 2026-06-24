@@ -1687,8 +1687,11 @@
 
 /* Path-Based Product Mapper */
 .path-mapper {
-  position: relative;
   min-width: 280px;
+}
+
+.path-mapper-input-wrap {
+  position: relative;
 }
 
 .path-mapper-breadcrumb {

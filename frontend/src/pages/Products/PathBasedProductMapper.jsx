@@ -205,97 +205,99 @@ export default function PathBasedProductMapper({ productDescription, onSelect, o
         {path.length > 0 && <span className="path-mapper-sep">›</span>}
       </div>
 
-      <input
-        ref={inputRef}
-        type="text"
-        className="mapping-input"
-        value={query}
-        onChange={e => { setQuery(e.target.value); setCreateIntent(null); }}
-        onKeyDown={handleKeyDown}
-        placeholder={path.length === 0 ? 'Search base ingredient...' : 'Search or create...'}
-        autoFocus
-      />
+      <div className="path-mapper-input-wrap">
+        <input
+          ref={inputRef}
+          type="text"
+          className="mapping-input"
+          value={query}
+          onChange={e => { setQuery(e.target.value); setCreateIntent(null); }}
+          onKeyDown={handleKeyDown}
+          placeholder={path.length === 0 ? 'Search base ingredient...' : 'Search or create...'}
+          autoFocus
+        />
 
-      {(results.length > 0 || hasCreateOptions || (path.length > 0 && !query.trim())) && (
-        <div className="autocomplete-dropdown">
-          {results.map((item, i) => (
-            <div
-              key={`${item.type}-${item.id}`}
-              className={`autocomplete-item path-mapper-item ${highlightedIndex === i ? 'highlighted' : ''}`}
-              onClick={() => selectResult(item)}
-              onMouseEnter={() => setHighlightedIndex(i)}
-            >
-              <span className="path-mapper-item-icon">
-                {item.type === 'base_ingredient' && '⬡'}
-                {item.type === 'variant' && '📁'}
-                {item.type === 'common_product' && '📦'}
-              </span>
-              <span className="path-mapper-item-name">{item.name}</span>
-              <span className="path-mapper-item-meta">
-                {item.type === 'base_ingredient' && item.variant_count > 0 && `${item.variant_count} variants`}
-                {item.type === 'variant' && item.has_children && 'has sub-variants'}
-                {item.type === 'variant' && !item.has_children && item.common_product_count > 0 && `${item.common_product_count} products`}
-                {item.type === 'common_product' && item.category}
-              </span>
-            </div>
-          ))}
+        {(results.length > 0 || hasCreateOptions || (path.length > 0 && !query.trim())) && (
+          <div className="autocomplete-dropdown">
+            {results.map((item, i) => (
+              <div
+                key={`${item.type}-${item.id}`}
+                className={`autocomplete-item path-mapper-item ${highlightedIndex === i ? 'highlighted' : ''}`}
+                onClick={() => selectResult(item)}
+                onMouseEnter={() => setHighlightedIndex(i)}
+              >
+                <span className="path-mapper-item-icon">
+                  {item.type === 'base_ingredient' && '⬡'}
+                  {item.type === 'variant' && '📁'}
+                  {item.type === 'common_product' && '📦'}
+                </span>
+                <span className="path-mapper-item-name">{item.name}</span>
+                <span className="path-mapper-item-meta">
+                  {item.type === 'base_ingredient' && item.variant_count > 0 && `${item.variant_count} variants`}
+                  {item.type === 'variant' && item.has_children && 'has sub-variants'}
+                  {item.type === 'variant' && !item.has_children && item.common_product_count > 0 && `${item.common_product_count} products`}
+                  {item.type === 'common_product' && item.category}
+                </span>
+              </div>
+            ))}
 
-          {query.trim() && path.length > 0 && (
-            <>
-              {hasCreateOptions && results.length > 0 && (
-                <div className="path-mapper-divider" />
-              )}
-              {createIntent !== 'common_product' && (
-                <div
-                  className={`autocomplete-item create-new ${highlightedIndex === results.length ? 'highlighted' : ''}`}
-                  onClick={() => createItem('variant')}
-                  onMouseEnter={() => setHighlightedIndex(results.length)}
-                >
-                  {creating ? 'Creating...' : `+ Create "${query.trim()}" as variant`}
-                </div>
-              )}
-              {createIntent !== 'variant' && (
-                <div
-                  className={`autocomplete-item create-new ${highlightedIndex === (createIntent === 'common_product' ? results.length : results.length + 1) ? 'highlighted' : ''}`}
-                  onClick={() => createItem('common_product')}
-                  onMouseEnter={() => setHighlightedIndex(createIntent === 'common_product' ? results.length : results.length + 1)}
-                >
-                  {creating ? 'Creating...' : `+ Create "${query.trim()}" as Common Product`}
-                </div>
-              )}
-            </>
-          )}
+            {query.trim() && path.length > 0 && (
+              <>
+                {hasCreateOptions && results.length > 0 && (
+                  <div className="path-mapper-divider" />
+                )}
+                {createIntent !== 'common_product' && (
+                  <div
+                    className={`autocomplete-item create-new ${highlightedIndex === results.length ? 'highlighted' : ''}`}
+                    onClick={() => createItem('variant')}
+                    onMouseEnter={() => setHighlightedIndex(results.length)}
+                  >
+                    {creating ? 'Creating...' : `+ Create "${query.trim()}" as variant`}
+                  </div>
+                )}
+                {createIntent !== 'variant' && (
+                  <div
+                    className={`autocomplete-item create-new ${highlightedIndex === (createIntent === 'common_product' ? results.length : results.length + 1) ? 'highlighted' : ''}`}
+                    onClick={() => createItem('common_product')}
+                    onMouseEnter={() => setHighlightedIndex(createIntent === 'common_product' ? results.length : results.length + 1)}
+                  >
+                    {creating ? 'Creating...' : `+ Create "${query.trim()}" as Common Product`}
+                  </div>
+                )}
+              </>
+            )}
 
-          {query.trim() && path.length === 0 && (
-            <div
-              className={`autocomplete-item create-new ${highlightedIndex === results.length ? 'highlighted' : ''}`}
-              onClick={() => createItem('base_ingredient')}
-              onMouseEnter={() => setHighlightedIndex(results.length)}
-            >
-              {creating ? 'Creating...' : `+ Create "${query.trim()}" as base ingredient`}
-            </div>
-          )}
-
-          {path.length > 0 && !query.trim() && (
-            <>
-              {results.length > 0 && <div className="path-mapper-divider" />}
+            {query.trim() && path.length === 0 && (
               <div
                 className={`autocomplete-item create-new ${highlightedIndex === results.length ? 'highlighted' : ''}`}
-                onClick={suggestCPName}
+                onClick={() => createItem('base_ingredient')}
                 onMouseEnter={() => setHighlightedIndex(results.length)}
               >
-                📦 Create a Common Product here
+                {creating ? 'Creating...' : `+ Create "${query.trim()}" as base ingredient`}
               </div>
-            </>
-          )}
-        </div>
-      )}
+            )}
 
-      {loading && results.length === 0 && (
-        <div className="autocomplete-dropdown">
-          <div className="autocomplete-item" style={{ color: 'var(--text-tertiary)' }}>Searching...</div>
-        </div>
-      )}
+            {path.length > 0 && !query.trim() && (
+              <>
+                {results.length > 0 && <div className="path-mapper-divider" />}
+                <div
+                  className={`autocomplete-item create-new ${highlightedIndex === results.length ? 'highlighted' : ''}`}
+                  onClick={suggestCPName}
+                  onMouseEnter={() => setHighlightedIndex(results.length)}
+                >
+                  📦 Create a Common Product here
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {loading && results.length === 0 && (
+          <div className="autocomplete-dropdown">
+            <div className="autocomplete-item" style={{ color: 'var(--text-tertiary)' }}>Searching...</div>
+          </div>
+        )}
+      </div>
 
       <div className="mapping-actions">
         <button onClick={onCancel} className="btn-cancel">Cancel</button>
