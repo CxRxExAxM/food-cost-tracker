@@ -272,9 +272,13 @@ def determine_category_subcategory(base_name: str) -> tuple:
     return None, None
 
 
-def build_display_name(base_name: str, attrs: dict) -> str:
-    """Build a display name from base and attributes."""
-    parts = [base_name]
+def build_display_name(base_name: str, attrs: dict, include_base: bool = True) -> str:
+    """Build a display name from base and attributes.
+
+    Set include_base=False when creating a variant display_name — the base
+    ingredient is already the parent context and should not be repeated.
+    """
+    parts = [base_name] if include_base else []
 
     # Add attributes in consistent order
     if attrs.get("variety"):
@@ -296,4 +300,4 @@ def build_display_name(base_name: str, attrs: dict) -> str:
     if attrs.get("state"):
         parts.append(attrs["state"])
 
-    return ", ".join(parts)
+    return ", ".join(parts) if parts else base_name

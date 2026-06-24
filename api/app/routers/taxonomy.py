@@ -44,12 +44,12 @@ except ImportError:
             result["base_name"] = common_name.strip().title()
         return result
 
-    def build_display_name(base_name: str, attrs: dict) -> str:
-        parts = [base_name]
+    def build_display_name(base_name: str, attrs: dict, include_base: bool = True) -> str:
+        parts = [base_name] if include_base else []
         for key in ["variety", "form", "cut", "bone", "skin", "prep", "cut_size", "grade", "state"]:
             if attrs.get(key):
                 parts.append(attrs[key])
-        return ", ".join(parts)
+        return ", ".join(parts) if parts else base_name
 
 logger = get_logger(__name__)
 
@@ -848,7 +848,7 @@ def update_and_reparse_common_product(
                 logger.info(f"[reparse] Created new base ingredient: {base_name} (id={base_id})")
 
             # Build variant display name and find/create matching variant
-            display_name = build_display_name(base_name, attrs)
+            display_name = build_display_name(base_name, attrs, include_base=False)
 
             # Look for existing variant with matching attributes
             attr_conditions = []
