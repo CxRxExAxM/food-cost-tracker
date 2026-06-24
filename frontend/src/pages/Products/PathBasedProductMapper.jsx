@@ -145,7 +145,13 @@ export default function PathBasedProductMapper({ productDescription, onSelect, o
     if (item._action === 'create_variant') createItem('variant');
     else if (item._action === 'create_cp') createItem('common_product');
     else if (item._action === 'create_base') createItem('base_ingredient');
+    else if (item._action === 'suggest_cp_name') suggestCPName();
     else selectResult(item);
+  };
+
+  const suggestCPName = () => {
+    setQuery(path.join(', '));
+    inputRef.current?.focus();
   };
 
   // Build the full item list for keyboard navigation (results + create options)
@@ -161,6 +167,10 @@ export default function PathBasedProductMapper({ productDescription, onSelect, o
           items.push({ _action: 'create_base', name: query.trim(), type: '_create' });
         }
       }
+    }
+    // Always offer CP creation at a variant level, even with empty query
+    if (path.length > 0 && !query.trim()) {
+      items.push({ _action: 'suggest_cp_name', type: '_suggest' });
     }
     return items;
   };
@@ -203,7 +213,7 @@ export default function PathBasedProductMapper({ productDescription, onSelect, o
         autoFocus
       />
 
-      {(results.length > 0 || hasCreateOptions) && (
+      {(results.length > 0 || hasCreateOptions || (path.length > 0 && !query.trim())) && (
         <div className="autocomplete-dropdown">
           {results.map((item, i) => (
             <div
@@ -257,6 +267,19 @@ export default function PathBasedProductMapper({ productDescription, onSelect, o
             >
               {creating ? 'Creating...' : `+ Create "${query.trim()}" as base ingredient`}
             </div>
+          )}
+
+          {path.length > 0 && !query.trim() && (
+            <>
+              {results.length > 0 && <div className="path-mapper-divider" />}
+              <div
+                className={`autocomplete-item create-new ${highlightedIndex === results.length ? 'highlighted' : ''}`}
+                onClick={suggestCPName}
+                onMouseEnter={() => setHighlightedIndex(results.length)}
+              >
+                📦 Create a Common Product here
+              </div>
+            </>
           )}
         </div>
       )}
