@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import axios from '../../lib/axios';
+import PathBasedProductMapper from './PathBasedProductMapper';
 import { useToast } from '../../contexts/ToastContext';
 import './TaxonomyView.css';
 
@@ -404,10 +405,6 @@ function TaxonomyView() {
 
   // Product reassignment modal
   const [reassigningProduct, setReassigningProduct] = useState(null);
-  const [cpSearchQuery, setCpSearchQuery] = useState('');
-  const [cpSearchResults, setCpSearchResults] = useState([]);
-  const [selectedNewCP, setSelectedNewCP] = useState(null);
-  const [searchingCPs, setSearchingCPs] = useState(false);
 
   // Debounced search
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -779,63 +776,24 @@ function TaxonomyView() {
   const openReassignModal = (product, variantId, e) => {
     e.stopPropagation();
     setReassigningProduct({ ...product, currentVariantId: variantId });
-    setCpSearchQuery('');
-    setCpSearchResults([]);
-    setSelectedNewCP(null);
   };
 
   const closeReassignModal = () => {
     setReassigningProduct(null);
-    setCpSearchQuery('');
-    setCpSearchResults([]);
-    setSelectedNewCP(null);
   };
 
-  const searchCommonProducts = async (query) => {
-    if (query.length < 2) {
-      setCpSearchResults([]);
-      return;
-    }
-
-    setSearchingCPs(true);
-    try {
-      const response = await axios.get(`${API_URL}/taxonomy/common-products/search`, {
-        params: { q: query, limit: 20 }
-      });
-      setCpSearchResults(response.data);
-    } catch (error) {
-      console.error('Error searching common products:', error);
-    } finally {
-      setSearchingCPs(false);
-    }
-  };
-
-  // Debounce CP search
-  useEffect(() => {
-    if (!reassigningProduct) return;
-
-    const timer = setTimeout(() => {
-      searchCommonProducts(cpSearchQuery);
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [cpSearchQuery, reassigningProduct]);
-
-  const executeReassign = async () => {
-    if (!reassigningProduct || !selectedNewCP) return;
-
+  const executeReassign = async (newCp) => {
+    if (!reassigningProduct || !newCp) return;
     try {
       await axios.patch(`${API_URL}/taxonomy/products/${reassigningProduct.id}/reassign`, {
-        common_product_id: selectedNewCP.id
+        common_product_id: newCp.id
       });
-      toast.success(`Moved to "${selectedNewCP.common_name}"`);
-
-      // Clear cache for the old variant to force reload
+      toast.success(`Moved to "${newCp.common_name}"`);
       setCommonProductsCache(prev => {
         const next = { ...prev };
         delete next[reassigningProduct.currentVariantId];
         return next;
       });
-
       closeReassignModal();
       fetchTaxonomyData();
     } catch (error) {
@@ -1267,50 +1225,11 @@ function TaxonomyView() {
           <div className="modal-content reassign-modal" onClick={(e) => e.stopPropagation()}>
             <h3>Move Product to Different CP</h3>
             <p className="reassign-product-name">{reassigningProduct.product_name}</p>
-            <p className="reassign-hint">Search for the common product to move this SKU to:</p>
-
-            <input
-              type="text"
-              className="cp-search-input"
-              placeholder="Search common products..."
-              value={cpSearchQuery}
-              onChange={(e) => setCpSearchQuery(e.target.value)}
-              autoFocus
+            <PathBasedProductMapper
+              productDescription={reassigningProduct.product_name}
+              onSelect={(cp) => executeReassign(cp)}
+              onCancel={closeReassignModal}
             />
-
-            <div className="cp-search-results">
-              {searchingCPs ? (
-                <div className="searching">Searching...</div>
-              ) : cpSearchResults.length === 0 ? (
-                <div className="no-results">
-                  {cpSearchQuery.length < 2 ? 'Type at least 2 characters to search' : 'No matches found'}
-                </div>
-              ) : (
-                cpSearchResults.map(cp => (
-                  <div
-                    key={cp.id}
-                    className={`cp-result ${selectedNewCP?.id === cp.id ? 'selected' : ''}`}
-                    onClick={() => setSelectedNewCP(cp)}
-                  >
-                    <span className="cp-result-name">{cp.common_name}</span>
-                    {cp.variant_name && (
-                      <span className="cp-result-variant">→ {cp.variant_name}</span>
-                    )}
-                  </div>
-                ))
-              )}
-            </div>
-
-            <div className="modal-actions">
-              <button onClick={closeReassignModal} className="btn-secondary">Cancel</button>
-              <button
-                onClick={executeReassign}
-                className="btn-primary"
-                disabled={!selectedNewCP}
-              >
-                Move to {selectedNewCP?.common_name || '...'}
-              </button>
-            </div>
           </div>
         </div>
       )}

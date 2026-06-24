@@ -143,6 +143,8 @@ class IngredientVariantBase(BaseModel):
     """Specific form/variant of a base ingredient."""
     base_ingredient_id: int
     display_name: str
+    parent_variant_id: Optional[int] = None
+    depth: Optional[int] = None
     # General attributes
     variety: Optional[str] = None       # "Orange", "Rainbow", "Roma"
     form: Optional[str] = None          # "Baby", "Jumbo", "Petite"

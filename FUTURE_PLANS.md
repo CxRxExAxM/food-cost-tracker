@@ -121,26 +121,30 @@ This document outlines the technical roadmap for RestauranTek, covering both nea
 - Update operational flags
 - Create action items
 
-### 3. Database Refactor: Ingredient Taxonomy
+### 3. Taxonomy-Guided Product Mapping (In Progress)
 
-**Three-Phase Plan (See Notion for full design):**
+**Plan doc:** `docs/TAXONOMY_GUIDED_MAPPING_PLAN_v2.md`
+**Priority:** High — blocks trustworthy menu costing
 
-**Phase 1 - Preparation:**
-- Create `base_ingredients` table (tomato, chicken, etc.)
-- Create `ingredient_variants` table (cherry tomato, roma tomato)
-- Map existing `common_products` to base ingredients
+**Build sequence (see v2 plan for full detail + gotchas):**
 
-**Phase 2 - Migration:**
-- Update recipe ingredients to reference variants
-- Migrate learned mappings
-- Preserve existing cost relationships
+**Step 1 — Backend:** `search-path` and `create-in-path` endpoints in `taxonomy.py`; wire `parent_variant_id` through `IngredientVariantBase`/Create
 
-**Phase 3 - Features:**
-- Attribute-based search (find all "dairy" items)
-- Substitution suggestions
-- Cross-recipe ingredient analysis
+**Step 2 — Frontend:** `PathBasedProductMapper.jsx` — path-array input, breadcrumb, variant vs CP dropdown
 
-**Three-Tier Security Model:**
+**Step 3 — Integration:** Replace freeform mapper in `Products.jsx` (~lines 1118-1166) and `TaxonomyView.jsx`
+
+**Step 4 — Trial:** Test guided flow on real products before touching existing taxonomy data
+
+**Step 4.5 — Analysis:** Run duplicate-analysis script on `common_products`; decide clean-slate vs targeted merge
+
+**Step 5 — Archive:** Soft-archive old taxonomy data (`is_active = 0`); scope `common_products` by org, confirm tenant count for global tables first
+
+**Step 6 — Remap:** Walk vendor products through guided flow (auto-parser pre-fills path suggestions)
+
+**Step 7 — Re-link recipes:** Re-point `recipe_ingredients.common_product_id` via matching pipeline; review screen for bulk confirmation
+
+**Three-Tier Security Model (unchanged):**
 1. **Tenant-private:** Pricing, volumes, costs (never shared)
 2. **Anonymized shared:** Ingredient mappings (opt-in network effect)
 3. **Fully public:** Base taxonomy, unit normalizations
@@ -336,7 +340,7 @@ api/app/routers/
 
 ### Next Quarter
 - [ ] Potentials Phase 2 implementation
-- [ ] Database refactor Phase 1
+- [ ] Taxonomy-Guided Product Mapping (see `docs/TAXONOMY_GUIDED_MAPPING_PLAN_v2.md`)
 - [ ] Recipe scaling feature
 
 ### This Year

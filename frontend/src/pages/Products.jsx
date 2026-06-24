@@ -7,6 +7,7 @@ import { useToast } from '../contexts/ToastContext';
 import OutletBadge from '../components/outlets/OutletBadge';
 import CommonProductsTable from './Products/CommonProductsTable';
 import TaxonomyView from './Products/TaxonomyView';
+import PathBasedProductMapper from './Products/PathBasedProductMapper';
 import './Products.css';
 
 const API_URL = import.meta.env.VITE_API_URL ?? '';
@@ -49,9 +50,7 @@ function Products() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize] = useState(100);
   const [editingProductId, setEditingProductId] = useState(null);
-  const [mappingInput, setMappingInput] = useState('');
-  const [filteredCommonProducts, setFilteredCommonProducts] = useState([]);
-  const [showAutocomplete, setShowAutocomplete] = useState(false);
+
   const [editingCommonProductId, setEditingCommonProductId] = useState(null);
   const [commonProductEditInput, setCommonProductEditInput] = useState('');
   const [allergenModalProduct, setAllergenModalProduct] = useState(null);
@@ -203,19 +202,6 @@ function Products() {
     setEffectiveDate(new Date().toISOString().split('T')[0]);
   };
 
-  const handleMappingInputChange = (value) => {
-    setMappingInput(value);
-    if (value) {
-      const filtered = commonProducts.filter(cp =>
-        cp.common_name.toLowerCase().includes(value.toLowerCase())
-      );
-      setFilteredCommonProducts(filtered);
-      setShowAutocomplete(true);
-    } else {
-      setShowAutocomplete(false);
-    }
-  };
-
   const handleSelectCommonProduct = async (productId, commonProduct) => {
     try {
       await axios.patch(`${API_URL}/products/${productId}`, {
@@ -230,44 +216,9 @@ function Products() {
       ));
 
       setEditingProductId(null);
-      setMappingInput('');
-      setShowAutocomplete(false);
     } catch (error) {
       console.error('Error mapping product:', error);
       toast.error('Failed to map product');
-    }
-  };
-
-  const handleCreateAndMapCommonProduct = async (productId) => {
-    if (!mappingInput.trim()) return;
-
-    try {
-      // Create new common product
-      const createResponse = await axios.post(`${API_URL}/common-products`, {
-        common_name: mappingInput.trim()
-      });
-
-      const newCommonProduct = createResponse.data;
-
-      // Map to the product
-      await axios.patch(`${API_URL}/products/${productId}`, {
-        common_product_id: newCommonProduct.id
-      });
-
-      // Update local state
-      setProducts(products.map(p =>
-        p.id === productId
-          ? { ...p, common_product_id: newCommonProduct.id, common_product_name: newCommonProduct.common_name }
-          : p
-      ));
-
-      setCommonProducts([...commonProducts, newCommonProduct]);
-      setEditingProductId(null);
-      setMappingInput('');
-      setShowAutocomplete(false);
-    } catch (error) {
-      console.error('Error creating common product:', error);
-      toast.error(error.response?.data?.detail || 'Failed to create common product');
     }
   };
 
@@ -288,14 +239,10 @@ function Products() {
 
   const startEditing = (product) => {
     setEditingProductId(product.id);
-    setMappingInput('');
-    setShowAutocomplete(false);
   };
 
   const cancelEditing = () => {
     setEditingProductId(null);
-    setMappingInput('');
-    setShowAutocomplete(false);
   };
 
   const startEditingCommonProduct = (product) => {
@@ -1117,53 +1064,11 @@ function Products() {
                   <td className="text-right price-cell">{renderEditableCell(product, 'unit_price', formatPrice(product.unit_price))}</td>
                   <td className="mapping-cell">
                     {editingProductId === product.id ? (
-                      <div className="mapping-editor">
-                        <input
-                          type="text"
-                          value={mappingInput}
-                          onChange={(e) => handleMappingInputChange(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' && mappingInput.trim()) {
-                              handleCreateAndMapCommonProduct(product.id);
-                            } else if (e.key === 'Escape') {
-                              cancelEditing();
-                            }
-                          }}
-                          placeholder="Type to search or create..."
-                          className="mapping-input"
-                          autoFocus
-                        />
-
-                        {showAutocomplete && filteredCommonProducts.length > 0 && (
-                          <div className="autocomplete-dropdown">
-                            {filteredCommonProducts.map((cp) => (
-                              <div
-                                key={cp.id}
-                                className="autocomplete-item"
-                                onClick={() => handleSelectCommonProduct(product.id, cp)}
-                              >
-                                {cp.common_name}
-                                {cp.category && <span className="category-tag">{cp.category}</span>}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-
-                        {mappingInput && filteredCommonProducts.length === 0 && (
-                          <div className="autocomplete-dropdown">
-                            <div
-                              className="autocomplete-item create-new"
-                              onClick={() => handleCreateAndMapCommonProduct(product.id)}
-                            >
-                              + Create "{mappingInput}"
-                            </div>
-                          </div>
-                        )}
-
-                        <div className="mapping-actions">
-                          <button onClick={cancelEditing} className="btn-cancel">Cancel</button>
-                        </div>
-                      </div>
+                      <PathBasedProductMapper
+                        productDescription={product.name}
+                        onSelect={(cp) => handleSelectCommonProduct(product.id, cp)}
+                        onCancel={cancelEditing}
+                      />
                     ) : (
                       <div className="mapping-display">
                         {product.common_product_id ? (

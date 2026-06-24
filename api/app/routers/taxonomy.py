@@ -605,17 +605,28 @@ def create_variant(
         if not cursor.fetchone():
             raise HTTPException(status_code=400, detail="Base ingredient not found")
 
+        # Calculate depth from parent if provided
+        parent_depth = 0
+        if data.parent_variant_id:
+            cursor.execute("SELECT depth FROM ingredient_variants WHERE id = %s", (data.parent_variant_id,))
+            parent_row = cursor.fetchone()
+            if parent_row and parent_row["depth"] is not None:
+                parent_depth = parent_row["depth"]
+        variant_depth = parent_depth + 1 if data.parent_variant_id else 0
+
         cursor.execute("""
             INSERT INTO ingredient_variants (
                 base_ingredient_id, display_name,
                 variety, form, prep, cut_size,
-                cut, bone, skin, grade, state
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                cut, bone, skin, grade, state,
+                parent_variant_id, depth
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING *
         """, (
             data.base_ingredient_id, data.display_name,
             data.variety, data.form, data.prep, data.cut_size,
-            data.cut, data.bone, data.skin, data.grade, data.state
+            data.cut, data.bone, data.skin, data.grade, data.state,
+            data.parent_variant_id, variant_depth
         ))
         row = cursor.fetchone()
         conn.commit()
@@ -1153,3 +1164,340 @@ def merge_variants(
             products_updated=products_updated,
             mappings_updated=mappings_updated
         )
+
+
+# =============================================================================
+# Guided Path-Based Mapping Endpoints
+# =============================================================================
+
+class PathSearchResult(BaseModel):
+    type: str  # "base_ingredient", "variant", "common_product"
+    id: int
+    name: str
+    category: Optional[str] = None
+    variant_count: Optional[int] = None
+    common_product_count: Optional[int] = None
+    has_children: Optional[bool] = None
+
+
+class CreateInPathRequest(BaseModel):
+    path: List[str]
+    name: str
+    type: str  # "base_ingredient", "variant", "common_product"
+
+
+class SuggestPathResponse(BaseModel):
+    suggested_path: List[str]
+    parsed: dict
+    resolved: bool
+
+
+def _resolve_path(cursor, path: List[str]):
+    """
+    Walk the taxonomy tree along path steps.
+
+    path[0] = base ingredient name (case-insensitive)
+    path[1..n] = variant display_names at each nesting level
+
+    Returns (base_id, current_variant_id, depth) where:
+    - base_id is None if path is empty
+    - current_variant_id is None if stopped at base ingredient level
+    - depth is number of variant levels descended (0 = at base level)
+    """
+    if not path:
+        return None, None, 0
+
+    cursor.execute(
+        "SELECT id FROM base_ingredients WHERE LOWER(name) = LOWER(%s) AND is_active = 1",
+        (path[0],)
+    )
+    row = cursor.fetchone()
+    if not row:
+        raise HTTPException(status_code=400, detail=f"Base ingredient '{path[0]}' not found")
+
+    base_id = row["id"]
+    current_variant_id = None
+
+    for i, step in enumerate(path[1:], start=1):
+        if current_variant_id is None:
+            cursor.execute(
+                """SELECT id FROM ingredient_variants
+                   WHERE base_ingredient_id = %s AND LOWER(display_name) = LOWER(%s)
+                     AND parent_variant_id IS NULL AND is_active = 1""",
+                (base_id, step)
+            )
+        else:
+            cursor.execute(
+                """SELECT id FROM ingredient_variants
+                   WHERE base_ingredient_id = %s AND LOWER(display_name) = LOWER(%s)
+                     AND parent_variant_id = %s AND is_active = 1""",
+                (base_id, step, current_variant_id)
+            )
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=400, detail=f"Variant '{step}' not found at path level {i}")
+        current_variant_id = row["id"]
+
+    depth = len(path) - 1
+    return base_id, current_variant_id, depth
+
+
+@router.get("/search-path", response_model=List[PathSearchResult])
+def search_path(
+    path: Optional[str] = Query(None, description="Comma-separated path, e.g. 'Chicken,Breast'"),
+    query: Optional[str] = Query(None, description="Search term to filter results"),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Search the taxonomy tree at a given path depth.
+
+    - Empty path: returns matching base ingredients
+    - path='Chicken': returns variants under Chicken (root level, no parent)
+    - path='Chicken,Breast': returns child variants + common products under Breast
+    """
+    org_id = current_user["organization_id"]
+    path_steps = [s.strip() for s in path.split(",") if s.strip()] if path else []
+    q = f"%{query.strip()}%" if query and query.strip() else "%"
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+        results = []
+
+        if not path_steps:
+            # Top level: search base ingredients
+            cursor.execute(
+                """SELECT id, name, category,
+                          (SELECT COUNT(*) FROM ingredient_variants WHERE base_ingredient_id = bi.id AND is_active = 1) as variant_count
+                   FROM base_ingredients bi
+                   WHERE is_active = 1 AND LOWER(name) LIKE LOWER(%s)
+                   ORDER BY name LIMIT 20""",
+                (q,)
+            )
+            for row in cursor.fetchall():
+                results.append(PathSearchResult(
+                    type="base_ingredient",
+                    id=row["id"],
+                    name=row["name"],
+                    category=row["category"],
+                    variant_count=row["variant_count"]
+                ))
+            return results
+
+        # Resolve the path
+        try:
+            base_id, current_variant_id, depth = _resolve_path(cursor, path_steps)
+        except HTTPException as e:
+            logger.warning(f"search-path: {e.detail}")
+            return []
+
+        # Search child variants at this level
+        if current_variant_id is None:
+            # At base ingredient level - find root variants
+            cursor.execute(
+                """SELECT id, display_name,
+                          (SELECT COUNT(*) FROM common_products WHERE variant_id = v.id AND is_active = 1) as common_product_count,
+                          (SELECT COUNT(*) FROM ingredient_variants WHERE parent_variant_id = v.id AND is_active = 1) as child_count
+                   FROM ingredient_variants v
+                   WHERE base_ingredient_id = %s AND parent_variant_id IS NULL AND is_active = 1
+                     AND LOWER(display_name) LIKE LOWER(%s)
+                   ORDER BY display_name LIMIT 20""",
+                (base_id, q)
+            )
+        else:
+            # At a variant level - find child variants
+            cursor.execute(
+                """SELECT id, display_name,
+                          (SELECT COUNT(*) FROM common_products WHERE variant_id = v.id AND is_active = 1) as common_product_count,
+                          (SELECT COUNT(*) FROM ingredient_variants WHERE parent_variant_id = v.id AND is_active = 1) as child_count
+                   FROM ingredient_variants v
+                   WHERE base_ingredient_id = %s AND parent_variant_id = %s AND is_active = 1
+                     AND LOWER(display_name) LIKE LOWER(%s)
+                   ORDER BY display_name LIMIT 20""",
+                (base_id, current_variant_id, q)
+            )
+
+        for row in cursor.fetchall():
+            results.append(PathSearchResult(
+                type="variant",
+                id=row["id"],
+                name=row["display_name"],
+                common_product_count=row["common_product_count"],
+                has_children=row["child_count"] > 0
+            ))
+
+        # Also search common products at this level (only when at a variant node)
+        if current_variant_id is not None:
+            cursor.execute(
+                """SELECT id, common_name, category
+                   FROM common_products
+                   WHERE variant_id = %s AND organization_id = %s AND is_active = 1
+                     AND LOWER(common_name) LIKE LOWER(%s)
+                   ORDER BY common_name LIMIT 20""",
+                (current_variant_id, org_id, q)
+            )
+            for row in cursor.fetchall():
+                results.append(PathSearchResult(
+                    type="common_product",
+                    id=row["id"],
+                    name=row["common_name"],
+                    category=row["category"]
+                ))
+
+        return results
+
+
+@router.get("/suggest-path", response_model=SuggestPathResponse)
+def suggest_path(
+    name: str = Query(..., description="Raw vendor product description to parse"),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Parse a raw vendor description and return a suggested taxonomy path.
+    Used by PathBasedProductMapper to pre-fill the navigation path.
+    """
+    parsed = extract_base_and_attributes(name)
+    suggested_path = []
+    resolved = False
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        if parsed.get("base_name"):
+            # Try to resolve the base ingredient
+            cursor.execute(
+                "SELECT id FROM base_ingredients WHERE LOWER(name) = LOWER(%s) AND is_active = 1",
+                (parsed["base_name"],)
+            )
+            row = cursor.fetchone()
+            if row:
+                suggested_path.append(parsed["base_name"].title())
+                base_id = row["id"]
+
+                # Try to find a matching root variant from the cut attribute
+                if parsed.get("cut"):
+                    cursor.execute(
+                        """SELECT id, display_name FROM ingredient_variants
+                           WHERE base_ingredient_id = %s AND LOWER(display_name) = LOWER(%s)
+                             AND parent_variant_id IS NULL AND is_active = 1""",
+                        (base_id, parsed["cut"])
+                    )
+                    vrow = cursor.fetchone()
+                    if vrow:
+                        suggested_path.append(vrow["display_name"])
+                        resolved = True
+                else:
+                    resolved = True
+
+    return SuggestPathResponse(
+        suggested_path=suggested_path,
+        parsed=parsed,
+        resolved=resolved
+    )
+
+
+@router.post("/create-in-path")
+def create_in_path(
+    data: CreateInPathRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Create a base ingredient, variant, or common product at a given path location.
+
+    - type='base_ingredient', path=[] -> creates base ingredient named data.name
+    - type='variant', path=['Chicken'] -> creates root variant under Chicken
+    - type='variant', path=['Chicken','Breast'] -> creates child variant under Breast
+    - type='common_product', path=['Chicken','Breast'] -> creates CP linked to Breast variant
+    """
+    org_id = current_user["organization_id"]
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        if data.type == "base_ingredient":
+            cursor.execute(
+                "SELECT id FROM base_ingredients WHERE LOWER(name) = LOWER(%s)",
+                (data.name,)
+            )
+            if cursor.fetchone():
+                raise HTTPException(status_code=400, detail=f"Base ingredient '{data.name}' already exists")
+
+            cursor.execute(
+                "INSERT INTO base_ingredients (name, is_active) VALUES (%s, 1) RETURNING *",
+                (data.name.strip().title(),)
+            )
+            row = cursor.fetchone()
+            conn.commit()
+            log_audit(cursor, "base_ingredient_created", "base_ingredient", row["id"],
+                      current_user["id"], org_id, {"name": data.name})
+            conn.commit()
+            return {**dict_from_row(row), "object_type": "base_ingredient"}
+
+        elif data.type == "variant":
+            if not data.path:
+                raise HTTPException(status_code=400, detail="path must include at least a base ingredient for type=variant")
+
+            base_id, parent_variant_id, parent_depth = _resolve_path(cursor, data.path)
+            variant_depth = (parent_depth + 1) if parent_variant_id else 0
+
+            # Check for duplicate at this level
+            if parent_variant_id is None:
+                cursor.execute(
+                    """SELECT id FROM ingredient_variants
+                       WHERE base_ingredient_id = %s AND LOWER(display_name) = LOWER(%s)
+                         AND parent_variant_id IS NULL AND is_active = 1""",
+                    (base_id, data.name)
+                )
+            else:
+                cursor.execute(
+                    """SELECT id FROM ingredient_variants
+                       WHERE base_ingredient_id = %s AND LOWER(display_name) = LOWER(%s)
+                         AND parent_variant_id = %s AND is_active = 1""",
+                    (base_id, data.name, parent_variant_id)
+                )
+            if cursor.fetchone():
+                raise HTTPException(status_code=400, detail=f"Variant '{data.name}' already exists at this level")
+
+            cursor.execute(
+                """INSERT INTO ingredient_variants
+                   (base_ingredient_id, display_name, parent_variant_id, depth, is_active)
+                   VALUES (%s, %s, %s, %s, 1) RETURNING *""",
+                (base_id, data.name.strip(), parent_variant_id, variant_depth)
+            )
+            row = cursor.fetchone()
+            conn.commit()
+            log_audit(cursor, "variant_created", "ingredient_variant", row["id"],
+                      current_user["id"], org_id,
+                      {"display_name": data.name, "path": data.path})
+            conn.commit()
+            return {**dict_from_row(row), "object_type": "variant"}
+
+        elif data.type == "common_product":
+            if not data.path:
+                raise HTTPException(status_code=400, detail="path must include at least a base ingredient for type=common_product")
+
+            base_id, variant_id, _ = _resolve_path(cursor, data.path)
+            # variant_id can be None if path only has a base ingredient — still valid
+
+            # Check for duplicate name in this org
+            cursor.execute(
+                "SELECT id FROM common_products WHERE LOWER(common_name) = LOWER(%s) AND organization_id = %s AND is_active = 1",
+                (data.name, org_id)
+            )
+            if cursor.fetchone():
+                raise HTTPException(status_code=400, detail=f"Common product '{data.name}' already exists in your organization")
+
+            cursor.execute(
+                """INSERT INTO common_products (common_name, organization_id, variant_id, base_ingredient_id, is_active)
+                   VALUES (%s, %s, %s, %s, 1) RETURNING *""",
+                (data.name.strip(), org_id, variant_id, base_id)
+            )
+            row = cursor.fetchone()
+            conn.commit()
+            log_audit(cursor, "common_product_created", "common_product", row["id"],
+                      current_user["id"], org_id,
+                      {"common_name": data.name, "path": data.path, "variant_id": variant_id})
+            conn.commit()
+            return {**dict_from_row(row), "object_type": "common_product"}
+
+        else:
+            raise HTTPException(status_code=400, detail=f"Invalid type '{data.type}'. Must be base_ingredient, variant, or common_product")
