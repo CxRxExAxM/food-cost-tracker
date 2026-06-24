@@ -274,13 +274,32 @@ def create_base_ingredient(
     with get_db() as conn:
         cursor = conn.cursor()
 
-        # Check for duplicate name
+        # Error only on active duplicate; reactivate archived rows rather than blocking
         cursor.execute(
-            "SELECT id FROM base_ingredients WHERE LOWER(name) = LOWER(%s)",
+            "SELECT id FROM base_ingredients WHERE LOWER(name) = LOWER(%s) AND is_active = 1",
             (data.name,)
         )
         if cursor.fetchone():
             raise HTTPException(status_code=400, detail="Base ingredient with this name already exists")
+
+        cursor.execute(
+            "SELECT id FROM base_ingredients WHERE LOWER(name) = LOWER(%s) AND is_active = 0",
+            (data.name,)
+        )
+        archived = cursor.fetchone()
+        if archived:
+            cursor.execute(
+                "UPDATE base_ingredients SET is_active = 1 WHERE id = %s RETURNING *",
+                (archived["id"],)
+            )
+            row = cursor.fetchone()
+            conn.commit()
+            log_audit(cursor, "base_ingredient_reactivated", "base_ingredient", row["id"],
+                      current_user["id"], current_user["organization_id"],
+                      {"name": data.name})
+            conn.commit()
+            logger.info(f"Reactivated archived base ingredient: {data.name} (id={row['id']})")
+            return dict_from_row(row)
 
         cursor.execute("""
             INSERT INTO base_ingredients (
@@ -1415,11 +1434,29 @@ def create_in_path(
 
         if data.type == "base_ingredient":
             cursor.execute(
-                "SELECT id FROM base_ingredients WHERE LOWER(name) = LOWER(%s)",
+                "SELECT id FROM base_ingredients WHERE LOWER(name) = LOWER(%s) AND is_active = 1",
                 (data.name,)
             )
             if cursor.fetchone():
                 raise HTTPException(status_code=400, detail=f"Base ingredient '{data.name}' already exists")
+
+            cursor.execute(
+                "SELECT id FROM base_ingredients WHERE LOWER(name) = LOWER(%s) AND is_active = 0",
+                (data.name,)
+            )
+            archived = cursor.fetchone()
+            if archived:
+                cursor.execute(
+                    "UPDATE base_ingredients SET is_active = 1 WHERE id = %s RETURNING *",
+                    (archived["id"],)
+                )
+                row = cursor.fetchone()
+                conn.commit()
+                log_audit(cursor, "base_ingredient_reactivated", "base_ingredient", row["id"],
+                          current_user["id"], org_id, {"name": data.name})
+                conn.commit()
+                logger.info(f"Reactivated archived base ingredient: {data.name} (id={row['id']})")
+                return {**dict_from_row(row), "object_type": "base_ingredient"}
 
             cursor.execute(
                 "INSERT INTO base_ingredients (name, is_active) VALUES (%s, 1) RETURNING *",
