@@ -436,7 +436,8 @@
 
 .btn-edit,
 .btn-save,
-.btn-cancel {
+.btn-cancel,
+.btn-delete {
   width: 24px;
   height: 24px;
   padding: 0;
@@ -477,6 +478,25 @@
 .btn-cancel:hover {
   background: var(--color-red-dim);
   color: var(--color-red);
+}
+
+.btn-delete {
+  background: var(--bg-elevated);
+  color: var(--text-tertiary);
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+
+.btn-delete:hover {
+  background: var(--color-red-dim);
+  color: var(--color-red);
+  opacity: 1 !important;
+}
+
+.variant-row:hover .btn-delete,
+.base-ingredient-row:hover .btn-delete,
+.common-product-row:hover .btn-delete {
+  opacity: 1;
 }
 
 /* Edit Input */
@@ -654,7 +674,8 @@
 
 .cp-actions .btn-edit,
 .cp-actions .btn-save,
-.cp-actions .btn-cancel {
+.cp-actions .btn-cancel,
+.cp-actions .btn-delete {
   width: 20px;
   height: 20px;
   font-size: 11px;

@@ -164,6 +164,13 @@ function VariantTree({
                   >
                     ↕
                   </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); deleteVariant(variant.id, variant.display_name); }}
+                    className="btn-delete"
+                    title="Delete variant"
+                  >
+                    ✕
+                  </button>
                 </>
               )}
             </div>
@@ -306,13 +313,22 @@ function VariantTree({
                             </button>
                           </>
                         ) : (
-                          <button
-                            onClick={(e) => startEditingCP(cp, e)}
-                            className="btn-edit"
-                            title="Edit name"
-                          >
-                            ✎
-                          </button>
+                          <>
+                            <button
+                              onClick={(e) => startEditingCP(cp, e)}
+                              className="btn-edit"
+                              title="Edit name"
+                            >
+                              ✎
+                            </button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); deleteCP(cp.id, cp.common_name); }}
+                              className="btn-delete"
+                              title="Delete common product"
+                            >
+                              ✕
+                            </button>
+                          </>
                         )}
                       </div>
                     </div>
@@ -873,6 +889,36 @@ function TaxonomyView() {
     }
   };
 
+  const deleteCP = async (cpId, cpName) => {
+    if (!window.confirm(`Delete "${cpName}"?`)) return;
+    try {
+      await axios.delete(`${API_URL}/taxonomy/common-products/${cpId}`);
+      await fetchTaxonomyData();
+    } catch (err) {
+      alert(err.response?.data?.detail || 'Failed to delete common product');
+    }
+  };
+
+  const deleteVariant = async (variantId, displayName) => {
+    if (!window.confirm(`Delete variant "${displayName}"? It must have no child variants or common products.`)) return;
+    try {
+      await axios.delete(`${API_URL}/taxonomy/variants/${variantId}`);
+      await fetchTaxonomyData();
+    } catch (err) {
+      alert(err.response?.data?.detail || 'Failed to delete variant');
+    }
+  };
+
+  const deleteBaseIngredient = async (baseId, baseName) => {
+    if (!window.confirm(`Delete base ingredient "${baseName}"? It must have no active variants.`)) return;
+    try {
+      await axios.delete(`${API_URL}/taxonomy/base-ingredients/${baseId}`);
+      await fetchTaxonomyData();
+    } catch (err) {
+      alert(err.response?.data?.detail || 'Failed to delete base ingredient');
+    }
+  };
+
   // Format price for display
   const formatPrice = (price) => {
     if (price == null) return '-';
@@ -1037,6 +1083,13 @@ function TaxonomyView() {
                     title="Add variant"
                   >
                     +
+                  </button>
+                  <button
+                    className="btn-delete"
+                    onClick={(e) => { e.stopPropagation(); deleteBaseIngredient(base.id, base.name); }}
+                    title="Delete base ingredient"
+                  >
+                    ✕
                   </button>
                 </div>
 

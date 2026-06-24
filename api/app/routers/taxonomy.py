@@ -379,6 +379,32 @@ def update_base_ingredient(
         return dict_from_row(row)
 
 
+@router.delete("/base-ingredients/{base_id}", status_code=200)
+def delete_base_ingredient(base_id: int, current_user: dict = Depends(get_current_user)):
+    """Soft-delete a base ingredient. Fails if it has active variants."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT id, name FROM base_ingredients WHERE id = %s AND is_active = 1", (base_id,))
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Base ingredient not found")
+
+        cursor.execute(
+            "SELECT COUNT(*) AS n FROM ingredient_variants WHERE base_ingredient_id = %s AND is_active = 1",
+            (base_id,)
+        )
+        if cursor.fetchone()["n"] > 0:
+            raise HTTPException(status_code=400, detail="Cannot delete: base ingredient has active variants. Delete them first.")
+
+        cursor.execute("UPDATE base_ingredients SET is_active = 0 WHERE id = %s", (base_id,))
+        conn.commit()
+        log_audit(cursor, "base_ingredient_deleted", "base_ingredient", base_id,
+                  current_user["id"], current_user["organization_id"], {"name": row["name"]})
+        conn.commit()
+        return {"message": f"Base ingredient '{row['name']}' deleted"}
+
+
 # =============================================================================
 # Ingredient Variants
 # =============================================================================
@@ -703,6 +729,39 @@ def update_variant(
         return dict_from_row(row)
 
 
+@router.delete("/variants/{variant_id}", status_code=200)
+def delete_variant(variant_id: int, current_user: dict = Depends(get_current_user)):
+    """Soft-delete a variant. Fails if it has active child variants or common products."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT id, display_name FROM ingredient_variants WHERE id = %s AND is_active = 1", (variant_id,))
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Variant not found")
+
+        cursor.execute(
+            "SELECT COUNT(*) AS n FROM ingredient_variants WHERE parent_variant_id = %s AND is_active = 1",
+            (variant_id,)
+        )
+        if cursor.fetchone()["n"] > 0:
+            raise HTTPException(status_code=400, detail="Cannot delete: variant has active child variants. Delete them first.")
+
+        cursor.execute(
+            "SELECT COUNT(*) AS n FROM common_products WHERE variant_id = %s AND is_active = 1",
+            (variant_id,)
+        )
+        if cursor.fetchone()["n"] > 0:
+            raise HTTPException(status_code=400, detail="Cannot delete: variant has active common products. Delete them first.")
+
+        cursor.execute("UPDATE ingredient_variants SET is_active = 0 WHERE id = %s", (variant_id,))
+        conn.commit()
+        log_audit(cursor, "variant_deleted", "ingredient_variant", variant_id,
+                  current_user["id"], current_user["organization_id"], {"display_name": row["display_name"]})
+        conn.commit()
+        return {"message": f"Variant '{row['display_name']}' deleted"}
+
+
 # =============================================================================
 # Variant Hierarchy Management
 # =============================================================================
@@ -806,8 +865,30 @@ def move_variant(
 
 
 # =============================================================================
-# Common Product Re-parsing
+# Common Product Delete / Re-parsing
 # =============================================================================
+
+@router.delete("/common-products/{cp_id}", status_code=200)
+def delete_common_product(cp_id: int, current_user: dict = Depends(get_current_user)):
+    """Soft-delete a common product."""
+    org_id = current_user["organization_id"]
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute(
+            "SELECT id, common_name FROM common_products WHERE id = %s AND organization_id = %s AND is_active = 1",
+            (cp_id, org_id)
+        )
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Common product not found")
+
+        cursor.execute("UPDATE common_products SET is_active = 0 WHERE id = %s", (cp_id,))
+        conn.commit()
+        log_audit(cursor, "common_product_deleted", "common_product", cp_id,
+                  current_user["id"], org_id, {"common_name": row["common_name"]})
+        conn.commit()
+        return {"message": f"Common product '{row['common_name']}' deleted"}
 
 @router.patch("/common-products/{cp_id}/reparse", response_model=CommonProductReparseResponse)
 def update_and_reparse_common_product(
