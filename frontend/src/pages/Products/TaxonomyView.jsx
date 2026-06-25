@@ -335,7 +335,7 @@ function VariantTree({
                               ↗
                             </button>
                             <button
-                              onClick={(e) => { e.stopPropagation(); deleteCP(cp.id, cp.common_name); }}
+                              onClick={(e) => { e.stopPropagation(); deleteCP(cp.id, cp.common_name, variant.id); }}
                               className="btn-delete"
                               title="Delete common product"
                             >
@@ -459,9 +459,11 @@ function TaxonomyView() {
     fetchAttributeValues();
   }, []);
 
-  const fetchTaxonomyData = async () => {
+  // silent=true refreshes data in the background without blanking the tree with
+  // the full-page loading state — used after mutations so edits feel instant.
+  const fetchTaxonomyData = async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const params = {
         limit: 200,
         include_counts: true,
@@ -479,8 +481,21 @@ function TaxonomyView() {
       console.error('Error fetching taxonomy data:', error);
       toast.error('Failed to load taxonomy data');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
+  };
+
+  // Evict cached common-product lists for the given variant ids so the next
+  // expand (or background refresh) re-fetches them. Call after any mutation
+  // that changes which CPs live under a variant.
+  const invalidateVariantCache = (...variantIds) => {
+    setCommonProductsCache(prev => {
+      const next = { ...prev };
+      for (const id of variantIds) {
+        if (id != null) delete next[id];
+      }
+      return next;
+    });
   };
 
   const fetchCategories = async () => {
@@ -664,7 +679,7 @@ function TaxonomyView() {
       toast.success('Variant updated');
       setEditingVariant(null);
       setEditForm({});
-      fetchTaxonomyData();
+      fetchTaxonomyData(true);
     } catch (error) {
       console.error('Error updating variant:', error);
       toast.error('Failed to update variant');
@@ -708,7 +723,7 @@ function TaxonomyView() {
       await axios.post(`${API_URL}/taxonomy/variants`, payload);
       toast.success('Variant created');
       closeAddVariant();
-      fetchTaxonomyData();
+      fetchTaxonomyData(true);
     } catch (error) {
       console.error('Error creating variant:', error);
       toast.error('Failed to create variant');
@@ -763,7 +778,10 @@ function TaxonomyView() {
       setMergeMode(false);
       setSelectedForMerge([]);
       setMergeBaseId(null);
-      fetchTaxonomyData();
+      // Merge restructures variants and moves CPs between them — drop the whole
+      // CP cache so every affected variant re-fetches on next expand.
+      setCommonProductsCache({});
+      fetchTaxonomyData(true);
     } catch (error) {
       console.error('Error merging variants:', error);
       toast.error('Failed to merge variants');
@@ -799,7 +817,7 @@ function TaxonomyView() {
       });
       toast.success('Variant moved');
       closeMoveModal();
-      fetchTaxonomyData();
+      fetchTaxonomyData(true);
     } catch (error) {
       console.error('Error moving variant:', error);
       toast.error(error.response?.data?.detail || 'Failed to move variant');
@@ -822,13 +840,17 @@ function TaxonomyView() {
 
   const executeCPMove = async () => {
     if (!movingCP || !cpMoveTargetId) return;
+    const targetVariantId = parseInt(cpMoveTargetId);
     try {
       await axios.patch(`${API_URL}/taxonomy/common-products/${movingCP.id}/move`, {
-        variant_id: parseInt(cpMoveTargetId)
+        variant_id: targetVariantId
       });
       toast.success('Common product moved');
+      // The CP left movingCP.variant_id and joined targetVariantId — both cached
+      // lists are now stale, so evict them before the background refresh.
+      invalidateVariantCache(movingCP.variant_id, targetVariantId);
       closeCPMoveModal();
-      fetchTaxonomyData();
+      fetchTaxonomyData(true);
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to move common product');
     }
@@ -851,13 +873,9 @@ function TaxonomyView() {
         common_product_id: newCp.id
       });
       toast.success(`Moved to "${newCp.common_name}"`);
-      setCommonProductsCache(prev => {
-        const next = { ...prev };
-        delete next[reassigningProduct.currentVariantId];
-        return next;
-      });
+      invalidateVariantCache(reassigningProduct.currentVariantId);
       closeReassignModal();
-      fetchTaxonomyData();
+      fetchTaxonomyData(true);
     } catch (error) {
       console.error('Error reassigning product:', error);
       toast.error(error.response?.data?.detail || 'Failed to reassign product');
@@ -889,15 +907,9 @@ function TaxonomyView() {
 
       if (response.data.moved) {
         toast.success(`Moved to "${response.data.variant_display_name}"`);
-        // Clear cache for both old and new variant to force reload
-        setCommonProductsCache(prev => {
-          const next = { ...prev };
-          delete next[variantId];
-          delete next[response.data.variant_id];
-          return next;
-        });
-        // Re-fetch taxonomy to update counts
-        fetchTaxonomyData();
+        // CP left variantId and joined response.data.variant_id — evict both.
+        invalidateVariantCache(variantId, response.data.variant_id);
+        fetchTaxonomyData(true);
       } else {
         toast.success('Name updated');
         // Update the cache inline
@@ -935,11 +947,12 @@ function TaxonomyView() {
     }
   };
 
-  const deleteCP = async (cpId, cpName) => {
+  const deleteCP = async (cpId, cpName, variantId) => {
     if (!window.confirm(`Delete "${cpName}"?`)) return;
     try {
       await axios.delete(`${API_URL}/taxonomy/common-products/${cpId}`);
-      await fetchTaxonomyData();
+      invalidateVariantCache(variantId);
+      fetchTaxonomyData(true);
     } catch (err) {
       alert(err.response?.data?.detail || 'Failed to delete common product');
     }
@@ -949,7 +962,8 @@ function TaxonomyView() {
     if (!window.confirm(`Delete variant "${displayName}"? It must have no child variants or common products.`)) return;
     try {
       await axios.delete(`${API_URL}/taxonomy/variants/${variantId}`);
-      await fetchTaxonomyData();
+      invalidateVariantCache(variantId);
+      fetchTaxonomyData(true);
     } catch (err) {
       alert(err.response?.data?.detail || 'Failed to delete variant');
     }
@@ -959,7 +973,7 @@ function TaxonomyView() {
     if (!window.confirm(`Delete base ingredient "${baseName}"? It must have no active variants.`)) return;
     try {
       await axios.delete(`${API_URL}/taxonomy/base-ingredients/${baseId}`);
-      await fetchTaxonomyData();
+      fetchTaxonomyData(true);
     } catch (err) {
       alert(err.response?.data?.detail || 'Failed to delete base ingredient');
     }

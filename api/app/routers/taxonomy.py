@@ -274,32 +274,15 @@ def create_base_ingredient(
     with get_db() as conn:
         cursor = conn.cursor()
 
-        # Error only on active duplicate; reactivate archived rows rather than blocking
+        # Block only on an active duplicate. Archived names are free to reuse —
+        # the partial unique index (uq_base_ingredients_name_active) scopes
+        # uniqueness to is_active = 1, so a fresh INSERT is allowed.
         cursor.execute(
             "SELECT id FROM base_ingredients WHERE LOWER(name) = LOWER(%s) AND is_active = 1",
             (data.name,)
         )
         if cursor.fetchone():
             raise HTTPException(status_code=400, detail="Base ingredient with this name already exists")
-
-        cursor.execute(
-            "SELECT id FROM base_ingredients WHERE LOWER(name) = LOWER(%s) AND is_active = 0",
-            (data.name,)
-        )
-        archived = cursor.fetchone()
-        if archived:
-            cursor.execute(
-                "UPDATE base_ingredients SET is_active = 1 WHERE id = %s RETURNING *",
-                (archived["id"],)
-            )
-            row = cursor.fetchone()
-            conn.commit()
-            log_audit(cursor, "base_ingredient_reactivated", "base_ingredient", row["id"],
-                      current_user["id"], current_user["organization_id"],
-                      {"name": data.name})
-            conn.commit()
-            logger.info(f"Reactivated archived base ingredient: {data.name} (id={row['id']})")
-            return dict_from_row(row)
 
         cursor.execute("""
             INSERT INTO base_ingredients (
@@ -322,8 +305,6 @@ def create_base_ingredient(
             int(data.allergen_celery)
         ))
         row = cursor.fetchone()
-        conn.commit()
-
         log_audit(cursor, "base_ingredient_created", "base_ingredient", row["id"],
                   current_user["id"], current_user["organization_id"],
                   {"name": data.name})
@@ -398,7 +379,6 @@ def delete_base_ingredient(base_id: int, current_user: dict = Depends(get_curren
             raise HTTPException(status_code=400, detail="Cannot delete: base ingredient has active variants. Delete them first.")
 
         cursor.execute("UPDATE base_ingredients SET is_active = 0 WHERE id = %s", (base_id,))
-        conn.commit()
         log_audit(cursor, "base_ingredient_deleted", "base_ingredient", base_id,
                   current_user["id"], current_user["organization_id"], {"name": row["name"]})
         conn.commit()
@@ -505,6 +485,7 @@ def get_variant_common_products(
                 SELECT
                     cp.id,
                     cp.common_name,
+                    cp.variant_id,
                     cp.notes,
                     cp.category,
                     cp.preferred_unit_id,
@@ -755,7 +736,6 @@ def delete_variant(variant_id: int, current_user: dict = Depends(get_current_use
             raise HTTPException(status_code=400, detail="Cannot delete: variant has active common products. Delete them first.")
 
         cursor.execute("UPDATE ingredient_variants SET is_active = 0 WHERE id = %s", (variant_id,))
-        conn.commit()
         log_audit(cursor, "variant_deleted", "ingredient_variant", variant_id,
                   current_user["id"], current_user["organization_id"], {"display_name": row["display_name"]})
         conn.commit()
@@ -884,7 +864,6 @@ def delete_common_product(cp_id: int, current_user: dict = Depends(get_current_u
             raise HTTPException(status_code=404, detail="Common product not found")
 
         cursor.execute("UPDATE common_products SET is_active = 0 WHERE id = %s", (cp_id,))
-        conn.commit()
         log_audit(cursor, "common_product_deleted", "common_product", cp_id,
                   current_user["id"], org_id, {"common_name": row["common_name"]})
         conn.commit()
@@ -923,6 +902,11 @@ def move_common_product(cp_id: int, data: CPMoveRequest, current_user: dict = De
                WHERE id = %s""",
             (data.variant_id, target["base_ingredient_id"], cp_id)
         )
+        log_audit(cursor, "common_product_moved", "common_product", cp_id,
+                  current_user["id"], org_id,
+                  {"common_name": cp["common_name"],
+                   "from_variant_id": cp["variant_id"],
+                   "to_variant_id": data.variant_id})
         conn.commit()
         return {"id": cp_id, "common_name": cp["common_name"], "variant_id": data.variant_id}
 
@@ -1559,29 +1543,10 @@ def create_in_path(
                 raise HTTPException(status_code=400, detail=f"Base ingredient '{data.name}' already exists")
 
             cursor.execute(
-                "SELECT id FROM base_ingredients WHERE LOWER(name) = LOWER(%s) AND is_active = 0",
-                (data.name,)
-            )
-            archived = cursor.fetchone()
-            if archived:
-                cursor.execute(
-                    "UPDATE base_ingredients SET is_active = 1 WHERE id = %s RETURNING *",
-                    (archived["id"],)
-                )
-                row = cursor.fetchone()
-                conn.commit()
-                log_audit(cursor, "base_ingredient_reactivated", "base_ingredient", row["id"],
-                          current_user["id"], org_id, {"name": data.name})
-                conn.commit()
-                logger.info(f"Reactivated archived base ingredient: {data.name} (id={row['id']})")
-                return {**dict_from_row(row), "object_type": "base_ingredient"}
-
-            cursor.execute(
                 "INSERT INTO base_ingredients (name, is_active) VALUES (%s, 1) RETURNING *",
                 (data.name.strip().title(),)
             )
             row = cursor.fetchone()
-            conn.commit()
             log_audit(cursor, "base_ingredient_created", "base_ingredient", row["id"],
                       current_user["id"], org_id, {"name": data.name})
             conn.commit()
@@ -1619,7 +1584,6 @@ def create_in_path(
                 (base_id, data.name.strip(), parent_variant_id, variant_depth)
             )
             row = cursor.fetchone()
-            conn.commit()
             log_audit(cursor, "variant_created", "ingredient_variant", row["id"],
                       current_user["id"], org_id,
                       {"display_name": data.name, "path": data.path})
@@ -1633,7 +1597,10 @@ def create_in_path(
             base_id, variant_id, _ = _resolve_path(cursor, data.path)
             # variant_id can be None if path only has a base ingredient — still valid
 
-            # Error only on active duplicate
+            # Block only on an active duplicate. Archived names are free to reuse —
+            # the partial unique index (uq_common_name_per_org_active) scopes
+            # uniqueness to is_active = 1, so a fresh INSERT is allowed and any
+            # old archived row keeps its original id and FK history.
             cursor.execute(
                 "SELECT id FROM common_products WHERE LOWER(common_name) = LOWER(%s) AND organization_id = %s AND is_active = 1",
                 (data.name, org_id)
@@ -1641,34 +1608,12 @@ def create_in_path(
             if cursor.fetchone():
                 raise HTTPException(status_code=400, detail=f"Common product '{data.name}' already exists in your organization")
 
-            # Reactivate archived CP (unique constraint blocks a fresh insert for the same name+org)
-            cursor.execute(
-                "SELECT id FROM common_products WHERE LOWER(common_name) = LOWER(%s) AND organization_id = %s AND is_active = 0",
-                (data.name, org_id)
-            )
-            archived = cursor.fetchone()
-            if archived:
-                cursor.execute(
-                    """UPDATE common_products
-                       SET is_active = 1, variant_id = %s, base_ingredient_id = %s, updated_at = NOW()
-                       WHERE id = %s RETURNING *""",
-                    (variant_id, base_id, archived["id"])
-                )
-                row = cursor.fetchone()
-                conn.commit()
-                log_audit(cursor, "common_product_reactivated", "common_product", row["id"],
-                          current_user["id"], org_id,
-                          {"common_name": data.name, "path": data.path, "variant_id": variant_id})
-                conn.commit()
-                return {**dict_from_row(row), "object_type": "common_product"}
-
             cursor.execute(
                 """INSERT INTO common_products (common_name, organization_id, variant_id, base_ingredient_id, is_active)
                    VALUES (%s, %s, %s, %s, 1) RETURNING *""",
                 (data.name.strip(), org_id, variant_id, base_id)
             )
             row = cursor.fetchone()
-            conn.commit()
             log_audit(cursor, "common_product_created", "common_product", row["id"],
                       current_user["id"], org_id,
                       {"common_name": data.name, "path": data.path, "variant_id": variant_id})

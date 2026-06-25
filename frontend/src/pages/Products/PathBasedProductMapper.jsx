@@ -179,7 +179,6 @@ export default function PathBasedProductMapper({ productDescription, onSelect, o
     return items;
   };
 
-  const allItems = buildAllItems();
   const hasCreateOptions = query.trim() && !results.some(r => r.name.toLowerCase() === query.trim().toLowerCase());
 
   const getDropdownStyle = () => {
