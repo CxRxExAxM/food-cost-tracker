@@ -118,20 +118,16 @@ docs/
 
 ## Git Workflow
 
-### Branch Strategy (Current: Two-Branch)
+### Branch Strategy (Current: Simplified Main-Branch)
 
 ```
-main (production)
-  └── dev (development)
-      ├── feature/* (short-lived)
-      └── fix/* (short-lived)
+main (production + development)
 ```
 
 **Rules:**
-- `main` = production (manual deploys only)
-- `dev` = active development (auto-deploys to dev.onrender.com)
-- All work happens in feature branches off `dev`
-- Merge `dev` → `main` when ready for production
+- `main` = all development and production — commit directly here
+- Push after every commit so changes deploy immediately
+- No dev branch — `dev` branch is no longer used
 
 **Future (Three-Branch - When Starting HACCP):**
 ```
