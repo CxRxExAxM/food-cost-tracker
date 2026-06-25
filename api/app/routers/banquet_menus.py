@@ -438,8 +438,10 @@ def calculate_menu_cost(
                         FROM price_history ph
                         JOIN distributor_products dp ON dp.id = ph.distributor_product_id
                         WHERE dp.product_id = bp.product_id
-                          AND ph.outlet_id = %s
-                        ORDER BY ph.effective_date DESC
+                          AND ph.unit_price IS NOT NULL
+                        -- Prefer this menu's outlet, else fall back to the most
+                        -- recent price from any outlet.
+                        ORDER BY (ph.outlet_id = %s) DESC NULLS LAST, ph.effective_date DESC
                         LIMIT 1
                     ) as product_unit_cost,
                     (
@@ -455,18 +457,19 @@ def calculate_menu_cost(
                     ) as product_is_catch_weight,
                     -- Get common product average unit cost and typical pricing unit (filtered by outlet)
                     (
-                        SELECT AVG(ph2.unit_price)
-                        FROM price_history ph2
-                        JOIN distributor_products dp2 ON dp2.id = ph2.distributor_product_id
-                        JOIN products p2 ON p2.id = dp2.product_id
-                        WHERE p2.common_product_id = bp.common_product_id
-                          AND ph2.outlet_id = %s
-                          AND ph2.effective_date = (
-                            SELECT MAX(ph3.effective_date)
-                            FROM price_history ph3
-                            WHERE ph3.distributor_product_id = dp2.id
-                              AND ph3.outlet_id = %s
-                        )
+                        -- Average the best-available price across every SKU mapped
+                        -- to this common product. Per SKU, take one price preferring
+                        -- the menu's outlet, else the most recent from any outlet.
+                        SELECT AVG(best.unit_price)
+                        FROM (
+                            SELECT DISTINCT ON (dp2.id) ph2.unit_price
+                            FROM price_history ph2
+                            JOIN distributor_products dp2 ON dp2.id = ph2.distributor_product_id
+                            JOIN products p2 ON p2.id = dp2.product_id
+                            WHERE p2.common_product_id = bp.common_product_id
+                              AND ph2.unit_price IS NOT NULL
+                            ORDER BY dp2.id, (ph2.outlet_id = %s) DESC NULLS LAST, ph2.effective_date DESC
+                        ) best
                     ) as common_product_unit_cost,
                     -- Get the most common pricing unit for this common product
                     (
@@ -486,7 +489,7 @@ def calculate_menu_cost(
                 FROM banquet_prep_items bp
                 LEFT JOIN vessels v ON v.id = bp.vessel_id
                 WHERE bp.banquet_menu_item_id = %s
-            """, (menu_outlet_id, menu_outlet_id, menu_outlet_id, item["id"]))
+            """, (menu_outlet_id, menu_outlet_id, item["id"]))
 
             prep_items = dicts_from_rows(cursor.fetchall())
             org_id = current_user["organization_id"]
