@@ -61,6 +61,23 @@
   cursor: not-allowed;
 }
 
+.btn-delete-selected {
+  padding: var(--space-2) var(--space-4);
+  background: transparent;
+  color: var(--color-red);
+  border: 1px solid var(--color-red-dim);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+  transition: all var(--transition-base);
+}
+
+.btn-delete-selected:hover {
+  background: var(--color-red-dim);
+  border-color: var(--color-red);
+}
+
 .btn-clear-selection {
   padding: var(--space-2) var(--space-4);
   background: transparent;

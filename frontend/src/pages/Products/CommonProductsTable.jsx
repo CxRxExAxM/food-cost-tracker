@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import axios from '../../lib/axios';
 import { useToast } from '../../contexts/ToastContext';
 import MergeCommonProductsModal from './MergeCommonProductsModal';
@@ -246,8 +246,26 @@ function CommonProductsTable() {
     setSelectedIds([]);
   };
 
-  // Get all allergen/dietary definitions combined
-  const getAllAllergenDefs = () => [...ALLERGENS, ...DIETARY];
+  const handleDeleteSelected = async () => {
+    const count = selectedIds.length;
+    if (count === 0) return;
+    if (!window.confirm(`Delete ${count} common product${count > 1 ? 's' : ''}? This also covers orphaned items not shown in the Taxonomy view.`)) {
+      return;
+    }
+    try {
+      await Promise.all(
+        selectedIds.map(id => axios.delete(`${API_URL}/common-products/${id}`))
+      );
+      toast.success(`Deleted ${count} common product${count > 1 ? 's' : ''}`);
+      setSelectedIds([]);
+      fetchCommonProducts();
+    } catch (error) {
+      console.error('Error deleting common products:', error);
+      toast.error(error.response?.data?.detail || 'Failed to delete common products');
+      // Refetch so the table reflects whatever did/didn't delete.
+      fetchCommonProducts();
+    }
+  };
 
   // Handle viewing linked products
   const handleViewLinkedProducts = async (product) => {
@@ -379,6 +397,12 @@ function CommonProductsTable() {
               disabled={selectedIds.length < 2}
             >
               Merge Selected
+            </button>
+            <button
+              className="btn-delete-selected"
+              onClick={handleDeleteSelected}
+            >
+              Delete Selected
             </button>
             <button
               className="btn-clear-selection"
