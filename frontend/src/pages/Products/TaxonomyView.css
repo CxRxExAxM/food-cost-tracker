@@ -1003,7 +1003,6 @@
 /* Reassign Modal */
 .reassign-modal {
   max-width: 500px;
-  overflow: visible; /* PathBasedProductMapper autocomplete must escape modal boundary */
 }
 
 .reassign-product-name {

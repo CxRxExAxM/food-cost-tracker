@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import axios from '../../lib/axios';
 
 const API_URL = import.meta.env.VITE_API_URL ?? '';
@@ -181,6 +182,14 @@ export default function PathBasedProductMapper({ productDescription, onSelect, o
   const allItems = buildAllItems();
   const hasCreateOptions = query.trim() && !results.some(r => r.name.toLowerCase() === query.trim().toLowerCase());
 
+  const getDropdownStyle = () => {
+    if (!inputRef.current) return {};
+    const r = inputRef.current.getBoundingClientRect();
+    return { position: 'fixed', top: r.bottom + 4, left: r.left, width: r.width, zIndex: 9999 };
+  };
+
+  const showDropdown = results.length > 0 || hasCreateOptions || (path.length > 0 && !query.trim());
+
   return (
     <div className="path-mapper">
       <div className="path-mapper-breadcrumb">
@@ -217,8 +226,8 @@ export default function PathBasedProductMapper({ productDescription, onSelect, o
           autoFocus
         />
 
-        {(results.length > 0 || hasCreateOptions || (path.length > 0 && !query.trim())) && (
-          <div className="autocomplete-dropdown">
+        {showDropdown && createPortal(
+          <div className="autocomplete-dropdown" style={getDropdownStyle()}>
             {results.map((item, i) => (
               <div
                 key={`${item.type}-${item.id}`}
@@ -289,13 +298,15 @@ export default function PathBasedProductMapper({ productDescription, onSelect, o
                 </div>
               </>
             )}
-          </div>
+          </div>,
+          document.body
         )}
 
-        {loading && results.length === 0 && (
-          <div className="autocomplete-dropdown">
+        {loading && results.length === 0 && createPortal(
+          <div className="autocomplete-dropdown" style={getDropdownStyle()}>
             <div className="autocomplete-item" style={{ color: 'var(--text-tertiary)' }}>Searching...</div>
-          </div>
+          </div>,
+          document.body
         )}
       </div>
 
