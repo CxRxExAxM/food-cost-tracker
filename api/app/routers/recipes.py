@@ -441,10 +441,10 @@ def debug_recipe_cost(recipe_id: int, current_user: dict = Depends(get_current_u
                     SELECT distributor_product_id, outlet_id, unit_price, effective_date,
                            ROW_NUMBER() OVER (PARTITION BY distributor_product_id, outlet_id ORDER BY effective_date DESC) as rn
                     FROM price_history
-                ) ph ON ph.distributor_product_id = dp.id AND ph.rn = 1 AND ph.outlet_id = %s
+                ) ph ON ph.distributor_product_id = dp.id AND ph.rn = 1
                 WHERE p.common_product_id = ANY(%s) AND p.is_active = 1
-                ORDER BY p.common_product_id, ph.unit_price ASC NULLS LAST
-            """, (recipe['outlet_id'], common_product_ids))
+                ORDER BY p.common_product_id, (ph.outlet_id = %s) DESC NULLS LAST, ph.unit_price ASC NULLS LAST
+            """, (common_product_ids, recipe['outlet_id']))
 
             all_products = dicts_from_rows(cursor.fetchall())
 
@@ -637,17 +637,20 @@ def _calculate_ingredient_costs(cursor, recipe_id: int, outlet_id: int, visited:
                     u.abbreviation as product_unit,
                     ROW_NUMBER() OVER (
                         PARTITION BY p.common_product_id
-                        ORDER BY ph.unit_price ASC
+                        -- Prefer a price from the recipe's own outlet; otherwise
+                        -- fall back to the cheapest price from any outlet so a
+                        -- SKU priced under a different outlet still costs out.
+                        ORDER BY (ph.outlet_id = %s) DESC NULLS LAST, ph.unit_price ASC
                     ) as price_rank
                 FROM products p
                 JOIN distributor_products dp ON dp.product_id = p.id
                 JOIN distributors d ON d.id = dp.distributor_id
                 LEFT JOIN units u ON u.id = p.unit_id
-                LEFT JOIN (
+                JOIN (
                     SELECT distributor_product_id, outlet_id, unit_price,
                            ROW_NUMBER() OVER (PARTITION BY distributor_product_id, outlet_id ORDER BY effective_date DESC) as rn
                     FROM price_history
-                ) ph ON ph.distributor_product_id = dp.id AND ph.rn = 1 AND ph.outlet_id = %s
+                ) ph ON ph.distributor_product_id = dp.id AND ph.rn = 1
                 WHERE p.common_product_id = ANY(%s)
                   AND p.is_active = 1
                   AND ph.unit_price IS NOT NULL
