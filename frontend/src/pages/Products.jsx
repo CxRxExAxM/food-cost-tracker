@@ -83,6 +83,10 @@ function Products() {
     is_catch_weight: false,
     case_price: ''
   });
+  // Add new vendor (distributor) state
+  const [showAddVendor, setShowAddVendor] = useState(false);
+  const [newVendorName, setNewVendorName] = useState('');
+  const [creatingVendor, setCreatingVendor] = useState(false);
 
   useEffect(() => {
     fetchProducts();
@@ -141,6 +145,31 @@ function Products() {
       setDistributors(response.data);
     } catch (error) {
       console.error('Error fetching distributors:', error);
+    }
+  };
+
+  const createVendor = async () => {
+    const name = newVendorName.trim();
+    if (!name) {
+      toast.warning('Vendor name is required');
+      return;
+    }
+    try {
+      setCreatingVendor(true);
+      const response = await axios.post(`${API_URL}/distributors`, { name });
+      const created = response.data;
+      // Refresh the dropdown and auto-select the new vendor in the add-product row
+      const list = await axios.get(`${API_URL}/uploads/distributors`);
+      setDistributors(list.data);
+      setNewProduct(prev => ({ ...prev, distributor_id: String(created.id) }));
+      setShowAddVendor(false);
+      setNewVendorName('');
+      toast.success(`Vendor "${created.name}" added`);
+    } catch (error) {
+      console.error('Error creating vendor:', error);
+      toast.error(error.response?.data?.detail || 'Failed to add vendor');
+    } finally {
+      setCreatingVendor(false);
     }
   };
 
@@ -963,13 +992,20 @@ function Products() {
                   <td>
                     <select
                       value={newProduct.distributor_id}
-                      onChange={(e) => setNewProduct({ ...newProduct, distributor_id: e.target.value })}
+                      onChange={(e) => {
+                        if (e.target.value === '__add_vendor__') {
+                          setShowAddVendor(true);
+                          return;
+                        }
+                        setNewProduct({ ...newProduct, distributor_id: e.target.value });
+                      }}
                       className="inline-edit-select"
                     >
                       <option value="">Distributor</option>
                       {distributors.map(d => (
                         <option key={d.id} value={d.id}>{d.name}</option>
                       ))}
+                      <option value="__add_vendor__">+ Add new vendor…</option>
                     </select>
                   </td>
                   <td>
@@ -1154,6 +1190,58 @@ function Products() {
           onClose={() => setAllergenModalProduct(null)}
           onUpdate={handleUpdateAllergens}
         />
+      )}
+
+      {/* Add Vendor Modal */}
+      {showAddVendor && (
+        <div className="modal-overlay" onClick={() => !creatingVendor && setShowAddVendor(false)}>
+          <div className="modal-content add-vendor-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Add Vendor</h2>
+              <button
+                className="modal-close"
+                onClick={() => setShowAddVendor(false)}
+                disabled={creatingVendor}
+              >
+                ×
+              </button>
+            </div>
+            <div className="modal-body">
+              <label className="add-vendor-label" htmlFor="new-vendor-name">Vendor name</label>
+              <input
+                id="new-vendor-name"
+                type="text"
+                className="add-vendor-input"
+                value={newVendorName}
+                onChange={(e) => setNewVendorName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') createVendor(); }}
+                placeholder="e.g. Internal / Housemade, US Foods"
+                autoFocus
+              />
+              <p className="add-vendor-hint">
+                Vendors are shared across the app. Use this for in-house items or
+                suppliers not yet imported, then enter prices manually until an
+                invoice arrives.
+              </p>
+            </div>
+            <div className="modal-footer">
+              <button
+                className="btn-cancel"
+                onClick={() => setShowAddVendor(false)}
+                disabled={creatingVendor}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn-done"
+                onClick={createVendor}
+                disabled={creatingVendor || !newVendorName.trim()}
+              >
+                {creatingVendor ? 'Adding…' : 'Add Vendor'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
       </>
       )}

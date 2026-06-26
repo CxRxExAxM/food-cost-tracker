@@ -719,6 +719,61 @@
   background: #5568d3;
 }
 
+.btn-done:disabled,
+.btn-cancel:disabled,
+.modal-close:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Add Vendor Modal */
+.add-vendor-modal {
+  max-width: 440px;
+}
+
+.add-vendor-modal .modal-footer {
+  gap: var(--space-3);
+}
+
+.add-vendor-label {
+  display: block;
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-medium);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+  color: var(--text-tertiary);
+  margin-bottom: var(--space-2);
+}
+
+.add-vendor-input {
+  width: 100%;
+  font-family: var(--font-primary);
+  font-size: var(--text-sm);
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  outline: none;
+  transition: all var(--transition-base) var(--ease-in-out);
+}
+
+.add-vendor-input:focus {
+  border-color: var(--color-focus);
+  box-shadow: var(--shadow-yellow);
+}
+
+.add-vendor-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.add-vendor-hint {
+  margin: var(--space-3) 0 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  color: var(--text-secondary);
+}
+
 /* Upload Section Styles */
 .page-header {
   display: flex;
