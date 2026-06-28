@@ -40,6 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **Recipe Parser - Saving**
 - Parsed recipes with unquantified ingredients (e.g. "salt to taste") no longer 422 on save; `quantity`/`unit_id` are now optional, with null quantity coerced to 0 for completion in the editor
 - Validation errors (HTTP 422) no longer crash the review UI with React error #31 — the error detail is rendered as a readable message
+- Viewing a recipe with a unit-less ingredient no longer 500s; the recipe read model now allows null `unit_id` (was a regression from allowing such ingredients to save)
 
 ---
 
