@@ -65,7 +65,7 @@ export default function UploadRecipeModal({ isOpen, onClose, outletId, onParseCo
     if (!selectedFile) return;
 
     // Check file extension
-    const validExtensions = ['.docx', '.pdf', '.xlsx'];
+    const validExtensions = ['.docx', '.doc', '.pdf', '.xlsx'];
     const fileExt = selectedFile.name.toLowerCase().slice(selectedFile.name.lastIndexOf('.'));
 
     if (!validExtensions.includes(fileExt)) {
@@ -185,7 +185,7 @@ export default function UploadRecipeModal({ isOpen, onClose, outletId, onParseCo
                 <input
                   id="file-input"
                   type="file"
-                  accept=".docx,.pdf,.xlsx"
+                  accept=".docx,.doc,.pdf,.xlsx"
                   onChange={handleFileSelect}
                   style={{ display: 'none' }}
                 />
@@ -195,7 +195,7 @@ export default function UploadRecipeModal({ isOpen, onClose, outletId, onParseCo
                     <div className="dropzone-icon">📄</div>
                     <p className="dropzone-text">Drag & drop file here</p>
                     <p className="dropzone-subtext">or click to browse</p>
-                    <p className="dropzone-formats">Supported: .docx, .pdf, .xlsx</p>
+                    <p className="dropzone-formats">Supported: .docx, .doc, .pdf, .xlsx</p>
                   </>
                 ) : (
                   <>

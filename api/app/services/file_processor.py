@@ -1,7 +1,7 @@
 """
 File processing service for AI recipe parser.
 
-Extracts text from uploaded documents (.docx, .pdf, .xlsx).
+Extracts text from uploaded documents (.docx, .doc, .pdf, .xlsx).
 """
 
 import io
@@ -15,6 +15,7 @@ async def extract_text_from_file(file: UploadFile) -> str:
 
     Supports:
     - .docx (Microsoft Word)
+    - .doc (legacy Microsoft Word, via antiword)
     - .pdf (PDF documents)
     - .xlsx (Excel spreadsheets)
 
@@ -39,6 +40,8 @@ async def extract_text_from_file(file: UploadFile) -> str:
 
         if filename_lower.endswith('.docx'):
             return await extract_from_docx(io.BytesIO(content))
+        elif filename_lower.endswith('.doc'):
+            return await extract_from_doc(io.BytesIO(content))
         elif filename_lower.endswith('.pdf'):
             return await extract_from_pdf(io.BytesIO(content))
         elif filename_lower.endswith('.xlsx'):
@@ -46,7 +49,7 @@ async def extract_text_from_file(file: UploadFile) -> str:
         else:
             raise HTTPException(
                 status_code=400,
-                detail="Unsupported file format. Supported: .docx, .pdf, .xlsx"
+                detail="Unsupported file format. Supported: .docx, .doc, .pdf, .xlsx"
             )
 
     except HTTPException:
@@ -109,6 +112,78 @@ async def extract_from_docx(file_content: BinaryIO) -> str:
             status_code=400,
             detail=f"Invalid or corrupted Word document: {str(e)}"
         )
+
+
+async def extract_from_doc(file_content: BinaryIO) -> str:
+    """
+    Extract text from legacy Word document (.doc) using antiword.
+
+    Legacy .doc is a binary format that python-docx cannot read. antiword is a
+    system package (installed via apt-get in the Dockerfiles) and operates on a
+    file path, so the in-memory content is written to a temp file first. The
+    extracted text feeds the same Claude extraction pipeline as .docx.
+
+    Args:
+        file_content: File content as binary stream
+
+    Returns:
+        Plain text content
+    """
+
+    import os
+    import shutil
+    import subprocess
+    import tempfile
+
+    if shutil.which("antiword") is None:
+        raise HTTPException(
+            status_code=500,
+            detail="antiword not installed (required for legacy .doc files). Install the antiword system package."
+        )
+
+    tmp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".doc", delete=False) as tmp:
+            tmp.write(file_content.read())
+            tmp_path = tmp.name
+
+        result = subprocess.run(
+            ["antiword", tmp_path],
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+
+        if result.returncode != 0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid or corrupted Word document (.doc): {result.stderr.strip() or 'antiword could not read the file'}"
+            )
+
+        text = result.stdout
+        if not text or not text.strip():
+            raise HTTPException(
+                status_code=400,
+                detail="Document appears to be empty"
+            )
+
+        return text
+
+    except subprocess.TimeoutExpired:
+        raise HTTPException(
+            status_code=400,
+            detail="Timed out while reading the .doc file"
+        )
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid or corrupted Word document (.doc): {str(e)}"
+        )
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            os.unlink(tmp_path)
 
 
 async def extract_from_pdf(file_content: BinaryIO) -> str:
@@ -239,10 +314,10 @@ async def validate_file_before_parse(file: UploadFile) -> dict:
 
     # Check file extension
     filename_lower = file.filename.lower()
-    if not any(filename_lower.endswith(ext) for ext in ['.docx', '.pdf', '.xlsx']):
+    if not any(filename_lower.endswith(ext) for ext in ['.docx', '.doc', '.pdf', '.xlsx']):
         raise HTTPException(
             status_code=400,
-            detail="Unsupported file format. Supported: .docx, .pdf, .xlsx"
+            detail="Unsupported file format. Supported: .docx, .doc, .pdf, .xlsx"
         )
 
     # Check file size (10MB limit)
