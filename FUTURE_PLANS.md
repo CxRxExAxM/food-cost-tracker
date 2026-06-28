@@ -91,6 +91,12 @@ This document outlines the technical roadmap for RestauranTek, covering both nea
 
 ### 2. AI Recipe Parser Enhancements
 
+**Done (June 2026):**
+- Legacy `.doc` support via antiword (in addition to .docx/.pdf/.xlsx)
+- Parsed recipes with unquantified ingredients ("to taste") now save (quantity/unit optional, null quantity defaults to 0)
+
+**Known gap — matching quality:** parse success is high, but ingredient→common-product matching is weak on messy data (observed 0/6 matches on a real recipe). This is gated on the Taxonomy-Guided Mapping work (section 3) — clean common products are what the matcher needs. Refinement of the parser's matching should follow taxonomy cleanup, not precede it.
+
 **Method Step Parsing (Next):**
 - Extract cooking instructions from documents
 - Parse into numbered steps

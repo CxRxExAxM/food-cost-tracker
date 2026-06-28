@@ -1,42 +1,43 @@
-# Session Handoff — Taxonomy-Guided Mapping Build
+# Session Handoff
 
-**Date:** 2026-06-24  
-**Status:** Steps 1–3 complete, data fix applied, ready for testing
+**Date:** 2026-06-28
+**Status:** Recipe import unblocked & hardened; ready to plan parser refinement next session
 
 ---
 
-## What Was Built (Steps 1–3 of TAXONOMY_GUIDED_MAPPING_PLAN_v2.md)
+## Next Session Starts Here
 
-- **Backend:** 3 new endpoints in `api/app/routers/taxonomy.py`
-  - `GET /taxonomy/search-path` — returns base_ingredients/variants/common_products at a path level
-  - `GET /taxonomy/suggest-path` — pre-fills path from vendor product name using parser
-  - `POST /taxonomy/create-in-path` — creates any node type at a given path location
-- **Frontend:** `PathBasedProductMapper.jsx` — new component replacing freeform mapping input
-  - Used in `Products.jsx` (map distributor products) and `TaxonomyView.jsx` (reassign products)
-- **Parser fix:** `build_display_name()` now accepts `include_base=False` — variants no longer repeat base ingredient name
+**The user will add a recipe-parser planning doc to `/docs`.** Start by reading it and reconciling it against:
+- `docs/TAXONOMY_GUIDED_MAPPING_PLAN_v2.md` (the taxonomy prerequisite — Steps 1-3 done, 4-7 remain)
+- The current AI parser state (below) and `FUTURE_PLANS.md` section 2
 
-## Data Fix Applied
+Key framing: AI parse *extraction* is solid; ingredient→common-product *matching* is the weak point, and it's gated on taxonomy cleanup. Concrete evidence: a real `.doc` parse matched 0 of 6 ingredients.
 
-- Ran `scripts/fix_variant_display_names.py --apply` against production DB
-- Stripped base ingredient prefix from 119 variant display_names
-- e.g. "Cheese, American, SLI" → "American, SLI" under the Cheese base ingredient
+---
 
-## iCloud → Local Migration
+## This Session's Work (all committed to main & deployed)
 
-- DevProjects moved OFF iCloud Drive to `~/Documents/DevProjects/`
-- New project root: `~/Documents/DevProjects/Clean_Invoices`
-- Old path (`Documents - Mike's MacBook Pro/...`) no longer exists
+- **Legacy `.doc` support** in the recipe parser via `antiword` (system pkg in both Dockerfiles). Verified in prod (Guacamole.doc extracted 6 ingredients). Commit `4b54d35`.
+- **Recipe save fix:** parsed recipes with unquantified ingredients ("to taste") were 422'ing on save (`quantity`/`unit_id` were required); now optional, null quantity → 0. Also fixed a React #31 crash from rendering FastAPI 422 detail (array of objects) in a toast. Commit `364ea14`.
+- **Vendor creation:** `POST /api/distributors` + "Add new vendor" UI + seeded "Internal / Housemade" vendor (migration 047). Unblocks creating priced products before invoices arrive. Commit `d9c9fb3`.
+- **Search performance:** debounced all-products search + moved reference data to mount-only load (~28 requests → ~1 while typing); same debounce on super-admin org search. Commits `ce34666`, `36a9e86`.
+- **Infra:** Render Postgres upgraded Basic-256mb (0.1 CPU) → Basic-1gb (0.5 CPU); fixed query latency variance (CPU starvation, not indexes).
 
-## Next Steps (from v2 plan)
+## Current AI Recipe Parser State
 
-1. **Step 4:** Test the guided mapping flow end-to-end on real products
-2. **Step 4.5:** Run duplicate-analysis on `common_products` to find redundant entries
-3. **Steps 5–7:** Archive old taxonomy data, remap vendor products, re-link recipes
-4. **Separate:** Populate real `yield_percentage` values on `recipe_ingredients`
+- **Extraction:** `.docx`, `.doc`, `.pdf`, `.xlsx` all supported (`api/app/services/file_processor.py`).
+- **Save:** `POST /recipes/create-from-parse` works for drafts with partial/unmatched ingredients.
+- **Matching:** multi-strategy (learned → exact → base → contains → fuzzy → semantic) in `product_matcher.py`. Quality limited by messy `common_products` — the taxonomy work is the unlock.
+- **Audit trail:** `ai_parse_usage` table logs every parse (filename, status, ingredients_count, matched_count, recipe_id). A row with `recipe_id = NULL` = parsed but never saved.
+
+## Taxonomy-Guided Mapping (prerequisite) — where it stands
+
+Steps 1-3 complete (endpoints + `PathBasedProductMapper.jsx`, per prior handoff). Remaining: Step 4 (trial guided flow), 4.5 (duplicate-analysis on common_products), 5-7 (archive → remap products → re-link recipes), plus parallel yield-% population. Full plan: `docs/TAXONOMY_GUIDED_MAPPING_PLAN_v2.md`.
 
 ## Key Files
 
-- `docs/TAXONOMY_GUIDED_MAPPING_PLAN_v2.md` — full build plan
-- `api/app/routers/taxonomy.py` — new endpoints
-- `frontend/src/pages/Products/PathBasedProductMapper.jsx` — new component
-- `scripts/fix_variant_display_names.py` — data fix (already applied, keep for reference)
+- `api/app/services/file_processor.py` — text extraction (incl. new `extract_from_doc`)
+- `api/app/routers/ai_parse.py` — parse + `create-from-parse` endpoints
+- `api/app/services/product_matcher.py` — ingredient matching pipeline
+- `frontend/src/components/RecipeImport/` — UploadRecipeModal, ReviewParsedRecipe
+- `api/app/routers/taxonomy.py` + `frontend/src/pages/Products/PathBasedProductMapper.jsx` — guided mapping

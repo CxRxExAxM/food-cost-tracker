@@ -95,7 +95,7 @@ A comprehensive multi-tenant SaaS platform for F&B operations to manage food cos
 ### AI Recipe Parser
 
 **Automated ingredient extraction:**
-- Upload Word, PDF, or Excel recipe documents
+- Upload Word (.docx and legacy .doc), PDF, or Excel recipe documents
 - Claude API extracts ingredients, quantities, units
 - Multi-strategy product matching:
   1. **Learned** - User's previous selections (highest priority)

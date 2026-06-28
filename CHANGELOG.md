@@ -13,6 +13,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2026-06-28] - Recipe Import, Search Performance & Vendor Creation
+
+### Added
+
+**Vendor Creation**
+- `POST /api/distributors` endpoint to create vendors (external or internal/housemade) without waiting for an invoice import
+- "+ Add new vendor" option in the Products add-row distributor dropdown, with auto-select after creation
+- Seeded a global "Internal / Housemade" vendor (migration 047) so in-house items can carry a price (pricing is keyed on distributor_products)
+
+**Recipe Parser - Legacy .doc Support**
+- Added `.doc` (legacy binary Word) extraction via `antiword` (system package, added to both Dockerfiles)
+- Feeds the same Claude extraction pipeline as `.docx`; frontend upload now accepts `.doc`
+
+### Changed
+
+**Search Performance**
+- Debounced the all-products search (300ms) and moved search-independent reference data (common products, distributors, units) to a mount-only load — typing "chicken" went from ~28 requests to ~1
+- Applied the same 300ms debounce to the super-admin organization search
+
+**Infrastructure**
+- Upgraded the Render PostgreSQL instance from Basic-256mb (0.1 CPU) to Basic-1gb (0.5 CPU) — resolved query latency variance traced to CPU starvation, not missing indexes
+
+### Fixed
+
+**Recipe Parser - Saving**
+- Parsed recipes with unquantified ingredients (e.g. "salt to taste") no longer 422 on save; `quantity`/`unit_id` are now optional, with null quantity coerced to 0 for completion in the editor
+- Validation errors (HTTP 422) no longer crash the review UI with React error #31 — the error detail is rendered as a readable message
+
+---
+
 ## [2025-01-30] - Banquet Menus & Quality of Life Updates
 
 ### Added
