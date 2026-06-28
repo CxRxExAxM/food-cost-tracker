@@ -9,6 +9,8 @@ export default function SuperAdminOrganizations() {
   const [organizations, setOrganizations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  // Debounced search drives the fetch so typing doesn't hit the API per keystroke.
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [tierFilter, setTierFilter] = useState('');
   const location = useLocation();
   const navigate = useNavigate();
@@ -37,14 +39,20 @@ export default function SuperAdminOrganizations() {
     role: 'admin'
   });
 
+  // Debounce the search term (300ms) before it triggers a fetch.
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
   useEffect(() => {
     fetchOrganizations();
-  }, [search, tierFilter]);
+  }, [debouncedSearch, tierFilter]);
 
   const fetchOrganizations = async () => {
     try {
       const params = {};
-      if (search) params.search = search;
+      if (debouncedSearch) params.search = debouncedSearch;
       if (tierFilter) params.tier = tierFilter;
 
       const response = await axios.get('/super-admin/organizations', { params });
