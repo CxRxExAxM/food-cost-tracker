@@ -549,7 +549,10 @@ async def create_recipe_from_parse(
                 recipe_id,
                 ingredient.common_product_id,
                 ingredient.ingredient_name,
-                ingredient.quantity,
+                # quantity is NOT NULL in the DB and costing multiplies it
+                # directly; default an unparsed quantity to 0 for the user to
+                # complete in the editor. unit_id is nullable, so pass through.
+                ingredient.quantity if ingredient.quantity is not None else 0,
                 ingredient.unit_id,
                 ingredient.notes
             ))

@@ -566,8 +566,12 @@ class CreateRecipeIngredient(BaseModel):
     """Ingredient for recipe creation from AI parser."""
     common_product_id: Optional[int] = None  # Map to product (for costing)
     ingredient_name: Optional[str] = None     # OR use text-only name
-    quantity: float
-    unit_id: int
+    # Optional: the parser can't always normalize a quantity/unit (e.g. "salt to
+    # taste"). A null quantity is coerced to 0 on save (the DB column is NOT NULL
+    # and costing multiplies quantity directly); the user completes it in the
+    # recipe editor. unit_id is nullable in the DB, so it passes through as-is.
+    quantity: Optional[float] = None
+    unit_id: Optional[int] = None
     notes: Optional[str] = None
 
     # Learning loop fields - for recording user corrections

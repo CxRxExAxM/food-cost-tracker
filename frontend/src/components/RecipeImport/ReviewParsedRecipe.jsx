@@ -207,7 +207,22 @@ export default function ReviewParsedRecipe({ parseResult, outletId, onClose }) {
 
     } catch (err) {
       console.error('Create error:', err);
-      toast.error(err.response?.data?.detail || 'Error creating recipe');
+      // FastAPI 422 returns `detail` as an array of {loc, msg, ...} objects.
+      // Passing that straight to toast/React crashes (React error #31), so
+      // coerce it to a readable string first.
+      const detail = err.response?.data?.detail;
+      let message;
+      if (Array.isArray(detail)) {
+        message = detail
+          .map(d => {
+            const field = Array.isArray(d.loc) ? d.loc[d.loc.length - 1] : null;
+            return field ? `${field}: ${d.msg}` : d.msg;
+          })
+          .join('; ');
+      } else if (typeof detail === 'string') {
+        message = detail;
+      }
+      toast.error(message || 'Error creating recipe');
       setCreating(false);
     }
   };
