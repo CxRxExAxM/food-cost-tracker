@@ -45,6 +45,9 @@ function Products() {
   const [commonProducts, setCommonProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState(searchParams.get('search') || '');
+  // Debounced search term drives the (expensive) products fetch, so typing
+  // doesn't fire a request per keystroke. Matches CommonProductsTable.jsx.
+  const [debouncedSearch, setDebouncedSearch] = useState(searchParams.get('search') || '');
   const [mappingFilter, setMappingFilter] = useState('all'); // 'all', 'mapped', 'unmapped'
   const [distributorFilter, setDistributorFilter] = useState(''); // distributor_id or empty
   const [currentPage, setCurrentPage] = useState(1);
@@ -88,22 +91,33 @@ function Products() {
   const [newVendorName, setNewVendorName] = useState('');
   const [creatingVendor, setCreatingVendor] = useState(false);
 
+  // Reference data is search-independent: load once on mount, not per keystroke.
   useEffect(() => {
-    fetchProducts();
     fetchCommonProducts();
     fetchDistributors();
     fetchUnits();
-  }, [search, mappingFilter, distributorFilter, sortColumn, sortDirection, currentPage]);
+  }, []);
+
+  // Debounce the search term (300ms) before it triggers a products fetch.
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  // Fetch products when the debounced search, filters, sort, or page changes.
+  useEffect(() => {
+    fetchProducts();
+  }, [debouncedSearch, mappingFilter, distributorFilter, sortColumn, sortDirection, currentPage]);
 
   // Refetch products when outlet changes (for price filtering)
   useEffect(() => {
     fetchProducts();
   }, [currentOutlet]);
 
-  // Reset to page 1 when filters change
+  // Reset to page 1 when the debounced search or filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, mappingFilter, distributorFilter, sortColumn, sortDirection]);
+  }, [debouncedSearch, mappingFilter, distributorFilter, sortColumn, sortDirection]);
 
   const fetchProducts = async () => {
     try {
@@ -113,7 +127,7 @@ function Products() {
         skip: (currentPage - 1) * pageSize,
         sort_by: sortColumn,
         sort_dir: sortDirection,
-        ...(search && { search }),
+        ...(debouncedSearch && { search: debouncedSearch }),
         ...(mappingFilter === 'unmapped' && { unmapped_only: true }),
         ...(mappingFilter === 'mapped' && { mapped_only: true }),
         ...(distributorFilter && { distributor_id: parseInt(distributorFilter) }),
