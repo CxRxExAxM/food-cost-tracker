@@ -269,7 +269,10 @@ class RecipeIngredientBase(BaseModel):
     sub_recipe_id: Optional[int] = None      # OR map to sub-recipe
     ingredient_name: Optional[str] = None    # OR use text-only name (no costing)
     quantity: float
-    unit_id: int
+    # unit_id is nullable in the DB: a text-only/unparsed ingredient (e.g.
+    # "Salt and Pepper to taste", "2 avocados") may have no unit. The read
+    # model must allow None or get_recipe's response validation 500s.
+    unit_id: Optional[int] = None
     yield_percentage: float = 100.0
     notes: Optional[str] = None
 
